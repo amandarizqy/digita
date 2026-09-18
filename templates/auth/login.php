@@ -2,29 +2,44 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Login - Digita PLN</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Digita</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Memanggil file CSS eksternal dari folder assets -->
+    <link rel="stylesheet" href="../../assets/css/style.css">
 </head>
-<body class="bg-primary d-flex align-items-center justify-content-center vh-100">
-    <div class="card shadow p-4" style="width: 400px;">
-        <h3 class="text-center mb-3 fw-bold text-primary">DIGITA S41</h3>
-        <p class="text-center text-muted small">Silakan login untuk masuk sistem</p>
+<body class="bg-login">
+<div class="container">
+    <div class="row justify-content-center align-items-center vh-100">
+        <div class="col-md-4">
+            <div class="card card-login p-4 shadow">
+                <div class="text-center mb-4">
+                    <h3 class="fw-bold text-dark mb-1">DIGITA</h3>
+                    <span class="text-muted small">Manajemen Mutu & Siklus Aset PLN</span>
+                </div>
 
-        <?php if (!empty($error)): ?>
-            <div class="alert alert-danger py-2 small"><?= $error; ?></div>
-        <?php endif; ?>
+                <!-- Menampilkan pesan error dari file logic login.php -->
+                <?php if (!empty($error_message)): ?>
+                    <div class="alert alert-danger py-2 small text-center" role="alert">
+                        <?= $error_message; ?>
+                    </div>
+                <?php endif; ?>
 
-        <form action="" method="POST">
-            <div class="mb-3">
-                <label class="form-label fw-bold small">Nama Akun (Username)</label>
-                <input type="text" name="NamaAkun" class="form-control" required>
+                <!-- Form diarahkan ke file logic PHP itu sendiri -->
+                <form action="../../modules/auth/login.php" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Username / NIP</label>
+                        <input type="text" name="username" class="form-control" placeholder="Masukkan username" required autofocus>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Password</label>
+                        <input type="password" name="password" class="form-control" placeholder="******" required>
+                    </div>
+                    <button type="submit" class="btn btn-pln w-100 py-2">Masuk ke Sistem</button>
+                </form>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-bold small">Kata Kunci (Password)</label>
-                <input type="password" name="KataKunci" class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 fw-bold">LOGIN</button>
-        </form>
+        </div>
     </div>
+</div>
 </body>
 </html>

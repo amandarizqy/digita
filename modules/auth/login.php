@@ -1,53 +1,52 @@
 <?php
 session_start();
+
+// Panggil konfigurasi database
 require_once '../../config/database.php';
 
-$error = '';
+// Jika pengguna sudah login, arahkan langsung ke dashboard
+if (isset($_SESSION['NamaAkun'])) {
+    header("Location: ../../index.php");
+    exit;
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nama_akun = trim($_POST['NamaAkun']);
-    $kata_kunci = trim($_POST['KataKunci']);
+$error_message = '';
 
-    if (!empty($nama_akun) && !empty($kata_kunci)) {
-        // Ambil data pengguna dan JOIN ke tabel hak_akses untuk membaca level/nama hak akses
-        $stmt = $conn->prepare("
-            SELECT p.*, h.NamaHak 
-            FROM master_pengguna p 
-            LEFT JOIN hak_akses h ON p.KodeHak = h.KodeHak 
-            WHERE p.NamaAkun = ? AND p.StatusData = 'AKTIF'
-        ");
-        $stmt->execute([$nama_akun]);
-        $user = $stmt->fetch();
+// Proses form jika metode request adalah POST
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $username = trim($_POST['username']);
+    $password = trim($_POST['password']);
 
-        // Verifikasi akun dan password
-        if ($user && ($kata_kunci === $user['KataKunci'])) {
-            // Set Session berdasarkan database mentor
+    try {
+        // Cek kredensial menggunakan PDO Prepared Statement
+        $query = "SELECT * FROM master_pengguna WHERE NamaAkun = :username AND KataKunci = :password AND StatusData = 'AKTIF'";
+        $stmt = $conn->prepare($query);
+        $stmt->bindParam(':username', $username);
+        $stmt->bindParam(':password', $password);
+        $stmt->execute();
+
+        if ($stmt->rowCount() > 0) {
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Inisialisasi Session RBAC S41
             $_SESSION['NamaAkun'] = $user['NamaAkun'];
             $_SESSION['NamaPengguna'] = $user['NamaPengguna'];
-            $_SESSION['KodeHak'] = $user['KodeHak']; // Kode hak akses (misal: 'SUP')
-            $_SESSION['NamaHak'] = $user['NamaHak'];
-            $_SESSION['UnitUp'] = $user['UnitUp'];
-            $_SESSION['UnitAp'] = $user['UnitAp'];
+            $_SESSION['KodeHak'] = $user['KodeHak']; // Contoh: 'SUP', 'ADM', 'STF'
             $_SESSION['UnitUpi'] = $user['UnitUpi'];
-
-            // PERBAIKAN: Gunakan $_SESSION['KodeHak'] sesuai yang diset di atas
-            if ($_SESSION['KodeHak'] == 'SUP') {
-                // Superadmin langsung diarahkan ke halaman utama Master Unit
-                header("Location: ../../templates/master/unit.php");
-                exit;
-            } else {
-                // User biasa diarahkan ke dashboard unit masing-masing
-                header("Location: ../../templates/dashboard/index.php");
-                exit;
-            }
+            $_SESSION['UnitAp'] = $user['UnitAp'];
+            $_SESSION['UnitUp'] = $user['UnitUp'];
+            
+            // Redirect ke dashboard utama
+            header("Location: ../../index.php");
+            exit;
         } else {
-            $error = "Nama Akun atau Kata Kunci salah, atau akun tidak aktif!";
+            $error_message = "Username atau kata sandi salah, atau akun tidak aktif.";
         }
-    } else {
-        $error = "Semua kolom wajib diisi!";
+    } catch (PDOException $e) {
+        $error_message = "Terjadi kesalahan sistem: " . $e->getMessage();
     }
 }
 
-// Panggil tampilan form login
+// Muat tampilan UI (View)
 require_once '../../templates/auth/login.php';
 ?>

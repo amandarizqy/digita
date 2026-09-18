@@ -5,11 +5,11 @@
         </span>
         <div class="d-flex align-items-center">
             <span class="badge bg-info text-dark me-3 px-3 py-2">
-                Role: <strong>{{ session.get('role_code', 'USER') }}</strong>
+                Role: <?= $_SESSION['KodeHak'] ?? 'USER'; ?>
             </span>
             <div class="dropdown">
                 <a href="#" class="d-flex align-items-center text-dark text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
-                    <span class="fw-semibold">{{ session.get('fullname', 'User Aktif') }}</span>
+                    <span class="fw-semibold"><?= $_SESSION['NamaPengguna'] ?? 'User Aktif'; ?></span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end text-small shadow" aria-labelledby="dropdownUser1">
                     <li><a class="dropdown-item" href="/auth/logout">Keluar</a></li>
