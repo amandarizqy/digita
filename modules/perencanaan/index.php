@@ -8,19 +8,39 @@ if (!isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
-// ---------------------------------------------------------
-// AREA KERJA BACKEND: 
-// Teman timmu bisa melakukan query SELECT/INSERT/UPDATE di sini
-// ---------------------------------------------------------
-
-
-// Atur judul halaman
+// Atur judul halaman & menu aktif
 $page_title = "Perencanaan - Digita S41";
 $active_menu = 'perencanaan';      // ← ini yang membuat menu Perencanaan menyala
 
-// Tangkap output view ke dalam variabel $content
+// Ambil parameter action dari URL, jika kosong arahkan ke dashboard
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+
+// Mulai menangkap output view ke dalam variabel $content
 ob_start();
-require_once '../../templates/perencanaan/index.php'; 
+
+// ---------------------------------------------------------
+// AREA KERJA BACKEND & ROUTING: 
+switch ($action) {
+    case 'upload_riwayat':
+        // Memanggil halaman input dari folder yang sama (modules/perencanaan)
+        include 'upload_riwayat.php';
+        break;
+        
+    case 'data_riwayat':
+        include 'data_riwayat.php';
+        break;
+
+    // Tambahkan case lain sesuai kebutuhan menu di dashboard...
+
+    default:
+        // PENTING: Gunakan ../../ untuk mundur ke root folder digita, 
+        // lalu masuk ke folder templates
+        include '../../templates/perencanaan/index.php';
+        break;
+}
+// ---------------------------------------------------------
+
+// Selesai menangkap output
 $content = ob_get_clean();
 
 // Render ke dalam layout utama
