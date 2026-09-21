@@ -26,9 +26,3 @@ $content = ob_get_clean();
 // Render ke dalam layout utama
 require_once '../../templates/layouts/base.php';
 ?>
-
-<h3>Modul Perencanaan</h3>
-  <div class="card shadow-sm mt-3">
-    <div class="card-header fw-bold text-primary">Daftar Perencanaan</div>
-    <div class="card-body">Isi tabel / form perencanaan di sini.</div>
-  </div>
