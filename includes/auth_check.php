@@ -1,8 +1,10 @@
 <?php
-require_once __DIR__ . '/../config/app.php';
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: " . BASE_URL . "/modules/auth/login.php");
+// Jika belum login, lempar kembali ke halaman login
+if (!isset($_SESSION['user_id'])) {
+    header("Location: /s41_monitoring/modules/auth/login.php");
     exit;
 }

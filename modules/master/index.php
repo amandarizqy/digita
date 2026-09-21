@@ -1,14 +1,12 @@
 <?php
 session_start();
-require_once __DIR__ . '/../../config/database.php';
+require_once '../../config/database.php';
 
-// 1. Verifikasi Session Pengguna
+// Pastikan pengguna sudah login
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: ../auth/login.php");
     exit;
 }
-
-$action = $_GET['action'] ?? 'index';
 
 // ---------------------------------------------------------
 // PROSES CRUD: TABEL master_provider

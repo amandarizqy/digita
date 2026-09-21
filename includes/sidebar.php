@@ -1,16 +1,8 @@
 <?php 
-// Ambil URL saat ini untuk mendeteksi menu mana yang sedang aktif
+// Panggil koneksi database
+require_once __DIR__ . '/../config/database.php';
+
 $current_path = $_SERVER['REQUEST_URI']; 
-$menus = [
-  ['master',       'Master Data',      'bi-hdd-stack'],
-  ['perencanaan',  'Perencanaan',      'bi-bar-chart-steps'],
-  ['pengadaan',    'Pengadaan & Stok', 'bi-box-seam'],
-  ['pemasangan',   'Pemasangan',       'bi-tools'],
-  ['penggunaan',   'Penggunaan',       'bi-activity'],
-  ['pemeliharaan', 'Pemeliharaan',     'bi-wrench'],
-  ['penghapusan',  'Penghapusan',      'bi-trash'],
-  ['laporan',      'Laporan',          'bi-file-earmark-text'],
-];
 ?>
 <!-- Tambahkan bg-dark dan min-vh-100 agar sidebar berwarna gelap dan tingginya penuh -->
 <div class="sidebar d-flex flex-column flex-shrink-0 p-3 bg-dark text-white min-vh-100" style="width: 250px;">
@@ -22,46 +14,22 @@ $menus = [
     <div class="small text-uppercase text-muted fw-bold ps-2 mb-2" style="font-size: 0.75rem;">Menu Utama</div>
     
     <ul class="nav nav-pills flex-column mb-auto">
-        <li class="nav-item mb-1">
-            <a href="/modules/master/index.php" class="nav-link text-white <?= (strpos($current_path, 'master') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-hdd-stack me-2"></i> Master Data
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/perencanaan/index.php" class="nav-link text-white <?= (strpos($current_path, 'perencanaan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-bar-chart-steps me-2"></i> Perencanaan
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/pengadaan/index.php" class="nav-link text-white <?= (strpos($current_path, 'pengadaan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-box-seam me-2"></i> Pengadaan & Stok
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/pemasangan/index.php" class="nav-link text-white <?= (strpos($current_path, 'pemasangan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-tools me-2"></i> Pemasangan
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/penggunaan/index.php" class="nav-link text-white <?= (strpos($current_path, 'penggunaan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-activity me-2"></i> Penggunaan
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/pemeliharaan/index.php" class="nav-link text-white <?= (strpos($current_path, 'pemeliharaan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-wrench me-2"></i> Pemeliharaan
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/penghapusan/index.php" class="nav-link text-white <?= (strpos($current_path, 'penghapusan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-trash me-2"></i> Penghapusan
-            </a>
-        </li>
-        <li class="nav-item mb-1">
-            <a href="/modules/laporan/index.php" class="nav-link text-white <?= (strpos($current_path, 'laporan') !== false) ? 'active bg-primary' : '' ?>">
-                <i class="bi bi-file-earmark-text me-2"></i> Laporan
-            </a>
-        </li>
+        <!-- Render menu secara dinamis menggunakan loop -->
+        <?php foreach ($menus as $menu): ?>
+            <?php 
+                // Ekstrak nama folder modul dari URL (misal: 'master' dari '/modules/master/index.php')
+                $path_parts = explode('/', trim($menu['UrlRoute'], '/'));
+                $module_name = $path_parts[1] ?? '';
+                
+                // Deteksi menu aktif
+                $is_active = (strpos($current_path, $module_name) !== false) ? 'active bg-primary' : '';
+            ?>
+            <li class="nav-item mb-1">
+                <a href="<?= htmlspecialchars($menu['UrlRoute']) ?>" class="nav-link text-white <?= $is_active ?>">
+                    <i class="bi <?= htmlspecialchars($menu['Icon']) ?> me-2"></i> <?= htmlspecialchars($menu['NamaMenu']) ?>
+                </a>
+            </li>
+        <?php endforeach; ?>
     </ul>
     <hr class="text-secondary">
     <div class="dropdown">

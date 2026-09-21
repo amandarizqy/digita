@@ -1,5 +1,6 @@
 <?php
-session_start();
+// Pastikan path ke auth_check dan database sudah benar
+require_once '../../includes/auth_check.php';
 require_once '../../config/database.php';
 
 // Pastikan pengguna sudah login
@@ -15,13 +16,12 @@ if (!isset($_SESSION['NamaAkun'])) {
 
 
 // Atur judul halaman
-$page_title = "Pengadaan - Digita S41";
-$active_menu = 'pengadaan'; 
+$page_title = "Master Data - Digita S41";
 
 // Tangkap output view ke dalam variabel $content
 ob_start();
 // Sesuaikan path ini dengan modul yang sedang dikerjakan
-require_once '../../templates/pengadaan/index.php'; 
+require_once '../../templates/master/index.php'; 
 $content = ob_get_clean();
 
 // Render ke dalam layout utama
