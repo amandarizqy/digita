@@ -15,14 +15,20 @@ if (!isset($_SESSION['NamaAkun'])) {
 
 
 // Atur judul halaman
-$page_title = "Master Data - Digita S41";
+$page_title = "Perencanaan - Digita S41";
+$active_menu = 'perencanaan';      // ← ini yang membuat menu Perencanaan menyala
 
 // Tangkap output view ke dalam variabel $content
 ob_start();
-// Sesuaikan path ini dengan modul yang sedang dikerjakan
-require_once '../../templates/master/index.php'; 
+require_once '../../templates/perencanaan/index.php'; 
 $content = ob_get_clean();
 
 // Render ke dalam layout utama
 require_once '../../templates/layouts/base.php';
 ?>
+
+<h3>Modul Perencanaan</h3>
+  <div class="card shadow-sm mt-3">
+    <div class="card-header fw-bold text-primary">Daftar Perencanaan</div>
+    <div class="card-body">Isi tabel / form perencanaan di sini.</div>
+  </div>

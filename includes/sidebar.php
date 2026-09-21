@@ -1,6 +1,16 @@
 <?php 
 // Ambil URL saat ini untuk mendeteksi menu mana yang sedang aktif
 $current_path = $_SERVER['REQUEST_URI']; 
+$menus = [
+  ['master',       'Master Data',      'bi-hdd-stack'],
+  ['perencanaan',  'Perencanaan',      'bi-bar-chart-steps'],
+  ['pengadaan',    'Pengadaan & Stok', 'bi-box-seam'],
+  ['pemasangan',   'Pemasangan',       'bi-tools'],
+  ['penggunaan',   'Penggunaan',       'bi-activity'],
+  ['pemeliharaan', 'Pemeliharaan',     'bi-wrench'],
+  ['penghapusan',  'Penghapusan',      'bi-trash'],
+  ['laporan',      'Laporan',          'bi-file-earmark-text'],
+];
 ?>
 <!-- Tambahkan bg-dark dan min-vh-100 agar sidebar berwarna gelap dan tingginya penuh -->
 <div class="sidebar d-flex flex-column flex-shrink-0 p-3 bg-dark text-white min-vh-100" style="width: 250px;">

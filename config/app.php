@@ -1,0 +1,1 @@
+define('BASE_URL', '/s41_monitoring');define('BASE_URL', '/s41_monitoring');
