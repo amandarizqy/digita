@@ -1,0 +1,257 @@
+<!-- HEADER MODUL & TOMBOL TAMBAH DATA -->
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h4 class="fw-bold text-dark mb-1">Modul Master Data</h4>
+        <p class="text-muted small mb-0">Kelola konfigurasi organisasi, master akun, dan pusat integrasi pesan telemetri relai S41.</p>
+    </div>
+    <button class="btn btn-primary btn-sm px-3 shadow-sm rounded-2" data-bs-toggle="modal" data-bs-target="#modalTambahModem" style="background-color: #0d6efd; border-color: #0d6efd;">
+        <i class="bi bi-plus-lg me-1"></i> Tambah Modem
+    </button>
+</div>
+
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
+    <li class="nav-item">
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
+            <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="pengguna_Controller.php">
+            <i class="bi bi-people me-2"></i> Pengguna
+        </a>
+    </li>
+    <li class="nav-item">
+        <!-- TAB PUSAT PESAN AKTIF -->
+        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
+            <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
+        </a>
+    </li>
+</ul>
+
+<!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
+    
+    <!-- Link kembali ke Provider SIM -->
+    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Provider SIM
+    </a>
+
+    <!-- Modem GSM AKTIF -->
+    <a href="modem_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
+        <i class="bi bi-check2 me-1"></i> Modem GSM
+    </a>
+
+    <!-- Link ke Perintah Baku -->
+    <a href="pesan_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Perintah Baku (AT Commands)
+    </a>
+</div>
+
+<!-- KARTU METRIK RINGKASAN MODEM -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL MODEM TERDAFTAR</span>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem ?? count($modems ?? []); ?> Modem</h2>
+                    <span class="text-muted small">Tabel referensi: <code class="text-danger">master_modem</code></span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
+                    <i class="bi bi-hdd-network fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS MODEM ONLINE</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_modem_aktif ?? 0; ?> / <?= $total_modem ?? count($modems ?? []); ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Port Engine & Gateway Server Terhubung</span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
+                    <i class="bi bi-cpu fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABEL MASTER MODEM -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">
+                Daftar Master Modem Gateway
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_modem</span>
+        </div>
+        <!-- Kolom Pencarian Cepat -->
+        <div class="input-group input-group-sm" style="max-width: 260px;">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="cariModem" class="form-control bg-light border-start-0" placeholder="Cari IMEI, IP, Port...">
+        </div>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tabelModem">
+                <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
+                    <tr>
+                        <th style="width: 40px;" class="ps-4">#</th>
+                        <th>IMEI MODEM</th>
+                        <th>KODE UNIT (UP / AP / UPI)</th>
+                        <th>SIM ID</th>
+                        <th>IP SERVER (DATA / ENGINE)</th>
+                        <th>PORT</th>
+                        <th>STATUS DATA</th>
+                        <th>WAKTU DATA</th>
+                        <th class="text-end pe-4">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($modems)): ?>
+                        <?php $no = 1; foreach ($modems as $row): ?>
+                        <tr>
+                            <td class="ps-4 text-muted small"><?= $no++; ?></td>
+                            <td class="fw-bold text-dark font-monospace imei-cell">
+                                <i class="bi bi-hdd-rack me-1 text-primary"></i>
+                                <?= htmlspecialchars($row['ImeiModem'] ?? '-'); ?>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
+                                <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['KodeAp'] ?? '-'); ?></span>
+                                <span class="badge bg-light text-secondary border">UPI: <?= htmlspecialchars($row['KodeUpi'] ?? '-'); ?></span>
+                            </td>
+                            <td class="font-monospace text-secondary small"><?= htmlspecialchars($row['SimId'] ?? '-'); ?></td>
+                            <td class="small ip-cell">
+                                <div><span class="text-muted">Data:</span> <code><?= htmlspecialchars($row['IpServerData'] ?? '-'); ?></code></div>
+                                <div><span class="text-muted">Engine:</span> <code><?= htmlspecialchars($row['IpServerEngine'] ?? '-'); ?></code></div>
+                            </td>
+                            <td class="port-cell"><span class="badge bg-secondary bg-opacity-10 text-dark border font-monospace"><?= htmlspecialchars($row['PortEngine'] ?? '-'); ?></span></td>
+                            <td>
+                                <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
+                            <td class="text-end pe-4">
+                                <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">Belum ada rekaman data di tabel master_modem.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginasi -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
+        <small class="text-muted">Menampilkan <?= !empty($modems) ? count($modems) : 0; ?> dari <?= !empty($modems) ? count($modems) : 0; ?> total data master modem</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
+                <li class="page-item active"><a class="page-link" style="background-color: #0d6efd; border-color: #0d6efd;" href="#">1</a></li>
+                <li class="page-item disabled"><a class="page-link" href="#">Selanjutnya</a></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- MODAL TAMBAH MODEM -->
+<div class="modal fade" id="modalTambahModem" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="store">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Tambah Master Modem Baru</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">IMEI Modem *</label>
+                    <input type="text" name="ImeiModem" class="form-control form-control-sm font-monospace" placeholder="Contoh: 867749010776270" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">SIM ID / ICCID</label>
+                    <input type="text" name="SimId" class="form-control form-control-sm font-monospace" placeholder="Contoh: 510105394216009">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UP</label>
+                    <input type="text" name="KodeUp" class="form-control form-control-sm" placeholder="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode AP</label>
+                    <input type="text" name="KodeAp" class="form-control form-control-sm" placeholder="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UPI</label>
+                    <input type="text" name="KodeUpi" class="form-control form-control-sm" placeholder="56">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
+                    <input type="text" name="IpServerData" class="form-control form-control-sm font-monospace" placeholder="10.96.100.123">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">IP Server Engine</label>
+                    <input type="text" name="IpServerEngine" class="form-control form-control-sm font-monospace" placeholder="10.96.100.20">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Port Engine</label>
+                    <input type="text" name="PortEngine" class="form-control form-control-sm font-monospace" placeholder="COM13">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
+                    <select name="StatusData" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Data Modem</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputCari = document.getElementById('cariModem');
+    const tabel = document.getElementById('tabelModem');
+    if (inputCari && tabel) {
+        inputCari.addEventListener('keyup', function() {
+            const keyword = this.value.toLowerCase();
+            const baris = tabel.querySelectorAll('tbody tr');
+            baris.forEach(row => {
+                const imeiText = row.querySelector('.imei-cell') ? row.querySelector('.imei-cell').textContent.toLowerCase() : '';
+                const ipText = row.querySelector('.ip-cell') ? row.querySelector('.ip-cell').textContent.toLowerCase() : '';
+                const portText = row.querySelector('.port-cell') ? row.querySelector('.port-cell').textContent.toLowerCase() : '';
+                
+                row.style.display = (imeiText.includes(keyword) || ipText.includes(keyword) || portText.includes(keyword)) ? '' : 'none';
+            });
+        });
+    }
+});
+</script>

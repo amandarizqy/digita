@@ -1,0 +1,247 @@
+<!-- HEADER MODUL & TOMBOL TAMBAH DATA -->
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h4 class="fw-bold text-dark mb-1">Modul Master Data</h4>
+        <p class="text-muted small mb-0">Kelola konfigurasi organisasi, master akun, dan pusat integrasi pesan telemetri relai S41.</p>
+    </div>
+    <button class="btn btn-primary btn-sm px-3 shadow-sm rounded-2" data-bs-toggle="modal" data-bs-target="#modalTambahPerintah" style="background-color: #0d6efd; border-color: #0d6efd;">
+        <i class="bi bi-plus-lg me-1"></i> Tambah Perintah
+    </button>
+</div>
+
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
+    <li class="nav-item">
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
+            <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="pengguna_Controller.php">
+            <i class="bi bi-people me-2"></i> Pengguna
+        </a>
+    </li>
+    <li class="nav-item">
+        <!-- TAB PUSAT PESAN AKTIF -->
+        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
+            <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
+        </a>
+    </li>
+</ul>
+
+<!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
+    
+    <!-- Link ke Provider SIM -->
+    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Provider SIM
+    </a>
+
+    <!-- Link ke Modem GSM -->
+    <a href="modem_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Modem GSM
+    </a>
+
+    <!-- Perintah Baku AKTIF -->
+    <a href="pesan_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
+        <i class="bi bi-check2 me-1"></i> Perintah Baku (AT Commands)
+    </a>
+</div>
+
+<!-- KARTU METRIK RINGKASAN PERINTAH BAKU -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PERINTAH TERDAFTAR</span>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_perintah ?? count($perintah ?? []); ?> Format</h2>
+                    <span class="text-muted small">Tabel referensi: <code class="text-danger">baku_outbox</code></span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
+                    <i class="bi bi-terminal fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS FORMAT AKTIF</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif ?? 0; ?> / <?= $total_perintah ?? count($perintah ?? []); ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Tervalidasi untuk Daemon SMS Gateway</span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
+                    <i class="bi bi-check2-circle fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABEL MASTER PERINTAH BAKU -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">
+                Daftar Perintah Baku Transmisi Relai
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: baku_outbox</span>
+        </div>
+        <!-- Kolom Pencarian Cepat -->
+        <div class="input-group input-group-sm" style="max-width: 260px;">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="cariPerintah" class="form-control bg-light border-start-0" placeholder="Cari sintaks / aksi...">
+        </div>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tabelPerintah">
+                <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
+                    <tr>
+                        <th style="width: 50px;" class="ps-4">ID</th>
+                        <th style="width: 220px;">SINTAKS ISI PESAN</th>
+                        <th>KETERANGAN TINDAKAN</th>
+                        <th style="width: 140px;">JENIS PERINTAH</th>
+                        <th style="width: 140px;">DB TUJUAN</th>
+                        <th style="width: 130px;">STATUS</th>
+                        <th style="width: 180px;">WAKTU DATA</th>
+                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($perintah)): ?>
+                        <?php foreach ($perintah as $row): ?>
+                        <tr>
+                            <td class="ps-4 text-muted small font-monospace"><?= htmlspecialchars($row['Id'] ?? '-'); ?></td>
+                            <td>
+                                <code class="fw-bold text-primary px-2 py-1 bg-light rounded border border-light-subtle sintaks-cell">
+                                    <?= htmlspecialchars($row['IsiPesan'] ?? '-'); ?>
+                                </code>
+                            </td>
+                            <td class="fw-medium text-dark ket-cell">
+                                <?= htmlspecialchars($row['Keterangan'] ?? '-'); ?>
+                            </td>
+                            <td>
+                                <span class="badge bg-info bg-opacity-10 text-dark border font-monospace">
+                                    <?= htmlspecialchars($row['JenisPerintah'] ?? 'KIRIM'); ?>
+                                </span>
+                            </td>
+                            <td class="text-secondary small font-monospace">
+                                <?= htmlspecialchars($row['DatabaseTujuan'] ?? 'smsd'); ?>
+                            </td>
+                            <td>
+                                <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
+                            <td class="text-end pe-4">
+                                <a href="pesan_Controller.php?action=toggle_status&id=<?= urlencode($row['Id']); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">Belum ada data perintah di tabel baku_outbox.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginasi -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
+        <small class="text-muted">Menampilkan <?= !empty($perintah) ? count($perintah) : 0; ?> dari <?= !empty($perintah) ? count($perintah) : 0; ?> total perintah baku</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
+                <li class="page-item active"><a class="page-link" style="background-color: #0d6efd; border-color: #0d6efd;" href="#">1</a></li>
+                <li class="page-item disabled"><a class="page-link" href="#">Selanjutnya</a></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- MODAL TAMBAH PERINTAH BAKU -->
+<div class="modal fade" id="modalTambahPerintah" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="pesan_Controller.php" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="store">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Tambah Format Perintah Baku</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Isi Format Pesan (Sintaks Perintah) *</label>
+                    <input type="text" name="IsiPesan" class="form-control form-control-sm font-monospace" placeholder="Contoh: PLNON, PLNOFF, PLNRESET" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Keterangan Tindakan *</label>
+                    <input type="text" name="Keterangan" class="form-control form-control-sm" placeholder="Contoh: MENYALAKAN LISTRIK" required>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold text-secondary">Jenis Perintah</label>
+                        <select name="JenisPerintah" class="form-select form-select-sm">
+                            <option value="KIRIM">KIRIM</option>
+                            <option value="TERIMA">TERIMA</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold text-secondary">Database Tujuan</label>
+                        <input type="text" name="DatabaseTujuan" class="form-control form-control-sm font-monospace" value="smsd">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Status Awal</label>
+                    <select name="StatusData" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Format</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputCari = document.getElementById('cariPerintah');
+    const tabel = document.getElementById('tabelPerintah');
+    if (inputCari && tabel) {
+        inputCari.addEventListener('keyup', function() {
+            const keyword = this.value.toLowerCase();
+            const baris = tabel.querySelectorAll('tbody tr');
+            baris.forEach(row => {
+                const sintaksCell = row.querySelector('.sintaks-cell');
+                const ketCell = row.querySelector('.ket-cell');
+                const sintaksText = sintaksCell ? sintaksCell.textContent.toLowerCase() : '';
+                const ketText = ketCell ? ketCell.textContent.toLowerCase() : '';
+                
+                row.style.display = (sintaksText.includes(keyword) || ketText.includes(keyword)) ? '' : 'none';
+            });
+        });
+    }
+});
+</script>

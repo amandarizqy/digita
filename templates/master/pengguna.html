@@ -1,0 +1,296 @@
+<!-- HEADER MODUL & TOMBOL TAMBAH PENGGUNA -->
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h4 class="fw-bold text-dark mb-1">Modul Master Data</h4>
+        <p class="text-muted small mb-0">Kelola konfigurasi organisasi, master akun, otorisasi peran, dan hak akses pengguna sistem S41.</p>
+    </div>
+    <button class="btn btn-primary btn-sm px-3 shadow-sm rounded-2" data-bs-toggle="modal" data-bs-target="#modalTambahPengguna" style="background-color: #0d6efd; border-color: #0d6efd;">
+        <i class="bi bi-plus-lg me-1"></i> Tambah Pengguna
+    </button>
+</div>
+
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
+<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
+    <li class="nav-item">
+        <!-- TAUTAN DIARAHKAN KE CONTROLLER UNIT -->
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
+            <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
+        </a>
+    </li>
+    <li class="nav-item">
+        <!-- TAB PENGGUNA AKTIF -->
+        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="pengguna_Controller.php">
+            <i class="bi bi-people me-2"></i> Pengguna
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="index.php">
+            <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
+        </a>
+    </li>
+</ul>
+
+<!-- LEVEL 3: SUB ENTITAS FILTER PENGGUNA -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
+    
+    <a href="pengguna_Controller.php?sub=semua" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'semua') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'semua') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+        <?= ($sub === 'semua') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Semua Pengguna
+    </a>
+
+    <a href="pengguna_Controller.php?sub=ui" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ui') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ui') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+        <?= ($sub === 'ui') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UI
+    </a>
+
+    <a href="pengguna_Controller.php?sub=up3" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'up3') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'up3') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+        <?= ($sub === 'up3') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UP3
+    </a>
+
+    <a href="pengguna_Controller.php?sub=ulp" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ulp') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ulp') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+        <?= ($sub === 'ulp') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat ULP
+    </a>
+</div>
+
+<!-- KARTU METRIK KPI PENGGUNA -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PENGGUNA TERDAFTAR</span>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_akun ?? count($users ?? []); ?> Akun</h2>
+                    <span class="text-muted small">Tabel referensi: <code class="text-danger">master_pengguna</code></span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
+                    <i class="bi bi-people fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS AKUN AKTIF</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif ?? 0; ?> / <?= $total_akun ?? count($users ?? []); ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Hak Akses Terverifikasi</span>
+                </div>
+                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
+                    <i class="bi bi-check2-circle fs-4"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABEL MASTER PENGGUNA -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">
+                Daftar Data Master Pengguna
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_pengguna</span>
+        </div>
+        <!-- Tambahan: Input Pencarian Cepat -->
+        <div class="input-group input-group-sm" style="max-width: 260px;">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="cariPengguna" class="form-control bg-light border-start-0" placeholder="Cari nama, akun, email...">
+        </div>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tabelPengguna">
+                <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
+                    <tr>
+                        <th style="width: 40px;" class="ps-4">#</th>
+                        <th style="width: 140px;">USERNAME</th>
+                        <th>NAMA PENGGUNA & KONTAK</th>
+                        <th>EMAIL</th>
+                        <th style="width: 150px;">ROLE / HAK AKSES</th>
+                        <th style="width: 140px;">UNIT PENEMPATAN</th>
+                        <th style="width: 120px;">STATUS DATA</th>
+                        <th style="width: 160px;">WAKTU DATA</th>
+                        <th class="text-end pe-4" style="width: 100px;">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($users)): ?>
+                        <?php $no = 1; foreach ($users as $row): ?>
+                        <tr>
+                            <td class="ps-4 text-muted small"><?= $no++; ?></td>
+                            <td class="fw-bold text-dark font-monospace akun-cell"><?= htmlspecialchars($row['NamaAkun'] ?? '-'); ?></td>
+                            <td class="nama-cell">
+                                <div class="fw-semibold text-dark"><?= htmlspecialchars($row['NamaPengguna'] ?? '-'); ?></div>
+                                <div class="text-muted small"><i class="bi bi-telephone me-1"></i><?= htmlspecialchars($row['NomorKontak'] ?? '-'); ?></div>
+                            </td>
+                            <td class="email-cell">
+                                <div class="text-secondary small">
+                                    <i class="bi bi-envelope me-1 text-muted"></i>
+                                    <?= htmlspecialchars($row['AlamatEmail'] ?? '-'); ?>
+                                </div>
+                            </td>
+                            <td>
+                                <?php 
+                                    $hak = $row['KodeHak'] ?? '-';
+                                    $badge_class = 'bg-secondary';
+                                    if (strpos($hak, 'SA') !== false) $badge_class = 'bg-primary';
+                                    elseif (strpos($hak, 'AM') !== false) $badge_class = 'bg-warning text-dark';
+                                    elseif (strpos($hak, 'TL') !== false) $badge_class = 'bg-info text-dark';
+                                    elseif (strpos($hak, 'SF') !== false) $badge_class = 'bg-success';
+                                ?>
+                                <span class="badge <?= $badge_class; ?> px-2 py-1 font-monospace mb-1"><?= htmlspecialchars($hak); ?></span>
+                            </td>
+                            <td>
+                                <div class="small">
+                                    <span class="badge bg-light text-dark border">UPI: <?= htmlspecialchars($row['UnitUpi'] ?? '-'); ?></span>
+                                    <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['UnitAp'] ?? '-'); ?></span>
+                                    <span class="badge bg-light text-secondary border">UP: <?= htmlspecialchars($row['UnitUp'] ?? '-'); ?></span>
+                                </div>
+                            </td>
+                            <td>
+                                <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
+                            <td class="text-end pe-4">
+                                <a href="pengguna_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['NamaAkun'] ?? '')); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">Belum ada rekaman akun pada kategori ini.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Paginasi -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
+        <small class="text-muted">Menampilkan 1 - <?= !empty($users) ? count($users) : 0; ?> dari <?= $total_akun ?? (!empty($users) ? count($users) : 0); ?> total data master pengguna</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
+                <li class="page-item active"><a class="page-link" style="background-color: #0d6efd; border-color: #0d6efd;" href="#">1</a></li>
+                <li class="page-item disabled"><a class="page-link" href="#">Selanjutnya</a></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- MODAL TAMBAH PENGGUNA -->
+<div class="modal fade" id="modalTambahPengguna" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form action="pengguna_Controller.php?sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="store">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Tambah Pengguna Baru</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Username (NamaAkun) *</label>
+                    <input type="text" name="NamaAkun" class="form-control form-control-sm font-monospace" placeholder="Contoh: ahmad.subagyo" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Email Korporat *</label>
+                    <input type="email" name="AlamatEmail" class="form-control form-control-sm" placeholder="Contoh: ahmad@pln.co.id" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Nama Lengkap Pengguna *</label>
+                    <input type="text" name="NamaPengguna" class="form-control form-control-sm" placeholder="Contoh: Ahmad Subagyo, S.T." required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Nomor Kontak / WhatsApp</label>
+                    <input type="text" name="NomorKontak" class="form-control form-control-sm" placeholder="08123456789">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Kata Kunci (Password) *</label>
+                    <input type="password" name="KataKunci" class="form-control form-control-sm" value="Niaga@123" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Role / Hak Akses *</label>
+                    <select name="KodeHak" class="form-select form-select-sm" required>
+                        <option value="SF.AP">SF.AP (Staf Pelaksana UP3)</option>
+                        <option value="TL.AP">TL.AP (Team Leader UP3)</option>
+                        <option value="AM.AP">AM.AP (Asisten Manajer UP3)</option>
+                        <option value="SF.UI">SF.UI (Staf Unit Induk)</option>
+                        <option value="AM.UI">AM.UI (Asisten Manajer UI)</option>
+                        <option value="MB.UI">MB.UI (Manajer Bidang UI)</option>
+                        <option value="SF.UP">SF.UP (Staf Pelaksana ULP)</option>
+                        <option value="TL.UP">TL.UP (Team Leader ULP)</option>
+                        <option value="ML.UP">ML.UP (Manajer Layanan ULP)</option>
+                        <option value="SA.KP">SA.KP (Super Administrator Pusat)</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit UPI (UID)</label>
+                    <input type="text" name="UnitUpi" class="form-control form-control-sm" value="56">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit AP (UP3)</label>
+                    <input type="text" name="UnitAp" class="form-control form-control-sm" value="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit UP (ULP)</label>
+                    <input type="text" name="UnitUp" class="form-control form-control-sm" value="56610">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
+                    <select name="StatusData" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Akun Pengguna</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SCRIPT PENCARIAN CLIENT-SIDE INSTAN -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputCari = document.getElementById('cariPengguna');
+    const tabel = document.getElementById('tabelPengguna');
+    if (inputCari && tabel) {
+        inputCari.addEventListener('keyup', function() {
+            const keyword = this.value.toLowerCase();
+            const baris = tabel.querySelectorAll('tbody tr');
+            baris.forEach(row => {
+                const akunCell  = row.querySelector('.akun-cell');
+                const namaCell  = row.querySelector('.nama-cell');
+                const emailCell = row.querySelector('.email-cell');
+
+                const akunText  = akunCell ? akunCell.textContent.toLowerCase() : '';
+                const namaText  = namaCell ? namaCell.textContent.toLowerCase() : '';
+                const emailText = emailCell ? emailCell.textContent.toLowerCase() : '';
+
+                if (akunText.includes(keyword) || namaText.includes(keyword) || emailText.includes(keyword)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+});
+</script>
