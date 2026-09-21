@@ -1,8 +1,8 @@
 <?php
-$host = 'localhost';
+$host = '10.96.100.123';
 $dbname = 'digita_db';
-$username = 'root';
-$password = '';
+$username = 'digita';
+$password = 'Niaga@123';
 
 try {
     $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
