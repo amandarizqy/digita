@@ -21,16 +21,34 @@ ob_start();
 // ---------------------------------------------------------
 // AREA KERJA BACKEND & ROUTING: 
 switch ($action) {
+    // Kolom Input
     case 'upload_riwayat':
         // Memanggil halaman input dari folder yang sama (modules/perencanaan)
         include 'upload_riwayat.php';
         break;
-        
+    case 'input_kepentingan':
+        include 'input_kepentingan.php';
+        break;
+    case 'input_survey':
+        include 'input_survey.php';
+        break;
+    // Kolom Proses    
+    case 'proses_risiko':
+        include 'proses_risiko.php';
+        break;
+    case 'proses_prioritas':
+        include 'proses_prioritas.php'; 
+        break;
+    // Kolom Monitoring
     case 'data_riwayat':
         include 'data_riwayat.php';
         break;
-
-    // Tambahkan case lain sesuai kebutuhan menu di dashboard...
+    case 'hasil_kepentingan':
+        include 'hasil_kepentingan.php'; break;
+    case 'hasil_survey':
+        include 'hasil_survey.php'; break;
+    case 'hasil_risiko':
+        include 'hasil_risiko.php'; break;
 
     default:
         // PENTING: Gunakan ../../ untuk mundur ke root folder digita, 
