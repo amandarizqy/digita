@@ -2,6 +2,9 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4><i class="bi bi-upload"></i> Data Riwayat Pelunasan</h4>
+    <a href="?module=perencanaan&action=upload_riwayat" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i> Input Riwayat Baru
+    </a>
     <a href="?module=perencanaan" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Dashboard</a>
 </div>
 

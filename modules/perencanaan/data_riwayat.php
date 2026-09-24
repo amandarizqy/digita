@@ -35,17 +35,23 @@ $limit   = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50, 1
 $page    = isset($_GET['page']) && (int)$_GET['page'] > 0 ? (int)$_GET['page'] : 1;
 $offset  = ($page - 1) * $limit;
 
-// Menyiapkan kondisi pencarian (WHERE)
 $where_sql = "";
 $params = [];
 
 if (!empty($keyword)) {
-    $where_sql = " WHERE (IdPel LIKE :kw OR ThBlRek LIKE :kw OR UnitUp LIKE :kw OR UnitAp LIKE :kw)";
-    $params[':kw'] = '%' . $keyword . '%';
+    // Jika input berupa angka 12 digit (IdPel persis), gunakan pencarian langsung (Sangat Cepat)
+    if (ctype_digit($keyword) && strlen($keyword) >= 11) {
+        $where_sql = " WHERE IdPel = :kw_exact";
+        $params[':kw_exact'] = $keyword;
+    } else {
+        // Gunakan Wildcard Kanan (keyword%) agar Index pada IdPel/UnitUp tetap berfungsi
+        $where_sql = " WHERE (IdPel LIKE :kw OR ThBlRek LIKE :kw OR UnitUp LIKE :kw OR UnitAp LIKE :kw)";
+        $params[':kw'] = $keyword . '%'; 
+    }
 }
 
 // ---------------------------------------------------------
-// 3. HITUNG TOTAL DATA (Untuk keperluan paginasi)
+// 3. HITUNG TOTAL DATA (PAGINASI)
 // ---------------------------------------------------------
 try {
     $query_count = "SELECT COUNT(*) FROM pelunasan_ap2t" . $where_sql;
@@ -60,18 +66,21 @@ $total_pages = ceil($total_data / $limit);
 if ($total_pages < 1) $total_pages = 1;
 
 // ---------------------------------------------------------
-// 4. AMBIL DATA SESUAI LIMIT & OFFSET
+// 4. AMBIL DATA (AMBIL KOLOM YANG DIPERLUKAN SAJA)
 // ---------------------------------------------------------
 try {
-    $query_tampil = "SELECT * FROM pelunasan_ap2t" . $where_sql . " ORDER BY WaktuData DESC LIMIT :limit OFFSET :offset";
-    $stmt_tampil  = $conn->prepare($query_tampil);
+    // Ganti SELECT * dengan kolom spesifik yang benar-benar ditampilkan di HTML
+    $query_tampil = "SELECT IdPel, ThBlRek, TglBayar, RpBK, RpTag, UnitUp, UnitAp, UnitUpi, WaktuData 
+                     FROM pelunasan_ap2t" 
+                     . $where_sql . 
+                     " ORDER BY WaktuData DESC LIMIT :limit OFFSET :offset";
+                     
+    $stmt_tampil = $conn->prepare($query_tampil);
 
-    // Bind parameter pencarian jika ada
     foreach ($params as $key => $val) {
         $stmt_tampil->bindValue($key, $val, PDO::PARAM_STR);
     }
 
-    // Bind parameter limit & offset (wajib integer)
     $stmt_tampil->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt_tampil->bindValue(':offset', $offset, PDO::PARAM_INT);
 
