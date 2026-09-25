@@ -49,6 +49,8 @@ switch ($action) {
         include 'hasil_survey.php'; break;
     case 'hasil_risiko':
         include 'hasil_risiko.php'; break;
+    case 'hasil_prioritas':
+        include 'hasil_prioritas.php'; break;
 
     default:
         // PENTING: Gunakan ../../ untuk mundur ke root folder digita, 

@@ -13,6 +13,17 @@ function hitungKeterlambatan($late_count, $lewat_bulan_count) {
 
 /**
  * Hitung Level Kemungkinan & Kuadran (1-9)
+ *
+ * PENTING: $kepentingan di sini WAJIB berasal dari kolom LevelKepentingan yang
+ * diisi lewat modul input_kepentingan.php (RENDAH/MODERAT/TINGGI). Ini adalah
+ * atribut "seberapa penting pelanggan ini secara bisnis", dan TIDAK ADA
+ * hubungannya dengan PosisiSR.
+ *
+ * PosisiSR (dari modul input_survey.php) adalah atribut yang sama sekali
+ * berbeda: apakah lokasi sambungan pelanggan saling bergantung/paralel dengan
+ * pelanggan lain ('0' = mandiri/tidak tergantung, '1' = tergantung dengan
+ * pelanggan lain). PosisiSR TIDAK dipakai untuk menentukan LevelKepentingan,
+ * Kuadran, maupun Skala Prioritas — ia hanya data atribut pelanggan tersendiri.
  */
 function hitungKemungkinan($kepentingan, $keterlambatan) {
     $kuadran = 0;
@@ -90,13 +101,37 @@ function getPeriodeFromThBlRek($thBlRek) {
 }
 
 /**
- * Cek kelengkapan data prasyarat sebelum kalkulasi risiko boleh dijalankan.
- *
- * Kalkulasi kuadran/skala prioritas TIDAK BOLEH dijalankan jika PosisiSR belum
- * pernah diisi (NULL/kosong), karena LevelKepentingan (TINGGI/RENDAH) diturunkan
- * langsung dari nilai PosisiSR ini. Tanpa PosisiSR, LevelKepentingan tidak bisa
- * ditentukan sehingga seluruh matriks Kemungkinan & Skala Prioritas ikut tidak valid.
+ * Cek apakah PosisiSR sudah diisi (nilai '0' atau '1').
+ * PosisiSR = apakah lokasi pelanggan saling tergantung/paralel dengan pelanggan
+ * lain atau tidak. Diisi lewat modul input_survey.php.
  */
-function isDataSiapDiproses($posisi_sr) {
+function isPosisiSrTerisi($posisi_sr) {
     return $posisi_sr !== null && trim((string) $posisi_sr) !== '';
+}
+
+/**
+ * Cek apakah LevelKepentingan sudah diisi dengan nilai valid.
+ * LevelKepentingan = seberapa penting pelanggan secara bisnis (RENDAH/MODERAT/
+ * TINGGI). Diisi lewat modul input_kepentingan.php, TIDAK diturunkan dari
+ * PosisiSR maupun kolom lain.
+ */
+function isLevelKepentinganTerisi($level_kepentingan) {
+    $valid = ['RENDAH', 'MODERAT', 'TINGGI'];
+    if ($level_kepentingan === null) return false;
+    return in_array(strtoupper(trim((string) $level_kepentingan)), $valid, true);
+}
+
+/**
+ * Cek kelengkapan data prasyarat sebelum kalkulasi risiko (Kuadran & Skala
+ * Prioritas) boleh dijalankan untuk seorang pelanggan.
+ *
+ * Kalkulasi TIDAK BOLEH dijalankan jika salah satu dari PosisiSR atau
+ * LevelKepentingan belum diisi:
+ * - PosisiSR wajib ada karena disimpan sebagai atribut pelanggan (walau tidak
+ *   dipakai dalam rumus Kuadran/Skala Prioritas).
+ * - LevelKepentingan wajib ada karena inilah input utama matriks Kemungkinan
+ *   (Kepentingan x Keterlambatan), dan HANYA berasal dari input_kepentingan.php.
+ */
+function isDataSiapDiproses($posisi_sr, $level_kepentingan) {
+    return isPosisiSrTerisi($posisi_sr) && isLevelKepentinganTerisi($level_kepentingan);
 }
