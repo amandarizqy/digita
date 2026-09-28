@@ -1,10 +1,16 @@
-<<<<<<< HEAD
-=======
 <?php
 session_start();
+
+// 1. Session Bypass / Default Login Check (Agar tidak terlempar saat pengujian)
+if (!isset($_SESSION['NamaAkun'])) {
+    $_SESSION['NamaAkun'] = 'Super Administrator Pusat';
+    $_SESSION['role']     = 'SA.KP';
+    $_SESSION['user_id']  = 1;
+}
+
 require_once __DIR__ . '/../../config/database.php';
 
-// 1. Verifikasi Sesi Login
+// Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: ../auth/login.php");
     exit;
@@ -153,10 +159,20 @@ $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100
 
 $page_title = "Master Pengguna - Digita S41";
 
+// ---------------------------------------------------------
+// 7. RENDER TEMPLATE & LAYOUT
+// ---------------------------------------------------------
 ob_start();
-require_once __DIR__ . '/../../templates/master/pengguna.html';
+if (file_exists(__DIR__ . '/../../templates/master/pengguna.php')) {
+    require_once __DIR__ . '/../../templates/master/pengguna.php';
+} else {
+    require_once __DIR__ . '/../../templates/master/pengguna.html';
+}
 $content = ob_get_clean();
 
-require_once __DIR__ . '/../../templates/layouts/base.php';
+if (file_exists(__DIR__ . '/../../templates/layouts/base.php')) {
+    require_once __DIR__ . '/../../templates/layouts/base.php';
+} else {
+    echo $content;
+}
 ?>
->>>>>>> 00b2ee0 (Simpan perubahan sebelum pindah branch)

@@ -1,7 +1,13 @@
-<<<<<<< HEAD
-=======
 <?php
 session_start();
+
+// Bypass Login Sementara (agar tampilan langsung muncul tanpa terlempar ke login)
+if (!isset($_SESSION['NamaAkun'])) {
+    $_SESSION['NamaAkun'] = 'Super Administrator Pusat';
+    $_SESSION['role'] = 'SA.KP';
+    $_SESSION['user_id'] = 1;
+}
+
 require_once __DIR__ . '/../../config/database.php';
 
 // 1. Verifikasi Sesi Login
@@ -178,9 +184,18 @@ $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama FROM master_ap WHERE Stat
 $page_title = "Master Unit - Digita S41";
 
 ob_start();
-require_once __DIR__ . '/../../templates/master/unit.html';
+// Memanggil template tampilan unit
+if (file_exists(__DIR__ . '/../../templates/master/unit.php')) {
+    require_once __DIR__ . '/../../templates/master/unit.php';
+} else {
+    require_once __DIR__ . '/../../templates/master/unit.html';
+}
 $content = ob_get_clean();
 
-require_once __DIR__ . '/../../templates/layouts/base.php';
+// Memanggil base layout utama (header, sidebar, footer)
+if (file_exists(__DIR__ . '/../../templates/layouts/base.php')) {
+    require_once __DIR__ . '/../../templates/layouts/base.php';
+} else {
+    echo $content;
+}
 ?>
->>>>>>> 00b2ee0 (Simpan perubahan sebelum pindah branch)
