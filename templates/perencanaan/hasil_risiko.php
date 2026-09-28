@@ -202,7 +202,7 @@
                                     </span>
                                 </td>
                             </tr>
-                        <?php endforeach; ?>
+                        <?php endforeach; ?> 
                     <?php else: ?>
                         <tr>
                             <td colspan="9" class="text-center text-muted py-4">

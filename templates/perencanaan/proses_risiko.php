@@ -42,7 +42,6 @@
                             <li><strong>Posisi SR</strong> — dari modul Input Survey (apakah lokasi pelanggan saling tergantung/paralel dengan pelanggan lain atau tidak)</li>
                             <li><strong>Level Kepentingan</strong> — dari modul Input Kepentingan (RENDAH/MODERAT/TINGGI)</li>
                         </ul>
-                        <small class="text-danger fw-semibold d-block">⚠️ Posisi SR &amp; Level Kepentingan adalah dua data yang berbeda dan tidak saling menentukan satu sama lain.</small>
                     </div>
                 </div>
 
@@ -76,7 +75,6 @@
                         <small class="text-muted d-block mb-2">Output berupa <strong>Skala Prioritas 1-9</strong>.</small>
                         <span class="badge bg-danger">Prioritas 9: Tertinggi</span>
                         <span class="badge bg-success ms-1">Prioritas 1: Terendah</span>
-                        <small class="d-block mt-2 text-muted">* Otomatis tersimpan ke <code>kategorisasi_risiko</code> (Periode <?= htmlspecialchars($periode_filter) ?>) & <code>dil.IndexPrioritas</code> menggunakan metode UPSERT.</small>
                     </div>
                 </div>
             </div>
