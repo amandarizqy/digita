@@ -1,29 +1,78 @@
 <?php
-// Pastikan path ke auth_check dan database sudah benar
-require_once '../../includes/auth_check.php';
-require_once '../../config/database.php';
+// Hapus session_start() dan auth_check.php di sini karena sudah 
+// dieksekusi secara terpusat di root index.php untuk mencegah bentrok
 
-// Pastikan pengguna sudah login
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
-    exit;
+// Gunakan __DIR__ untuk path absolut yang kebal terhadap perubahan root
+require_once __DIR__ . '/../../config/database.php';
+
+// ---------------------------------------------------------
+// 1. TANGKAP PARAMETER ROUTING DARI URL
+// ---------------------------------------------------------
+$menu = isset($_GET['menu']) ? $_GET['menu'] : 'pembelian';
+$sub  = isset($_GET['sub']) ? $_GET['sub'] : 'daftar';
+
+$data = []; 
+
+// ---------------------------------------------------------
+// 2. AREA KERJA BACKEND (Query Menggunakan PDO)
+// ---------------------------------------------------------
+switch ($menu) {
+    case 'pembelian':
+        if ($sub == 'daftar') {
+            $page_title = "Daftar Pembelian - Pengadaan S41";
+            
+            $query = "SELECT f.*, u.SingkatanNama 
+                      FROM formulir_pembelian f 
+                      LEFT JOIN master_up u ON f.KodeUp = u.UnitUp 
+                      ORDER BY f.WaktuData DESC";
+            
+            $stmt = $conn->prepare($query);
+            $stmt->execute();
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $data['list_pembelian'] = [];
+            if ($results) {
+                foreach ($results as $row) {
+                    $row['NamaUnit'] = !empty($row['SingkatanNama']) ? $row['SingkatanNama'] : $row['KodeUp'];
+                    $data['list_pembelian'][] = $row;
+                }
+            }
+            
+        } elseif ($sub == 'baru') {
+            $page_title = "Form Pembelian Baru - Pengadaan S41";
+            
+            $query_upi = "SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF'";
+            $stmt_upi = $conn->prepare($query_upi);
+            $stmt_upi->execute();
+            $data['list_upi'] = $stmt_upi->fetchAll(PDO::FETCH_ASSOC);
+        }
+        break;
+
+    case 'pengiriman':
+        if ($sub == 'daftar') {
+            $page_title = "Daftar Pengiriman - Pengadaan S41";
+            $data['list_pengiriman'] = []; 
+        } elseif ($sub == 'baru') {
+            $page_title = "Form Pengiriman - Pengadaan S41";
+        }
+        break;
+
+    case 'penerimaan':
+        $page_title = "Penerimaan Gudang - Pengadaan S41";
+        $sub = 'daftar'; 
+        break;
+
+    default:
+        $menu = 'pembelian';
+        $sub = 'daftar';
+        $page_title = "Pengadaan & Stok - Digita S41";
+        break;
 }
 
 // ---------------------------------------------------------
-// AREA KERJA BACKEND: 
-// Teman timmu bisa melakukan query SELECT/INSERT/UPDATE di sini
+// 3. RENDER TEMPLATE
 // ---------------------------------------------------------
-
-
-// Atur judul halaman
-$page_title = "Master Data - Digita S41";
-
-// Tangkap output view ke dalam variabel $content
-ob_start();
-// Sesuaikan path ini dengan modul yang sedang dikerjakan
-require_once '../../templates/master/index.php'; 
-$content = ob_get_clean();
-
-// Render ke dalam layout utama
-require_once '../../templates/layouts/base.php';
+// Cukup panggil templatenya saja menggunakan __DIR__. 
+// ob_start() dan base.php DIBUANG karena sudah di-handle oleh root index.php
+require_once __DIR__ . '/../../templates/pengadaan/index.php'; 
 ?>

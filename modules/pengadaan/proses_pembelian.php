@@ -2,129 +2,130 @@
 session_start();
 require_once '../../config/database.php';
 
-// Pastikan pengguna sudah login
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
-    exit;
+// Pastikan pengguna sudah login dan memiliki otoritas
+$kode_hak = $_SESSION['KodeHak'] ?? '';
+$allowed_roles = ['AM.UI', 'SA.KP']; 
+if (!isset($_SESSION['NamaAkun']) || !in_array($kode_hak, $allowed_roles)) {
+    die("Akses Ditolak: Anda tidak memiliki otoritas untuk memproses pembelian.");
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $metode = $_POST['metode'] ?? 'manual';
-    $tgl_beli = $_POST['tgl_beli_massal'] ?? $_POST['tgl_beli'] ?? date('Y-m-d');
-    
-    // Ambil data sesi
-    $nama_akun = $_SESSION['NamaAkun'];
-    $unit_upi  = $_SESSION['UnitUpi'] ?? '56'; // UID Banten
-    $unit_ap   = $_SESSION['UnitAp'] ?? '56610'; // UP3 Cikokol
-    $unit_up   = $_SESSION['UnitUp'] ?? '56610'; // ULP Cikokol
+$action = $_GET['action'] ?? '';
+$nama_akun = $_SESSION['NamaAkun'];
+$unit_upi  = $_SESSION['UnitUpi'] ?? '56';
+$unit_ap   = $_SESSION['UnitAp'] ?? NULL;
+$unit_up   = $_SESSION['UnitUp'] ?? NULL;
 
-    try {
-        $conn->beginTransaction();
+try {
+    // AKSI 1: BUAT DRAFT FORMULIR
+    if ($action === 'create_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = trim($_POST['no_formulir']);
+        $tgl_beli = $_POST['tgl_beli'];
+        $upi_tujuan = !empty($_POST['kode_upi']) ? $_POST['kode_upi'] : NULL;
+        $ap_tujuan = !empty($_POST['kode_ap']) ? $_POST['kode_ap'] : NULL;
+        $up_tujuan = !empty($_POST['kode_up']) ? $_POST['kode_up'] : NULL;
 
-        // 1. Insert Header ke formulir_pembelian 
-        // NoFormulir dikirim string kosong ('') karena akan diisi otomatis oleh Trigger MySQL
-        $query_form = "INSERT INTO formulir_pembelian (NoFormulir, TglBeli, NamaAkun, KodeUp, KodeAp, KodeUpi, StatusData) 
-                       VALUES ('', :tgl, :akun, :up, :ap, :upi, 'AKTIF')";
+        $query_form = "INSERT INTO formulir_pembelian (NoFormulir, TglBeli, NamaAkun, KodeUp, KodeAp, KodeUpi, KodeUpTujuan, KodeApTujuan, KodeUpiTujuan, StatusData) 
+                       VALUES (:no_form, :tgl, :akun, :up, :ap, :upi, :up_tuj, :ap_tuj, :upi_tuj, 'TIDAK')";
         $stmt_form = $conn->prepare($query_form);
         $stmt_form->execute([
-            ':tgl'  => $tgl_beli,
-            ':akun' => $nama_akun,
-            ':up'   => $unit_up,
-            ':ap'   => $unit_ap,
-            ':upi'  => $unit_upi
+            ':no_form' => $no_formulir,
+            ':tgl'     => $tgl_beli,
+            ':akun'    => $nama_akun,
+            ':up'      => $unit_up,
+            ':ap'      => $unit_ap,
+            ':upi'     => $unit_upi,
+            ':up_tuj'  => $up_tujuan,
+            ':ap_tuj'  => $ap_tujuan,
+            ':upi_tuj' => $upi_tujuan
         ]);
+        
+        // Lempar ke halaman keranjang detail
+        header("Location: pembelian.php?view=detail&no_form=" . urlencode($no_formulir));
+        exit;
+    }
 
-        // 2. Ambil NoFormulir yang baru saja dibuat oleh Trigger
-        $stmt_get_id = $conn->prepare("SELECT NoFormulir FROM formulir_pembelian WHERE NamaAkun = :akun ORDER BY WaktuData DESC LIMIT 1");
-        $stmt_get_id->execute([':akun' => $nama_akun]);
-        $no_formulir = $stmt_get_id->fetchColumn();
-
-        if (!$no_formulir) {
-            throw new Exception("Gagal mendapatkan Nomor Formulir dari sistem.");
-        }
-
-        // Siapkan Statement untuk Master Barang & Detail Pembelian
-        // Disesuaikan dengan kolom: NoRef, UnitUp, UnitAp, UnitUpi, StatusData
-        $query_barang = "INSERT INTO master_barang (NoRef, UnitUp, UnitAp, UnitUpi, StatusData) 
-                         VALUES (:noref, :up, :ap, :upi, 'AKTIF')
-                         ON DUPLICATE KEY UPDATE StatusData = 'AKTIF'"; 
-                         // Antisipasi jika NoRef sudah ada agar tidak error
-        $stmt_barang = $conn->prepare($query_barang);
-
-        // Disesuaikan dengan kolom: NoFormulir, NoRef, StikerQC, CacatFisik, HargaBeli
+    // AKSI 2: TAMBAH ITEM KE KERANJANG
+    if ($action === 'add_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = $_POST['no_formulir'];
+        $metode = $_POST['metode'] ?? 'manual';
+        
+        $conn->beginTransaction();
         $query_detil = "INSERT INTO formulir_pembelian_detil (NoFormulir, NoRef, StikerQC, CacatFisik, HargaBeli) 
                         VALUES (:no_form, :noref, :qc, :cacat, :harga)";
         $stmt_detil = $conn->prepare($query_detil);
 
-        // --- BLOK PROSES FILE CSV ---
         if ($metode === 'excel' && isset($_FILES['file_excel']['tmp_name'])) {
             $file = $_FILES['file_excel']['tmp_name'];
-            
             if (($handle = fopen($file, "r")) !== FALSE) {
-                fgetcsv($handle, 1000, ";"); // Lewati baris header
-                
+                fgetcsv($handle, 1000, ";"); // Skip baris header
                 while (($row = fgetcsv($handle, 1000, ";")) !== FALSE) {
                     $no_ref = trim($row[0] ?? '');
                     $harga  = (int) preg_replace('/[^0-9]/', '', $row[1] ?? '0');
                     $qc     = strtoupper(trim($row[2] ?? 'TIDAK'));
-                    $cacat  = strtoupper(trim($row[3] ?? 'YA'));
+                    $cacat  = strtoupper(trim($row[3] ?? 'TIDAK'));
 
                     if (empty($no_ref)) continue;
 
-                    // Insert ke Master Barang
-                    $stmt_barang->execute([
-                        ':noref' => $no_ref,
-                        ':up'    => $unit_up, 
-                        ':ap'    => $unit_ap, 
-                        ':upi'   => $unit_upi
-                    ]);
-
-                    // Insert ke Detail
                     $stmt_detil->execute([
-                        ':no_form' => $no_formulir, 
-                        ':noref'   => $no_ref, 
-                        ':qc'      => $qc, 
-                        ':cacat'   => $cacat, 
+                        ':no_form' => $no_formulir,
+                        ':noref'   => $no_ref,
+                        ':qc'      => $qc,
+                        ':cacat'   => $cacat,
                         ':harga'   => $harga
                     ]);
                 }
                 fclose($handle);
             }
-
-        // --- BLOK PROSES MANUAL ---
         } elseif ($metode === 'manual') {
-            $no_ref = trim($_POST['no_ref'] ?? '');
-            $harga  = (int) preg_replace('/[^0-9]/', '', $_POST['harga'] ?? '0');
-            $qc     = strtoupper(trim($_POST['stiker_qc'] ?? 'TIDAK'));
-            $cacat  = strtoupper(trim($_POST['cacat_fisik'] ?? 'YA'));
-
-            if (!empty($no_ref)) {
-                $stmt_barang->execute([
-                    ':noref' => $no_ref,
-                    ':up'    => $unit_up, 
-                    ':ap'    => $unit_ap, 
-                    ':upi'   => $unit_upi
-                ]);
-
-                $stmt_detil->execute([
-                    ':no_form' => $no_formulir, 
-                    ':noref'   => $no_ref, 
-                    ':qc'      => $qc, 
-                    ':cacat'   => $cacat, 
-                    ':harga'   => $harga
-                ]);
-            }
+            $stmt_detil->execute([
+                ':no_form' => $no_formulir,
+                ':noref'   => trim($_POST['no_ref'] ?? ''),
+                ':qc'      => strtoupper(trim($_POST['stiker_qc'] ?? 'TIDAK')),
+                ':cacat'   => strtoupper(trim($_POST['cacat_fisik'] ?? 'TIDAK')),
+                ':harga'   => (int) preg_replace('/[^0-9]/', '', $_POST['harga'] ?? '0')
+            ]);
         }
-
         $conn->commit();
-        
-        // Redirect kembali ke form dengan parameter sukses
-        header("Location: pembelian.php?status=sukses");
+        header("Location: pembelian.php?view=detail&no_form=" . urlencode($no_formulir));
         exit;
-
-    } catch (Exception $e) {
-        $conn->rollBack();
-        die("Gagal memproses data: " . $e->getMessage());
     }
+
+    // AKSI 3: EKSEKUSI FINAL FORMULIR
+    if ($action === 'execute_form' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = $_POST['no_formulir'];
+        
+        $conn->beginTransaction();
+        
+        // 1. Ubah status form menjadi AKTIF
+        $stmt_update = $conn->prepare("UPDATE formulir_pembelian SET StatusData = 'AKTIF' WHERE NoFormulir = :no_form");
+        $stmt_update->execute([':no_form' => $no_formulir]);
+        
+        // 2. Ambil barang dari detil keranjang
+        $stmt_get = $conn->prepare("SELECT NoRef FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
+        $stmt_get->execute([':no_form' => $no_formulir]);
+        $items = $stmt_get->fetchAll(PDO::FETCH_ASSOC);
+        
+        // 3. Insert ke master_barang (Milik UI/UPI, AP & UP masih dikosongkan sampai proses pengiriman)
+        $query_barang = "INSERT INTO master_barang (NoRef, UnitUpi, StatusData) VALUES (:noref, :upi, 'AKTIF')
+                         ON DUPLICATE KEY UPDATE StatusData = 'AKTIF'";
+        $stmt_barang = $conn->prepare($query_barang);
+        
+        foreach ($items as $item) {
+            $stmt_barang->execute([
+                ':noref' => $item['NoRef'],
+                ':upi'   => $unit_upi
+            ]);
+        }
+        
+        $conn->commit();
+        header("Location: pembelian.php?view=daftar&status=sukses");
+        exit;
+    }
+
+} catch (Exception $e) {
+    if ($conn->inTransaction()) {
+        $conn->rollBack();
+    }
+    die("Gagal memproses data: " . $e->getMessage());
 }
 ?>
