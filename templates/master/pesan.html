@@ -9,7 +9,11 @@
     </button>
 </div>
 
+<<<<<<< HEAD
 <!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
+=======
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+>>>>>>> origin/main
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
         <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
@@ -22,6 +26,10 @@
         </a>
     </li>
     <li class="nav-item">
+<<<<<<< HEAD
+=======
+        <!-- TAB PUSAT PESAN AKTIF -->
+>>>>>>> origin/main
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
@@ -31,12 +39,27 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
+<<<<<<< HEAD
     <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Provider SIM
     </a>
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Modem GSM
     </a>
+=======
+    
+    <!-- Link ke Provider SIM -->
+    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Provider SIM
+    </a>
+
+    <!-- Link ke Modem GSM -->
+    <a href="modem_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Modem GSM
+    </a>
+
+    <!-- Perintah Baku AKTIF -->
+>>>>>>> origin/main
     <a href="pesan_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
         <i class="bi bi-check2 me-1"></i> Perintah Baku (AT Commands)
     </a>
@@ -49,7 +72,11 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PERINTAH TERDAFTAR</span>
+<<<<<<< HEAD
                     <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_perintah; ?> Format</h2>
+=======
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_perintah ?? count($perintah ?? []); ?> Format</h2>
+>>>>>>> origin/main
                     <span class="text-muted small">Tabel referensi: <code class="text-danger">baku_outbox</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
@@ -64,8 +91,13 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS FORMAT AKTIF</span>
+<<<<<<< HEAD
                     <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif; ?> / <?= $total_perintah; ?> Aktif</h2>
                     <span class="text-muted small"><?= $persentase_aktif; ?>% Tervalidasi untuk Daemon SMS Gateway</span>
+=======
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif ?? 0; ?> / <?= $total_perintah ?? count($perintah ?? []); ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Tervalidasi untuk Daemon SMS Gateway</span>
+>>>>>>> origin/main
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
                     <i class="bi bi-check2-circle fs-4"></i>
@@ -79,9 +111,18 @@
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
+<<<<<<< HEAD
             <span class="fw-bold text-primary fs-6">Daftar Perintah Baku Transmisi Relai</span>
             <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: baku_outbox</span>
         </div>
+=======
+            <span class="fw-bold text-primary fs-6">
+                Daftar Perintah Baku Transmisi Relai
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: baku_outbox</span>
+        </div>
+        <!-- Kolom Pencarian Cepat -->
+>>>>>>> origin/main
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariPerintah" class="form-control bg-light border-start-0" placeholder="Cari sintaks / aksi...">
@@ -94,6 +135,7 @@
                 <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
                     <tr>
                         <th style="width: 50px;" class="ps-4">ID</th>
+<<<<<<< HEAD
                         <th style="width: 200px;">SINTAKS ISI PESAN</th>
                         <th>KETERANGAN TINDAKAN</th>
                         <th style="width: 130px;">JENIS PERINTAH</th>
@@ -101,6 +143,15 @@
                         <th style="width: 130px;">STATUS</th>
                         <th style="width: 170px;">WAKTU DATA</th>
                         <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+=======
+                        <th style="width: 220px;">SINTAKS ISI PESAN</th>
+                        <th>KETERANGAN TINDAKAN</th>
+                        <th style="width: 140px;">JENIS PERINTAH</th>
+                        <th style="width: 140px;">DB TUJUAN</th>
+                        <th style="width: 130px;">STATUS</th>
+                        <th style="width: 180px;">WAKTU DATA</th>
+                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
+>>>>>>> origin/main
                     </tr>
                 </thead>
                 <tbody>
@@ -113,22 +164,44 @@
                                     <?= htmlspecialchars($row['IsiPesan'] ?? '-'); ?>
                                 </code>
                             </td>
+<<<<<<< HEAD
                             <td class="fw-medium text-dark ket-cell"><?= htmlspecialchars($row['Keterangan'] ?? '-'); ?></td>
+=======
+                            <td class="fw-medium text-dark ket-cell">
+                                <?= htmlspecialchars($row['Keterangan'] ?? '-'); ?>
+                            </td>
+>>>>>>> origin/main
                             <td>
                                 <span class="badge bg-info bg-opacity-10 text-dark border font-monospace">
                                     <?= htmlspecialchars($row['JenisPerintah'] ?? 'KIRIM'); ?>
                                 </span>
                             </td>
+<<<<<<< HEAD
                             <td class="text-secondary small font-monospace"><?= htmlspecialchars($row['DatabaseTujuan'] ?? 'smsd'); ?></td>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
                                     <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
                                     <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
+=======
+                            <td class="text-secondary small font-monospace">
+                                <?= htmlspecialchars($row['DatabaseTujuan'] ?? 'smsd'); ?>
+                            </td>
+                            <td>
+                                <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+>>>>>>> origin/main
                                 <?php endif; ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
+<<<<<<< HEAD
                                 <div class="btn-group btn-group-sm">
                                     <a href="pesan_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['Id'])); ?>" 
                                        class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
@@ -151,6 +224,12 @@
                                         <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
+=======
+                                <a href="pesan_Controller.php?action=toggle_status&id=<?= urlencode($row['Id']); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+>>>>>>> origin/main
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -164,8 +243,14 @@
         </div>
     </div>
 
+<<<<<<< HEAD
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
         <small class="text-muted">Menampilkan 1 - <?= count($perintah); ?> dari <?= $total_perintah; ?> total data</small>
+=======
+    <!-- Paginasi -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
+        <small class="text-muted">Menampilkan <?= !empty($perintah) ? count($perintah) : 0; ?> dari <?= !empty($perintah) ? count($perintah) : 0; ?> total perintah baku</small>
+>>>>>>> origin/main
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
@@ -223,6 +308,7 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- MODAL EDIT PERINTAH BAKU -->
 <div class="modal fade" id="modalEditPerintah" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -275,6 +361,9 @@
     </div>
 </div>
 
+=======
+<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+>>>>>>> origin/main
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const inputCari = document.getElementById('cariPerintah');
@@ -284,12 +373,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyword = this.value.toLowerCase();
             const baris = tabel.querySelectorAll('tbody tr');
             baris.forEach(row => {
+<<<<<<< HEAD
                 const sintaksText = row.querySelector('.sintaks-cell') ? row.querySelector('.sintaks-cell').textContent.toLowerCase() : '';
                 const ketText = row.querySelector('.ket-cell') ? row.querySelector('.ket-cell').textContent.toLowerCase() : '';
+=======
+                const sintaksCell = row.querySelector('.sintaks-cell');
+                const ketCell = row.querySelector('.ket-cell');
+                const sintaksText = sintaksCell ? sintaksCell.textContent.toLowerCase() : '';
+                const ketText = ketCell ? ketCell.textContent.toLowerCase() : '';
+                
+>>>>>>> origin/main
                 row.style.display = (sintaksText.includes(keyword) || ketText.includes(keyword)) ? '' : 'none';
             });
         });
     }
+<<<<<<< HEAD
 
     const modalEditEl = document.getElementById('modalEditPerintah');
     const modalEdit = new bootstrap.Modal(modalEditEl);
@@ -307,5 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
             modalEdit.show();
         });
     });
+=======
+>>>>>>> origin/main
 });
 </script>

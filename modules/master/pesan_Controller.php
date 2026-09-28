@@ -1,9 +1,16 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
 
+<<<<<<< HEAD
+=======
+// 1. Verifikasi Session Pengguna
+>>>>>>> origin/main
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: ../auth/login.php");
     exit;
@@ -11,13 +18,21 @@ if (!isset($_SESSION['NamaAkun'])) {
 
 $action = $_GET['action'] ?? 'index';
 
+<<<<<<< HEAD
 // 1. TAMBAH PERINTAH BAKU (POST - store)
+=======
+// 2. Aksi Tambah Perintah Baku Baru (POST)
+>>>>>>> origin/main
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $isi_pesan       = trim($_POST['IsiPesan']);
     $keterangan      = trim($_POST['Keterangan']);
     $jenis_perintah  = $_POST['JenisPerintah'] ?? 'KIRIM';
     $database_tujuan = trim($_POST['DatabaseTujuan'] ?? 'smsd');
+<<<<<<< HEAD
     $status_data     = ($_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+=======
+    $status_data     = $_POST['StatusData'] ?? 'AKTIF';
+>>>>>>> origin/main
 
     if (!empty($isi_pesan)) {
         $stmt = $conn->prepare("INSERT INTO baku_outbox 
@@ -29,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
+<<<<<<< HEAD
 // 2. EDIT PERINTAH BAKU (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     $id              = trim($_POST['Id']);
@@ -65,6 +81,9 @@ if ($action === 'delete') {
 }
 
 // 4. TOGGLE STATUS (GET - toggle_status)
+=======
+// 3. Aksi Ubah Status (Toggle AKTIF <-> TIDAK)
+>>>>>>> origin/main
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -82,6 +101,7 @@ if ($action === 'toggle_status') {
     exit;
 }
 
+<<<<<<< HEAD
 // 5. QUERY DATA & HITUNG METRIK
 $stmt = $conn->query("SELECT * FROM baku_outbox ORDER BY Id ASC");
 $perintah = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -93,6 +113,23 @@ foreach ($perintah as $p) {
 }
 $persentase_aktif = ($total_perintah > 0) ? round(($total_aktif / $total_perintah) * 100) : 0;
 
+=======
+// 4. Ambil Seluruh Data dari Tabel baku_outbox
+$stmt = $conn->query("SELECT * FROM baku_outbox ORDER BY Id ASC");
+$perintah = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// 5. Hitung Metrik Ringkasan (KPI)
+$total_perintah = count($perintah);
+$total_aktif = 0;
+foreach ($perintah as $p) {
+    if ($p['StatusData'] === 'AKTIF') {
+        $total_aktif++;
+    }
+}
+$persentase_aktif = ($total_perintah > 0) ? round(($total_aktif / $total_perintah) * 100) : 0;
+
+// 6. Siapkan data & Render ke Layout Utama
+>>>>>>> origin/main
 $page_title = "Master Perintah Baku - Digita S41";
 
 ob_start();
@@ -100,5 +137,9 @@ require_once __DIR__ . '/../../templates/master/pesan.html';
 $content = ob_get_clean();
 
 require_once __DIR__ . '/../../templates/layouts/base.php';
+<<<<<<< HEAD
 ?>
 >>>>>>> 00b2ee0 (Simpan perubahan sebelum pindah branch)
+=======
+?>
+>>>>>>> origin/main

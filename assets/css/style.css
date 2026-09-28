@@ -1,0 +1,85 @@
+/* =========================================
+   1. GLOBAL STYLES (DASHBOARD)
+========================================= */
+body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    background-color: #f4f6f9; 
+}
+.wrapper { 
+    display: flex; 
+    width: 100%; 
+    align-items: stretch; 
+    min-height: 100vh; 
+}
+
+/* =========================================
+   2. AUTHENTICATION / LOGIN PAGE
+========================================= */
+.bg-login {
+    background: linear-gradient(135deg, #005a70 0%, #003344 100%);
+    height: 100vh;
+    display: flex;
+    align-items: center;
+}
+.card-login { 
+    border: none; 
+    border-radius: 12px; 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3); 
+}
+.btn-pln { 
+    background-color: #005a70; 
+    color: white; 
+}
+.btn-pln:hover { 
+    background-color: #004252; 
+    color: white; 
+}
+
+/* =========================================
+   3. SIDEBAR STYLES
+========================================= */
+#sidebar { 
+    min-width: 250px; 
+    max-width: 250px; 
+    background: #003344; 
+    color: #fff; 
+    transition: all 0.3s; 
+}
+#sidebar .sidebar-header { 
+    padding: 20px; 
+    background: #00222e; 
+}
+#sidebar ul.components { 
+    padding: 20px 0; 
+}
+#sidebar ul li a { 
+    padding: 12px 20px; 
+    font-size: 1.1em; 
+    display: block; 
+    color: #b3c6cb; 
+    text-decoration: none; 
+}
+#sidebar ul li a:hover, #sidebar ul li.active > a { 
+    color: #fff; 
+    background: #005a70; 
+}
+#sidebar ul li a i { 
+    margin-right: 10px; 
+}
+
+/* =========================================
+   4. MAIN CONTENT & NAVBAR
+========================================= */
+#content { 
+    width: 100%; 
+    padding: 0; 
+    min-height: 100vh; 
+    transition: all 0.3s; 
+}
+.main-container { 
+    padding: 20px; 
+}
+.navbar-pln { 
+    background-color: #ffffff; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08); 
+}

@@ -9,7 +9,11 @@
     </button>
 </div>
 
+<<<<<<< HEAD
 <!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
+=======
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+>>>>>>> origin/main
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
         <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
@@ -22,6 +26,10 @@
         </a>
     </li>
     <li class="nav-item">
+<<<<<<< HEAD
+=======
+        <!-- TAB PUSAT PESAN AKTIF -->
+>>>>>>> origin/main
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
@@ -31,12 +39,27 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
+<<<<<<< HEAD
     <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Provider SIM
     </a>
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
         <i class="bi bi-check2 me-1"></i> Modem GSM
     </a>
+=======
+    
+    <!-- Link kembali ke Provider SIM -->
+    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+        Provider SIM
+    </a>
+
+    <!-- Modem GSM AKTIF -->
+    <a href="modem_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
+        <i class="bi bi-check2 me-1"></i> Modem GSM
+    </a>
+
+    <!-- Link ke Perintah Baku -->
+>>>>>>> origin/main
     <a href="pesan_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Perintah Baku (AT Commands)
     </a>
@@ -49,7 +72,11 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL MODEM TERDAFTAR</span>
+<<<<<<< HEAD
                     <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem; ?> Modem</h2>
+=======
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem ?? count($modems ?? []); ?> Modem</h2>
+>>>>>>> origin/main
                     <span class="text-muted small">Tabel referensi: <code class="text-danger">master_modem</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
@@ -64,8 +91,13 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS MODEM ONLINE</span>
+<<<<<<< HEAD
                     <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_modem_aktif; ?> / <?= $total_modem; ?> Aktif</h2>
                     <span class="text-muted small"><?= $persentase_aktif; ?>% Port Engine & Gateway Server Terhubung</span>
+=======
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_modem_aktif ?? 0; ?> / <?= $total_modem ?? count($modems ?? []); ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Port Engine & Gateway Server Terhubung</span>
+>>>>>>> origin/main
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
                     <i class="bi bi-cpu fs-4"></i>
@@ -79,9 +111,18 @@
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
+<<<<<<< HEAD
             <span class="fw-bold text-primary fs-6">Daftar Master Modem Gateway</span>
             <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_modem</span>
         </div>
+=======
+            <span class="fw-bold text-primary fs-6">
+                Daftar Master Modem Gateway
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_modem</span>
+        </div>
+        <!-- Kolom Pencarian Cepat -->
+>>>>>>> origin/main
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariModem" class="form-control bg-light border-start-0" placeholder="Cari IMEI, IP, Port...">
@@ -101,7 +142,11 @@
                         <th>PORT</th>
                         <th>STATUS DATA</th>
                         <th>WAKTU DATA</th>
+<<<<<<< HEAD
                         <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+=======
+                        <th class="text-end pe-4">AKSI</th>
+>>>>>>> origin/main
                     </tr>
                 </thead>
                 <tbody>
@@ -114,6 +159,7 @@
                                 <?= htmlspecialchars($row['ImeiModem'] ?? '-'); ?>
                             </td>
                             <td>
+<<<<<<< HEAD
                                 <div class="small d-flex flex-wrap gap-1">
                                     <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
                                     <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['KodeAp'] ?? '-'); ?></span>
@@ -127,6 +173,13 @@
                                     <span class="text-muted font-monospace fst-italic">Tanpa SIM</span>
                                 <?php endif; ?>
                             </td>
+=======
+                                <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
+                                <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['KodeAp'] ?? '-'); ?></span>
+                                <span class="badge bg-light text-secondary border">UPI: <?= htmlspecialchars($row['KodeUpi'] ?? '-'); ?></span>
+                            </td>
+                            <td class="font-monospace text-secondary small"><?= htmlspecialchars($row['SimId'] ?? '-'); ?></td>
+>>>>>>> origin/main
                             <td class="small ip-cell">
                                 <div><span class="text-muted">Data:</span> <code><?= htmlspecialchars($row['IpServerData'] ?? '-'); ?></code></div>
                                 <div><span class="text-muted">Engine:</span> <code><?= htmlspecialchars($row['IpServerEngine'] ?? '-'); ?></code></div>
@@ -134,13 +187,24 @@
                             <td class="port-cell"><span class="badge bg-secondary bg-opacity-10 text-dark border font-monospace"><?= htmlspecialchars($row['PortEngine'] ?? '-'); ?></span></td>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+<<<<<<< HEAD
                                     <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
                                     <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
+=======
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+>>>>>>> origin/main
                                 <?php endif; ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
+<<<<<<< HEAD
                                 <div class="btn-group btn-group-sm">
                                     <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
                                        class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
@@ -166,6 +230,12 @@
                                         <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
+=======
+                                <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+>>>>>>> origin/main
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -179,8 +249,14 @@
         </div>
     </div>
 
+<<<<<<< HEAD
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
         <small class="text-muted">Menampilkan 1 - <?= count($modems); ?> dari <?= $total_modem; ?> total data</small>
+=======
+    <!-- Paginasi -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
+        <small class="text-muted">Menampilkan <?= !empty($modems) ? count($modems) : 0; ?> dari <?= !empty($modems) ? count($modems) : 0; ?> total data master modem</small>
+>>>>>>> origin/main
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
@@ -191,9 +267,13 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- ========================================================= -->
 <!-- MODAL 1: TAMBAH MODEM -->
 <!-- ========================================================= -->
+=======
+<!-- MODAL TAMBAH MODEM -->
+>>>>>>> origin/main
 <div class="modal fade" id="modalTambahModem" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
@@ -207,6 +287,7 @@
                     <label class="form-label small fw-semibold text-secondary">IMEI Modem *</label>
                     <input type="text" name="ImeiModem" class="form-control form-control-sm font-monospace" placeholder="Contoh: 867749010776270" required>
                 </div>
+<<<<<<< HEAD
                 
                 <!-- DROPDOWN SIM ID DARI master_nomor -->
                 <div class="col-md-6">
@@ -258,6 +339,24 @@
                     </select>
                 </div>
 
+=======
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">SIM ID / ICCID</label>
+                    <input type="text" name="SimId" class="form-control form-control-sm font-monospace" placeholder="Contoh: 510105394216009">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UP</label>
+                    <input type="text" name="KodeUp" class="form-control form-control-sm" placeholder="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode AP</label>
+                    <input type="text" name="KodeAp" class="form-control form-control-sm" placeholder="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UPI</label>
+                    <input type="text" name="KodeUpi" class="form-control form-control-sm" placeholder="56">
+                </div>
+>>>>>>> origin/main
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
                     <input type="text" name="IpServerData" class="form-control form-control-sm font-monospace" placeholder="10.96.100.123">
@@ -286,6 +385,7 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- ========================================================= -->
 <!-- MODAL 2: EDIT MODEM -->
 <!-- ========================================================= -->
@@ -387,6 +487,11 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Live search pencarian instan
+=======
+<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+>>>>>>> origin/main
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
@@ -397,10 +502,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const imeiText = row.querySelector('.imei-cell') ? row.querySelector('.imei-cell').textContent.toLowerCase() : '';
                 const ipText = row.querySelector('.ip-cell') ? row.querySelector('.ip-cell').textContent.toLowerCase() : '';
                 const portText = row.querySelector('.port-cell') ? row.querySelector('.port-cell').textContent.toLowerCase() : '';
+<<<<<<< HEAD
+=======
+                
+>>>>>>> origin/main
                 row.style.display = (imeiText.includes(keyword) || ipText.includes(keyword) || portText.includes(keyword)) ? '' : 'none';
             });
         });
     }
+<<<<<<< HEAD
 
     // 2. Auto-fill modal edit
     const modalEditEl = document.getElementById('modalEditModem');
@@ -426,5 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
             modalEdit.show();
         });
     });
+=======
+>>>>>>> origin/main
 });
 </script>

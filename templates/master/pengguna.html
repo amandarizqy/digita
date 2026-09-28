@@ -12,11 +12,19 @@
 <!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
+<<<<<<< HEAD
+=======
+        <!-- TAUTAN DIARAHKAN KE CONTROLLER UNIT -->
+>>>>>>> origin/main
         <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
             <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
         </a>
     </li>
     <li class="nav-item">
+<<<<<<< HEAD
+=======
+        <!-- TAB PENGGUNA AKTIF -->
+>>>>>>> origin/main
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="pengguna_Controller.php">
             <i class="bi bi-people me-2"></i> Pengguna
         </a>
@@ -86,9 +94,18 @@
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
+<<<<<<< HEAD
             <span class="fw-bold text-primary fs-6">Daftar Data Master Pengguna</span>
             <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_pengguna</span>
         </div>
+=======
+            <span class="fw-bold text-primary fs-6">
+                Daftar Data Master Pengguna
+            </span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_pengguna</span>
+        </div>
+        <!-- Tambahan: Input Pencarian Cepat -->
+>>>>>>> origin/main
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariPengguna" class="form-control bg-light border-start-0" placeholder="Cari nama, akun, email...">
@@ -105,10 +122,17 @@
                         <th>NAMA PENGGUNA & KONTAK</th>
                         <th>EMAIL</th>
                         <th style="width: 150px;">ROLE / HAK AKSES</th>
+<<<<<<< HEAD
                         <th style="width: 180px;">UNIT PENEMPATAN</th>
                         <th style="width: 120px;">STATUS DATA</th>
                         <th style="width: 160px;">WAKTU DATA</th>
                         <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+=======
+                        <th style="width: 140px;">UNIT PENEMPATAN</th>
+                        <th style="width: 120px;">STATUS DATA</th>
+                        <th style="width: 160px;">WAKTU DATA</th>
+                        <th class="text-end pe-4" style="width: 100px;">AKSI</th>
+>>>>>>> origin/main
                     </tr>
                 </thead>
                 <tbody>
@@ -139,7 +163,11 @@
                                 <span class="badge <?= $badge_class; ?> px-2 py-1 font-monospace mb-1"><?= htmlspecialchars($hak); ?></span>
                             </td>
                             <td>
+<<<<<<< HEAD
                                 <div class="small d-flex flex-wrap gap-1">
+=======
+                                <div class="small">
+>>>>>>> origin/main
                                     <span class="badge bg-light text-dark border">UPI: <?= htmlspecialchars($row['UnitUpi'] ?? '-'); ?></span>
                                     <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['UnitAp'] ?? '-'); ?></span>
                                     <span class="badge bg-light text-secondary border">UP: <?= htmlspecialchars($row['UnitUp'] ?? '-'); ?></span>
@@ -147,13 +175,24 @@
                             </td>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
+<<<<<<< HEAD
                                     <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
                                     <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
+=======
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • AKTIF
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
+                                        • NONAKTIF
+                                    </span>
+>>>>>>> origin/main
                                 <?php endif; ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
+<<<<<<< HEAD
                                 <div class="btn-group btn-group-sm">
                                     <a href="pengguna_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['NamaAkun'] ?? '')); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" 
                                        class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
@@ -181,6 +220,12 @@
                                         <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
+=======
+                                <a href="pengguna_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['NamaAkun'] ?? '')); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" 
+                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
+                                </a>
+>>>>>>> origin/main
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -207,7 +252,11 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- MODAL 1: TAMBAH PENGGUNA -->
+=======
+<!-- MODAL TAMBAH PENGGUNA -->
+>>>>>>> origin/main
 <div class="modal fade" id="modalTambahPengguna" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="pengguna_Controller.php?sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" method="POST" class="modal-content border-0 shadow">
@@ -252,6 +301,7 @@
                         <option value="SA.KP">SA.KP (Super Administrator Pusat)</option>
                     </select>
                 </div>
+<<<<<<< HEAD
 
                 <!-- DROPDOWN UNIT DINAMIS -->
                 <div class="col-md-4">
@@ -288,6 +338,20 @@
                     </select>
                 </div>
 
+=======
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit UPI (UID)</label>
+                    <input type="text" name="UnitUpi" class="form-control form-control-sm" value="56">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit AP (UP3)</label>
+                    <input type="text" name="UnitAp" class="form-control form-control-sm" value="56610">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Unit UP (ULP)</label>
+                    <input type="text" name="UnitUp" class="form-control form-control-sm" value="56610">
+                </div>
+>>>>>>> origin/main
                 <div class="col-md-12">
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <select name="StatusData" class="form-select form-select-sm">
@@ -304,6 +368,7 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- MODAL 2: EDIT PENGGUNA -->
 <div class="modal fade" id="modalEditPengguna" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -405,6 +470,11 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Live search client-side
+=======
+<!-- SCRIPT PENCARIAN CLIENT-SIDE INSTAN -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+>>>>>>> origin/main
     const inputCari = document.getElementById('cariPengguna');
     const tabel = document.getElementById('tabelPengguna');
     if (inputCari && tabel) {
@@ -412,6 +482,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyword = this.value.toLowerCase();
             const baris = tabel.querySelectorAll('tbody tr');
             baris.forEach(row => {
+<<<<<<< HEAD
                 const akun = row.querySelector('.akun-cell') ? row.querySelector('.akun-cell').textContent.toLowerCase() : '';
                 const nama = row.querySelector('.nama-cell') ? row.querySelector('.nama-cell').textContent.toLowerCase() : '';
                 const email = row.querySelector('.email-cell') ? row.querySelector('.email-cell').textContent.toLowerCase() : '';
@@ -442,5 +513,23 @@ document.addEventListener('DOMContentLoaded', function() {
             modalEdit.show();
         });
     });
+=======
+                const akunCell  = row.querySelector('.akun-cell');
+                const namaCell  = row.querySelector('.nama-cell');
+                const emailCell = row.querySelector('.email-cell');
+
+                const akunText  = akunCell ? akunCell.textContent.toLowerCase() : '';
+                const namaText  = namaCell ? namaCell.textContent.toLowerCase() : '';
+                const emailText = emailCell ? emailCell.textContent.toLowerCase() : '';
+
+                if (akunText.includes(keyword) || namaText.includes(keyword) || emailText.includes(keyword)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+>>>>>>> origin/main
 });
 </script>
