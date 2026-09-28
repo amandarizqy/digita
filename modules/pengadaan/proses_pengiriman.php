@@ -2,111 +2,148 @@
 session_start();
 require_once '../../config/database.php';
 
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
-    exit;
+$kode_hak = $_SESSION['KodeHak'] ?? '';
+$allowed_roles = ['AM.UI', 'SA.KP']; 
+if (!isset($_SESSION['NamaAkun']) || !in_array($kode_hak, $allowed_roles)) {
+    die("Akses Ditolak: Anda tidak memiliki otoritas untuk memproses pengiriman.");
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $metode = $_POST['metode'] ?? 'manual';
-    $tgl_kirim = $_POST['tgl_kirim_massal'] ?? $_POST['tgl_kirim'] ?? date('Y-m-d');
-    $tujuan_up = $_POST['tujuan_up_massal'] ?? $_POST['tujuan_up'] ?? '';
-    $nama_akun = $_SESSION['NamaAkun'];
+$action = $_GET['action'] ?? '';
+$nama_akun = $_SESSION['NamaAkun'];
+$unit_upi  = $_SESSION['UnitUpi'] ?? '56';
 
-    if (empty($tujuan_up)) die("Unit tujuan belum dipilih.");
+try {
+    // AKSI 1: BUAT DRAFT PENGIRIMAN
+    if ($action === 'create_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = trim($_POST['no_formulir']);
+        $tgl_form = $_POST['tgl_form'];
+        $ap_tujuan = !empty($_POST['kode_ap_tujuan']) ? $_POST['kode_ap_tujuan'] : NULL;
+        $up_tujuan = !empty($_POST['kode_up_tujuan']) ? $_POST['kode_up_tujuan'] : NULL;
 
-    try {
-        $conn->beginTransaction();
-
-        // Ambil data AP dan UPI dari UnitUp tujuan yang dipilih
-        $stmt_tujuan = $conn->prepare("SELECT UnitAp, UnitUpi FROM master_up WHERE UnitUp = :up");
-        $stmt_tujuan->execute([':up' => $tujuan_up]);
-        $tujuan = $stmt_tujuan->fetch(PDO::FETCH_ASSOC);
-
-        if (!$tujuan) throw new Exception("Unit tujuan tidak ditemukan.");
-
-        $kode_ap = $tujuan['UnitAp'];
-        $kode_upi = $tujuan['UnitUpi'];
-
-        // 1. Insert Header Pengiriman (Trigger MySQL akan otomatis membuat NoFormulir berdasarkan KodeUp tujuan)
-        $query_form = "INSERT INTO formulir_pengiriman (NoFormulir, TglFormulir, NamaAkun, KodeUp, KodeAp, KodeUpi, StatusData) 
-                       VALUES ('', :tgl, :akun, :up, :ap, :upi, 'AKTIF')";
+        // KodeUp dan KodeAp di formulir ini bertindak sebagai Tujuan
+        $query_form = "INSERT INTO formulir_pengiriman (NoFormulir, TglFormulir, NamaAkun, KodeUp, KodeAp, KodeUpi, StatusPengiriman, StatusData) 
+                       VALUES (:no_form, :tgl, :akun, :up, :ap, :upi, 'DIKIRIM', 'TIDAK')";
         $stmt_form = $conn->prepare($query_form);
         $stmt_form->execute([
-            ':tgl'  => $tgl_kirim,
-            ':akun' => $nama_akun,
-            ':up'   => $tujuan_up,
-            ':ap'   => $kode_ap,
-            ':upi'  => $kode_upi
+            ':no_form' => $no_formulir,
+            ':tgl'     => $tgl_form,
+            ':akun'    => $nama_akun,
+            ':up'      => $up_tujuan,
+            ':ap'      => $ap_tujuan,
+            ':upi'     => $unit_upi
         ]);
+        
+        header("Location: pengiriman.php?view=detail&no_form=" . urlencode($no_formulir));
+        exit;
+    }
 
-        // 2. Ambil NoFormulir yang baru digenerate
-        $stmt_get_id = $conn->prepare("SELECT NoFormulir FROM formulir_pengiriman WHERE NamaAkun = :akun ORDER BY WaktuData DESC LIMIT 1");
-        $stmt_get_id->execute([':akun' => $nama_akun]);
-        $no_formulir = $stmt_get_id->fetchColumn();
+    // AKSI 2: TAMBAH ITEM KE KERANJANG (VALIDASI ASET)
+    if ($action === 'add_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = $_POST['no_formulir'];
+        $metode = $_POST['metode'] ?? 'manual';
+        
+        // Siapkan pengecekan apakah aset tersedia dan valid (Bukan milik AP/UP lain)
+        $stmt_check = $conn->prepare("SELECT NoRef FROM master_barang WHERE NoRef = :noref AND (UnitAp IS NULL OR UnitAp = '') AND (UnitUp IS NULL OR UnitUp = '')");
+        
+        // Siapkan pengecekan apakah sudah ada di keranjang lain yang aktif/belum diterima
+        $stmt_check_cart = $conn->prepare("SELECT d.NoRef FROM formulir_pengiriman_detil d JOIN formulir_pengiriman f ON d.NoFormulir = f.NoFormulir WHERE d.NoRef = :noref AND f.StatusPengiriman = 'DIKIRIM'");
 
-        if (!$no_formulir) throw new Exception("Gagal menggenerate Nomor Formulir.");
-
-        // Siapkan statement detail & update perpindahan unit alat
+        $conn->beginTransaction();
         $query_detil = "INSERT INTO formulir_pengiriman_detil (NoFormulir, NoRef, NomorRef, StikerQC, CacatFisik) 
-                        VALUES (:no_form, :noref, :nomorref, :qc, :cacat)";
+                        VALUES (:no_form, :noref, :noref_copy, :qc, :cacat)";
         $stmt_detil = $conn->prepare($query_detil);
 
-        $query_update_barang = "UPDATE master_barang SET UnitUp = :up, UnitAp = :ap, UnitUpi = :upi WHERE NoRef = :noref";
-        $stmt_update_barang = $conn->prepare($query_update_barang);
+        $added_count = 0;
+        $error_msgs = [];
 
-        // --- PROSES CSV ---
         if ($metode === 'excel' && isset($_FILES['file_excel']['tmp_name'])) {
             $file = $_FILES['file_excel']['tmp_name'];
             if (($handle = fopen($file, "r")) !== FALSE) {
-                fgetcsv($handle, 1000, ";"); // Abaikan baris header
-                
+                fgetcsv($handle, 1000, ";"); 
                 while (($row = fgetcsv($handle, 1000, ";")) !== FALSE) {
                     $no_ref = trim($row[0] ?? '');
-                    // Index 1 (Harga) diabaikan karena tidak dibutuhkan di tabel pengiriman detail
-                    $qc     = strtoupper(trim($row[2] ?? 'TIDAK'));
-                    $cacat  = strtoupper(trim($row[3] ?? 'YA'));
+                    $qc     = strtoupper(trim($row[1] ?? 'ADA'));
+                    $cacat  = strtoupper(trim($row[2] ?? 'TIDAK'));
 
                     if (empty($no_ref)) continue;
 
-                    $stmt_detil->execute([
-                        ':no_form' => $no_formulir, ':noref' => $no_ref, ':nomorref' => $no_ref,
-                        ':qc' => $qc, ':cacat' => $cacat
-                    ]);
+                    // Validasi Ketersediaan
+                    $stmt_check->execute([':noref' => $no_ref]);
+                    if ($stmt_check->rowCount() === 0) {
+                        $error_msgs[] = "$no_ref (Tidak ada di stok UI)";
+                        continue;
+                    }
+                    
+                    $stmt_check_cart->execute([':noref' => $no_ref]);
+                    if ($stmt_check_cart->rowCount() > 0) {
+                        $error_msgs[] = "$no_ref (Sedang dalam proses pengiriman lain)";
+                        continue;
+                    }
 
-                    // Pindahkan status kepemilikan alat ke Unit Tujuan
-                    $stmt_update_barang->execute([
-                        ':up' => $tujuan_up, ':ap' => $kode_ap, ':upi' => $kode_upi, ':noref' => $no_ref
+                    $stmt_detil->execute([
+                        ':no_form' => $no_formulir,
+                        ':noref'   => $no_ref,
+                        ':noref_copy' => $no_ref,
+                        ':qc'      => $qc,
+                        ':cacat'   => $cacat
                     ]);
+                    $added_count++;
                 }
                 fclose($handle);
             }
-        } 
-        // --- PROSES MANUAL ---
-        elseif ($metode === 'manual') {
+        } elseif ($metode === 'manual') {
             $no_ref = trim($_POST['no_ref'] ?? '');
-            $qc     = strtoupper(trim($_POST['stiker_qc'] ?? 'TIDAK'));
-            $cacat  = strtoupper(trim($_POST['cacat_fisik'] ?? 'YA'));
+            $qc     = strtoupper(trim($_POST['stiker_qc'] ?? 'ADA'));
+            $cacat  = strtoupper(trim($_POST['cacat_fisik'] ?? 'TIDAK'));
 
             if (!empty($no_ref)) {
-                $stmt_detil->execute([
-                    ':no_form' => $no_formulir, ':noref' => $no_ref, ':nomorref' => $no_ref,
-                    ':qc' => $qc, ':cacat' => $cacat
-                ]);
+                $stmt_check->execute([':noref' => $no_ref]);
+                if ($stmt_check->rowCount() === 0) {
+                    throw new Exception("Barang $no_ref tidak ditemukan di stok gudang UI.");
+                }
+                
+                $stmt_check_cart->execute([':noref' => $no_ref]);
+                if ($stmt_check_cart->rowCount() > 0) {
+                    throw new Exception("Barang $no_ref sedang dalam proses pengiriman lain.");
+                }
 
-                $stmt_update_barang->execute([
-                    ':up' => $tujuan_up, ':ap' => $kode_ap, ':upi' => $kode_upi, ':noref' => $no_ref
+                $stmt_detil->execute([
+                    ':no_form' => $no_formulir,
+                    ':noref'   => $no_ref,
+                    ':noref_copy' => $no_ref,
+                    ':qc'      => $qc,
+                    ':cacat'   => $cacat
                 ]);
             }
         }
-
+        
         $conn->commit();
-        header("Location: pengiriman.php?status=sukses");
+        
+        // Penanganan alert untuk upload massal
+        if (!empty($error_msgs)) {
+            $_SESSION['flash_error'] = "Beberapa item gagal diinput: " . implode(", ", $error_msgs);
+        }
+        
+        header("Location: pengiriman.php?view=detail&no_form=" . urlencode($no_formulir));
         exit;
-
-    } catch (Exception $e) {
-        $conn->rollBack();
-        die("Gagal memproses pengiriman: " . $e->getMessage());
     }
+
+    // AKSI 3: EKSEKUSI FINAL FORMULIR PENGIRIMAN
+    if ($action === 'execute_form' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_formulir = $_POST['no_formulir'];
+        
+        // Ubah status form menjadi AKTIF agar terdeteksi oleh unit tujuan
+        $stmt_update = $conn->prepare("UPDATE formulir_pengiriman SET StatusData = 'AKTIF', StatusPengiriman = 'DIKIRIM' WHERE NoFormulir = :no_form");
+        $stmt_update->execute([':no_form' => $no_formulir]);
+        
+        header("Location: pengiriman.php?view=daftar&status=sukses");
+        exit;
+    }
+
+} catch (Exception $e) {
+    if ($conn->inTransaction()) {
+        $conn->rollBack();
+    }
+    die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "'); window.history.back();</script>");
 }
 ?>
