@@ -14,6 +14,9 @@ $pages = [
     'laporan'      => 'Laporan',
 ];
 
+if (($_GET['module'] ?? '') === 'perencanaan') {
+     $_GET['page'] = 'perencanaan'; }
+     
 $page = $_GET['page'] ?? 'dashboard';
 if (!array_key_exists($page, $pages)) {
     $page = 'dashboard';
