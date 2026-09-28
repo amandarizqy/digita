@@ -9,7 +9,7 @@
     </button>
 </div>
 
-<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
         <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
@@ -22,7 +22,6 @@
         </a>
     </li>
     <li class="nav-item">
-        <!-- TAB PUSAT PESAN AKTIF -->
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
@@ -32,18 +31,12 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    
-    <!-- 1. Tombol Provider SIM (Aktif di Halaman Ini) -->
     <a href="index.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
         <i class="bi bi-check2 me-1"></i> Provider SIM
     </a>
-
-    <!-- 2. Tombol Modem GSM (Tersambung ke modem_Controller.php) -->
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Modem GSM
     </a>
-
-    <!-- 3. Tombol Perintah Baku (Tersambung ke pesan_Controller.php) -->
     <a href="pesan_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Perintah Baku (AT Commands)
     </a>
@@ -51,13 +44,12 @@
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
-    <!-- Kartu Total Provider -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PROVIDER TERDAFTAR</span>
-                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_operator ?? count($providers ?? []); ?> Operator</h2>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_operator; ?> Operator</h2>
                     <span class="text-muted small">Tabel referensi: <code class="text-danger">master_provider</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
@@ -67,14 +59,13 @@
         </div>
     </div>
 
-    <!-- Kartu Status Aktif Operasional -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS AKTIF OPERASIONAL</span>
-                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif ?? 0; ?> / <?= $total_operator ?? count($providers ?? []); ?> Aktif</h2>
-                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Siap melayani transmisi SMS gateway</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif; ?> / <?= $total_operator; ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif; ?>% Siap melayani transmisi SMS gateway</span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
                     <i class="bi bi-check2-circle fs-4"></i>
@@ -84,16 +75,13 @@
     </div>
 </div>
 
-<!-- KARTU TABEL DATA MASTER PROVIDER -->
+<!-- TABEL DATA MASTER PROVIDER -->
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary fs-6">
-                Daftar Data Master Provider
-            </span>
+            <span class="fw-bold text-primary fs-6">Daftar Data Master Provider</span>
             <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_provider</span>
         </div>
-        <!-- Tambahan: Input Pencarian Instan -->
         <div class="input-group input-group-sm" style="max-width: 250px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariProvider" class="form-control bg-light border-start-0" placeholder="Cari nama provider...">
@@ -110,7 +98,7 @@
                         <th>NAMA PROVIDER</th>
                         <th style="width: 160px;">STATUS DATA</th>
                         <th style="width: 200px;">WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 140px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -118,36 +106,45 @@
                         <?php $no = 1; foreach ($providers as $row): ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
-                            <td class="fw-bold text-dark font-monospace"><?= htmlspecialchars($row['KodeProvider'] ?? '-'); ?></td>
+                            <td class="fw-bold text-dark font-monospace"><?= htmlspecialchars($row['KodeProvider']); ?></td>
                             <td class="fw-medium text-dark nama-provider-cell">
                                 <span class="rounded-circle d-inline-block me-2" style="width: 8px; height: 8px; background-color: #0d6efd;"></span>
                                 <?= htmlspecialchars($row['NamaProvider'] ?? '-'); ?>
                             </td>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • AKTIF
-                                    </span>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • NONAKTIF
-                                    </span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-muted font-monospace small">
-                                <?= htmlspecialchars($row['WaktuData'] ?? '-'); ?>
-                            </td>
+                            <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
-                                <a href="index.php?action=toggle_status&id=<?= urlencode($row['KodeProvider']); ?>" 
-                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
-                                </a>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="index.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['KodeProvider'])); ?>" 
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-provider"
+                                            data-id="<?= htmlspecialchars($row['KodeProvider']); ?>"
+                                            data-nama="<?= htmlspecialchars($row['NamaProvider'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($row['StatusData'] ?? 'AKTIF'); ?>"
+                                            title="Edit Provider">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <a href="index.php?action=delete&id=<?= htmlspecialchars(urlencode($row['KodeProvider'])); ?>" 
+                                       class="btn btn-outline-danger py-1 px-2" 
+                                       onclick="return confirm('Apakah Anda yakin ingin menghapus provider ini?');" 
+                                       title="Hapus Provider">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">Belum ada rekaman di tabel master_provider.</td>
+                            <td colspan="6" class="text-center text-muted py-4">Belum ada data provider.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -155,9 +152,8 @@
         </div>
     </div>
 
-    <!-- FOOTER TABEL: PAGINASI -->
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
-        <small class="text-muted">Menampilkan <?= !empty($providers) ? count($providers) : 0; ?> dari <?= !empty($providers) ? count($providers) : 0; ?> total data master provider</small>
+        <small class="text-muted">Menampilkan 1 - <?= count($providers); ?> dari <?= $total_operator; ?> total data</small>
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
@@ -168,7 +164,7 @@
     </div>
 </div>
 
-<!-- MODAL TAMBAH DATA MASTER PROVIDER -->
+<!-- MODAL TAMBAH PROVIDER -->
 <div class="modal fade" id="modalTambahData" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="index.php" method="POST" class="modal-content border-0 shadow">
@@ -186,7 +182,7 @@
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <select name="StatusData" class="form-select form-select-sm">
                         <option value="AKTIF">AKTIF</option>
-                        <option value="NONAKTIF">NONAKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
                     </select>
                 </div>
             </div>
@@ -198,7 +194,41 @@
     </div>
 </div>
 
-<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<!-- MODAL EDIT PROVIDER -->
+<div class="modal fade" id="modalEditProvider" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="index.php" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="KodeProvider" id="edit_provider_id">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Edit Master Provider</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Kode Provider</label>
+                    <input type="text" id="edit_provider_id_display" class="form-control form-control-sm font-monospace bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Nama Provider Operator *</label>
+                    <input type="text" name="NamaProvider" id="edit_provider_nama" class="form-control form-control-sm" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
+                    <select name="StatusData" id="edit_provider_status" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const inputCari = document.getElementById('cariProvider');
@@ -216,5 +246,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    const modalEditEl = document.getElementById('modalEditProvider');
+    const modalEdit = new bootstrap.Modal(modalEditEl);
+
+    document.querySelectorAll('.btn-edit-provider').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            const nama = this.getAttribute('data-nama');
+            const status = this.getAttribute('data-status');
+
+            document.getElementById('edit_provider_id').value = id;
+            document.getElementById('edit_provider_id_display').value = id;
+            document.getElementById('edit_provider_nama').value = nama;
+            document.getElementById('edit_provider_status').value = (status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+
+            modalEdit.show();
+        });
+    });
 });
 </script>

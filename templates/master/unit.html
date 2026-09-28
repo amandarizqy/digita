@@ -9,10 +9,9 @@
     </button>
 </div>
 
-<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
-        <!-- TAB UNIT AKTIF -->
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="unit_Controller.php">
             <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
         </a>
@@ -38,7 +37,7 @@
         <?= ($sub === 'ui') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UI (Unit Induk)
     </a>
 
-    <!-- Tingkat UP3 (Default Desain) -->
+    <!-- Tingkat UP3 -->
     <a href="unit_Controller.php?sub=up3" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'up3') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'up3') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
         <?= ($sub === 'up3') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UP3 (Unit Pelaksana)
     </a>
@@ -51,14 +50,13 @@
 
 <!-- KARTU METRIK KPI UNIT -->
 <div class="row g-3 mb-4">
-    <!-- Total Unit Terdaftar -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL <?= strtoupper($sub); ?> TERDAFTAR</span>
-                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_unit ?? count($units ?? []); ?> <?= ($sub === 'ui') ? 'Unit Induk' : (($sub === 'up3') ? 'Unit Pelaksana' : 'Unit Layanan'); ?></h2>
-                    <span class="text-muted small">Tabel referensi: <code class="text-danger"><?= $table_ref ?? 'master_ap'; ?></code></span>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_unit; ?> Unit</h2>
+                    <span class="text-muted small">Tabel referensi: <code class="text-danger"><?= $table_ref; ?></code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
                     <i class="bi bi-building fs-4"></i>
@@ -67,14 +65,13 @@
         </div>
     </div>
 
-    <!-- Status Operasional -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS OPERASIONAL</span>
-                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif ?? 0; ?> / <?= $total_unit ?? count($units ?? []); ?> Aktif</h2>
-                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Terpetakan dalam Geografis UID Banten</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif; ?> / <?= $total_unit; ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif; ?>% Unit Beroperasi Normal</span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
                     <i class="bi bi-check2-circle fs-4"></i>
@@ -88,12 +85,9 @@
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary fs-6">
-                Daftar Master <?= $label_unit ?? 'Unit Organisasi'; ?>
-            </span>
-            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: <?= $table_ref ?? 'master_ap'; ?></span>
+            <span class="fw-bold text-primary fs-6">Daftar Master <?= $label_unit; ?></span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: <?= $table_ref; ?></span>
         </div>
-        <!-- Kolom Pencarian Cepat -->
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariUnit" class="form-control bg-light border-start-0" placeholder="Cari kode, nama unit...">
@@ -106,71 +100,82 @@
                 <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
                     <tr>
                         <th style="width: 40px;" class="ps-4">#</th>
-                        <th style="width: 140px;">KODE <?= strtoupper($sub); ?></th>
+                        <th style="width: 130px;">KODE <?= strtoupper($sub); ?></th>
                         <th style="width: 160px;">SINGKATAN</th>
                         <th>NAMA LENGKAP UNIT ORGANISASI</th>
                         <?php if ($sub !== 'ui'): ?>
-                            <th style="width: 180px;">INDUK WILAYAH</th>
+                            <th style="width: 170px;">INDUK WILAYAH</th>
                         <?php endif; ?>
                         <th style="width: 130px;">STATUS DATA</th>
-                        <th style="width: 170px;">WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 100px;">AKSI</th>
+                        <th style="width: 160px;">WAKTU DATA</th>
+                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($units)): ?>
                         <?php $no = 1; foreach ($units as $row): ?>
+                        <?php $kode_id = $row['UnitAp'] ?? $row['UnitUp'] ?? $row['UnitUpi'] ?? ''; ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
-                            <td class="fw-bold text-dark font-monospace kode-unit-cell">
-                                <?= htmlspecialchars($row['UnitAp'] ?? $row['UnitUp'] ?? $row['UnitUpi'] ?? '-'); ?>
-                            </td>
+                            <td class="fw-bold text-dark font-monospace kode-unit-cell"><?= htmlspecialchars($kode_id); ?></td>
                             <td class="singkatan-cell">
                                 <span class="badge bg-warning bg-opacity-10 text-dark border border-warning px-2 py-1 font-monospace">
                                     <?= htmlspecialchars($row['SingkatanNama'] ?? '-'); ?>
                                 </span>
                             </td>
-                            <td class="fw-semibold text-dark text-uppercase small nama-unit-cell">
-                                <?= htmlspecialchars($row['NamaUnit'] ?? '-'); ?>
-                            </td>
+                            <td class="fw-semibold text-dark text-uppercase small nama-unit-cell"><?= htmlspecialchars($row['NamaUnit'] ?? '-'); ?></td>
                             <?php if ($sub !== 'ui'): ?>
                             <td>
                                 <span class="badge bg-light text-secondary border font-monospace">
-                                    UID: <?= htmlspecialchars($row['UnitUpi'] ?? '-'); ?> <?= isset($row['NamaIndukUpi']) ? '- ' . htmlspecialchars($row['NamaIndukUpi']) : ''; ?>
+                                    UID: <?= htmlspecialchars($row['UnitUpi'] ?? '-'); ?>
                                 </span>
                                 <?php if ($sub === 'ulp' && isset($row['UnitAp'])): ?>
-                                    <div class="mt-1">
-                                        <span class="badge bg-light text-dark border font-monospace">
-                                            UP3: <?= htmlspecialchars($row['UnitAp']); ?>
-                                        </span>
-                                    </div>
+                                    <span class="badge bg-light text-dark border font-monospace">UP3: <?= htmlspecialchars($row['UnitAp']); ?></span>
                                 <?php endif; ?>
                             </td>
                             <?php endif; ?>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • AKTIF
-                                    </span>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • NONAKTIF
-                                    </span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
-                                <?php $kode_id = $row['UnitAp'] ?? $row['UnitUp'] ?? $row['UnitUpi'] ?? ''; ?>
-                                <a href="unit_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'up3')); ?>" 
-                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
-                                </a>
+                                <div class="btn-group btn-group-sm">
+                                    <!-- Toggle Status -->
+                                    <a href="unit_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>&sub=<?= htmlspecialchars(urlencode($sub)); ?>" 
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+
+                                    <!-- Edit Unit (Modal Auto-fill) -->
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-unit" 
+                                            data-id="<?= htmlspecialchars($kode_id); ?>"
+                                            data-nama="<?= htmlspecialchars($row['NamaUnit'] ?? ''); ?>"
+                                            data-singkatan="<?= htmlspecialchars($row['SingkatanNama'] ?? ''); ?>"
+                                            data-upi="<?= htmlspecialchars($row['UnitUpi'] ?? ''); ?>"
+                                            data-ap="<?= htmlspecialchars($row['UnitAp'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($row['StatusData'] ?? 'AKTIF'); ?>"
+                                            title="Edit Data">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+
+                                    <!-- Hapus Unit (Aman tanpa benturan petik) -->
+                                    <a href="unit_Controller.php?action=delete&id=<?= htmlspecialchars(urlencode($kode_id)); ?>&sub=<?= htmlspecialchars(urlencode($sub)); ?>" 
+                                       class="btn btn-outline-danger py-1 px-2" 
+                                       onclick="return confirm('Apakah Anda yakin ingin menghapus data unit ini?');" 
+                                       title="Hapus Data">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= ($sub !== 'ui') ? '8' : '7'; ?>" class="text-center text-muted py-4">Belum ada rekaman unit pada tingkat ini.</td>
+                            <td colspan="8" class="text-center text-muted py-4">Belum ada data unit pada tingkat ini.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -180,7 +185,7 @@
 
     <!-- Paginasi -->
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
-        <small class="text-muted">Menampilkan 1 - <?= !empty($units) ? count($units) : 0; ?> dari <?= $total_unit ?? (!empty($units) ? count($units) : 0); ?> total data master unit</small>
+        <small class="text-muted">Menampilkan 1 - <?= count($units); ?> dari <?= $total_unit; ?> total data</small>
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
@@ -191,13 +196,15 @@
     </div>
 </div>
 
-<!-- MODAL TAMBAH UNIT -->
+<!-- ========================================================= -->
+<!-- MODAL 1: TAMBAH UNIT -->
+<!-- ========================================================= -->
 <div class="modal fade" id="modalTambahUnit" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form action="unit_Controller.php?sub=<?= htmlspecialchars(urlencode($sub ?? 'up3')); ?>" method="POST" class="modal-content border-0 shadow">
+        <form action="unit_Controller.php?sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow">
             <input type="hidden" name="action" value="store">
             <div class="modal-header border-bottom">
-                <h5 class="modal-title fw-bold fs-6">Tambah Master <?= $label_unit ?? 'Unit'; ?></h5>
+                <h5 class="modal-title fw-bold fs-6">Tambah Master <?= $label_unit; ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -212,9 +219,9 @@
                         <input type="text" name="UnitAp" class="form-control form-control-sm font-monospace" placeholder="Contoh: 56650" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Unit Induk (UID) Induk *</label>
+                        <label class="form-label small fw-semibold text-secondary">Unit Induk (UID) Pembina *</label>
                         <select name="UnitUpi" class="form-select form-select-sm" required>
-                            <?php foreach ($list_upi ?? [] as $upi): ?>
+                            <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
                                 </option>
@@ -229,7 +236,7 @@
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-secondary">Pilih UP3 Pembina *</label>
                         <select name="UnitAp" class="form-select form-select-sm" required>
-                            <?php foreach ($list_ap ?? [] as $ap): ?>
+                            <?php foreach ($list_ap as $ap): ?>
                                 <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
                                     <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
                                 </option>
@@ -239,7 +246,7 @@
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-secondary">Pilih Unit Induk (UID) *</label>
                         <select name="UnitUpi" class="form-select form-select-sm" required>
-                            <?php foreach ($list_upi ?? [] as $upi): ?>
+                            <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
                                 </option>
@@ -250,14 +257,12 @@
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold text-secondary">Singkatan Nama *</label>
-                    <input type="text" name="SingkatanNama" class="form-control form-control-sm" placeholder="Contoh: UP3 SERPONG" required>
+                    <input type="text" name="SingkatanNama" class="form-control form-control-sm" placeholder="Contoh: UID BANTEN / UP3 CIKUPA" required>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label small fw-semibold text-secondary">Nama Lengkap Unit *</label>
-                    <input type="text" name="NamaUnit" class="form-control form-control-sm text-uppercase" placeholder="Contoh: UNIT PELAKSANA PELAYANAN PELANGGAN SERPONG" required>
+                    <input type="text" name="NamaUnit" class="form-control form-control-sm text-uppercase" placeholder="Contoh: UNIT INDUK DISTRIBUSI BANTEN" required>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <select name="StatusData" class="form-select form-select-sm">
@@ -268,15 +273,95 @@
             </div>
             <div class="modal-footer border-top">
                 <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Data Unit</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Unit</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<!-- ========================================================= -->
+<!-- MODAL 2: EDIT UNIT (OTOMATIS TERISI) -->
+<!-- ========================================================= -->
+<div class="modal fade" id="modalEditUnit" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="unit_Controller.php?sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="IdPrimary" id="edit_id_primary">
+
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Edit Data <?= $label_unit; ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Kode Unit (Primary Key - Kunci)</label>
+                    <input type="text" id="edit_kode_display" class="form-control form-control-sm font-monospace bg-light" readonly>
+                </div>
+
+                <?php if ($sub === 'up3'): ?>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Unit Induk (UID) *</label>
+                        <select name="UnitUpi" id="edit_unit_upi" class="form-select form-select-sm" required>
+                            <?php foreach ($list_upi as $upi): ?>
+                                <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
+                                    <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php elseif ($sub === 'ulp'): ?>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Pilih UP3 Pembina *</label>
+                        <select name="UnitAp" id="edit_unit_ap" class="form-select form-select-sm" required>
+                            <?php foreach ($list_ap as $ap): ?>
+                                <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
+                                    <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Pilih Unit Induk (UID) *</label>
+                        <select name="UnitUpi" id="edit_unit_upi_ulp" class="form-select form-select-sm" required>
+                            <?php foreach ($list_upi as $upi): ?>
+                                <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
+                                    <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Singkatan Nama *</label>
+                    <input type="text" name="SingkatanNama" id="edit_singkatan" class="form-control form-control-sm" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Nama Lengkap Unit *</label>
+                    <input type="text" name="NamaUnit" id="edit_nama" class="form-control form-control-sm text-uppercase" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
+                    <select name="StatusData" id="edit_status" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- JAVASCRIPT: FILTER PENCARIAN & AUTO-FILL MODAL EDIT -->
+<!-- ========================================================= -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. Live search
     const inputCari = document.getElementById('cariUnit');
     const tabel = document.getElementById('tabelUnit');
     if (inputCari && tabel) {
@@ -284,21 +369,45 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyword = this.value.toLowerCase();
             const baris = tabel.querySelectorAll('tbody tr');
             baris.forEach(row => {
-                const kodeCell = row.querySelector('.kode-unit-cell');
-                const singkatanCell = row.querySelector('.singkatan-cell');
-                const namaCell = row.querySelector('.nama-unit-cell');
-
-                const kodeText = kodeCell ? kodeCell.textContent.toLowerCase() : '';
-                const singkatanText = singkatanCell ? singkatanCell.textContent.toLowerCase() : '';
-                const namaText = namaCell ? namaCell.textContent.toLowerCase() : '';
-
-                if (kodeText.includes(keyword) || singkatanText.includes(keyword) || namaText.includes(keyword)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                const kode = row.querySelector('.kode-unit-cell') ? row.querySelector('.kode-unit-cell').textContent.toLowerCase() : '';
+                const singkatan = row.querySelector('.singkatan-cell') ? row.querySelector('.singkatan-cell').textContent.toLowerCase() : '';
+                const nama = row.querySelector('.nama-unit-cell') ? row.querySelector('.nama-unit-cell').textContent.toLowerCase() : '';
+                row.style.display = (kode.includes(keyword) || singkatan.includes(keyword) || nama.includes(keyword)) ? '' : 'none';
             });
         });
     }
+
+    // 2. Auto-fill modal edit
+    const modalEditEl = document.getElementById('modalEditUnit');
+    const modalEdit = new bootstrap.Modal(modalEditEl);
+
+    document.querySelectorAll('.btn-edit-unit').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            const nama = this.getAttribute('data-nama');
+            const singkatan = this.getAttribute('data-singkatan');
+            const upi = this.getAttribute('data-upi');
+            const ap = this.getAttribute('data-ap');
+            const status = this.getAttribute('data-status');
+
+            document.getElementById('edit_id_primary').value = id;
+            document.getElementById('edit_kode_display').value = id;
+            document.getElementById('edit_nama').value = nama;
+            document.getElementById('edit_singkatan').value = singkatan;
+            document.getElementById('edit_status').value = (status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+
+            if (document.getElementById('edit_unit_upi')) {
+                document.getElementById('edit_unit_upi').value = upi;
+            }
+            if (document.getElementById('edit_unit_ap')) {
+                document.getElementById('edit_unit_ap').value = ap;
+            }
+            if (document.getElementById('edit_unit_upi_ulp')) {
+                document.getElementById('edit_unit_upi_ulp').value = upi;
+            }
+
+            modalEdit.show();
+        });
+    });
 });
 </script>

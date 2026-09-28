@@ -9,7 +9,7 @@
     </button>
 </div>
 
-<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA (Unit, Pengguna, Pusat Pesan) -->
+<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
     <li class="nav-item">
         <a class="nav-link py-2 px-3 fw-medium text-secondary" href="unit_Controller.php">
@@ -22,7 +22,6 @@
         </a>
     </li>
     <li class="nav-item">
-        <!-- TAB PUSAT PESAN AKTIF -->
         <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
@@ -32,18 +31,12 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    
-    <!-- Link kembali ke Provider SIM -->
     <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Provider SIM
     </a>
-
-    <!-- Modem GSM AKTIF -->
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
         <i class="bi bi-check2 me-1"></i> Modem GSM
     </a>
-
-    <!-- Link ke Perintah Baku -->
     <a href="pesan_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Perintah Baku (AT Commands)
     </a>
@@ -56,7 +49,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL MODEM TERDAFTAR</span>
-                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem ?? count($modems ?? []); ?> Modem</h2>
+                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem; ?> Modem</h2>
                     <span class="text-muted small">Tabel referensi: <code class="text-danger">master_modem</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
@@ -71,8 +64,8 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS MODEM ONLINE</span>
-                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_modem_aktif ?? 0; ?> / <?= $total_modem ?? count($modems ?? []); ?> Aktif</h2>
-                    <span class="text-muted small"><?= $persentase_aktif ?? 0; ?>% Port Engine & Gateway Server Terhubung</span>
+                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_modem_aktif; ?> / <?= $total_modem; ?> Aktif</h2>
+                    <span class="text-muted small"><?= $persentase_aktif; ?>% Port Engine & Gateway Server Terhubung</span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
                     <i class="bi bi-cpu fs-4"></i>
@@ -86,12 +79,9 @@
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary fs-6">
-                Daftar Master Modem Gateway
-            </span>
+            <span class="fw-bold text-primary fs-6">Daftar Master Modem Gateway</span>
             <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_modem</span>
         </div>
-        <!-- Kolom Pencarian Cepat -->
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariModem" class="form-control bg-light border-start-0" placeholder="Cari IMEI, IP, Port...">
@@ -111,7 +101,7 @@
                         <th>PORT</th>
                         <th>STATUS DATA</th>
                         <th>WAKTU DATA</th>
-                        <th class="text-end pe-4">AKSI</th>
+                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -124,11 +114,19 @@
                                 <?= htmlspecialchars($row['ImeiModem'] ?? '-'); ?>
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
-                                <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['KodeAp'] ?? '-'); ?></span>
-                                <span class="badge bg-light text-secondary border">UPI: <?= htmlspecialchars($row['KodeUpi'] ?? '-'); ?></span>
+                                <div class="small d-flex flex-wrap gap-1">
+                                    <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
+                                    <span class="badge bg-light text-secondary border">AP: <?= htmlspecialchars($row['KodeAp'] ?? '-'); ?></span>
+                                    <span class="badge bg-light text-secondary border">UPI: <?= htmlspecialchars($row['KodeUpi'] ?? '-'); ?></span>
+                                </div>
                             </td>
-                            <td class="font-monospace text-secondary small"><?= htmlspecialchars($row['SimId'] ?? '-'); ?></td>
+                            <td class="font-monospace text-secondary small">
+                                <?php if (!empty($row['SimId'])): ?>
+                                    <span class="badge bg-info bg-opacity-10 text-dark border border-info font-monospace"><?= htmlspecialchars($row['SimId']); ?></span>
+                                <?php else: ?>
+                                    <span class="text-muted font-monospace fst-italic">Tanpa SIM</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="small ip-cell">
                                 <div><span class="text-muted">Data:</span> <code><?= htmlspecialchars($row['IpServerData'] ?? '-'); ?></code></div>
                                 <div><span class="text-muted">Engine:</span> <code><?= htmlspecialchars($row['IpServerEngine'] ?? '-'); ?></code></div>
@@ -136,21 +134,38 @@
                             <td class="port-cell"><span class="badge bg-secondary bg-opacity-10 text-dark border font-monospace"><?= htmlspecialchars($row['PortEngine'] ?? '-'); ?></span></td>
                             <td>
                                 <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • AKTIF
-                                    </span>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
                                 <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">
-                                        • NONAKTIF
-                                    </span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
-                                <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
-                                   class="btn btn-sm btn-outline-secondary py-1 px-2 small" style="font-size: 0.8rem;">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Ubah
-                                </a>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-modem"
+                                            data-imei="<?= htmlspecialchars($row['ImeiModem'] ?? ''); ?>"
+                                            data-sim="<?= htmlspecialchars($row['SimId'] ?? ''); ?>"
+                                            data-up="<?= htmlspecialchars($row['KodeUp'] ?? ''); ?>"
+                                            data-ap="<?= htmlspecialchars($row['KodeAp'] ?? ''); ?>"
+                                            data-upi="<?= htmlspecialchars($row['KodeUpi'] ?? ''); ?>"
+                                            data-ipdata="<?= htmlspecialchars($row['IpServerData'] ?? ''); ?>"
+                                            data-ipengine="<?= htmlspecialchars($row['IpServerEngine'] ?? ''); ?>"
+                                            data-port="<?= htmlspecialchars($row['PortEngine'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($row['StatusData'] ?? 'AKTIF'); ?>"
+                                            title="Edit Modem">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <a href="modem_Controller.php?action=delete&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
+                                       class="btn btn-outline-danger py-1 px-2" 
+                                       onclick="return confirm('Apakah Anda yakin ingin menghapus modem ini?');" 
+                                       title="Hapus Modem">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -164,9 +179,8 @@
         </div>
     </div>
 
-    <!-- Paginasi -->
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
-        <small class="text-muted">Menampilkan <?= !empty($modems) ? count($modems) : 0; ?> dari <?= !empty($modems) ? count($modems) : 0; ?> total data master modem</small>
+        <small class="text-muted">Menampilkan 1 - <?= count($modems); ?> dari <?= $total_modem; ?> total data</small>
         <nav>
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
@@ -177,7 +191,9 @@
     </div>
 </div>
 
-<!-- MODAL TAMBAH MODEM -->
+<!-- ========================================================= -->
+<!-- MODAL 1: TAMBAH MODEM -->
+<!-- ========================================================= -->
 <div class="modal fade" id="modalTambahModem" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
@@ -191,22 +207,57 @@
                     <label class="form-label small fw-semibold text-secondary">IMEI Modem *</label>
                     <input type="text" name="ImeiModem" class="form-control form-control-sm font-monospace" placeholder="Contoh: 867749010776270" required>
                 </div>
+                
+                <!-- DROPDOWN SIM ID DARI master_nomor -->
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-secondary">SIM ID / ICCID</label>
-                    <input type="text" name="SimId" class="form-control form-control-sm font-monospace" placeholder="Contoh: 510105394216009">
+                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
+                    <select name="SimId" class="form-select form-select-sm font-monospace">
+                        <option value="">-- Tanpa SIM Card (NULL) --</option>
+                        <?php if (!empty($list_sim)): ?>
+                            <?php foreach ($list_sim as $s): ?>
+                                <option value="<?= htmlspecialchars($s['SimId']); ?>">
+                                    <?= htmlspecialchars($s['SimId']); ?><?= isset($s['MsisdnNomor']) ? ' (' . htmlspecialchars($s['MsisdnNomor']) . ')' : ''; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+
+                <!-- DROPDOWN UNIT DINAMIS -->
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
+                    <select name="KodeUpi" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih UID --</option>
+                        <?php foreach ($list_upi as $upi): ?>
+                            <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
+                                <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-semibold text-secondary">Kode UP</label>
-                    <input type="text" name="KodeUp" class="form-control form-control-sm" placeholder="56610">
+                    <label class="form-label small fw-semibold text-secondary">Kode AP (UP3) *</label>
+                    <select name="KodeAp" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih UP3 --</option>
+                        <?php foreach ($list_ap as $ap): ?>
+                            <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
+                                <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small fw-semibold text-secondary">Kode AP</label>
-                    <input type="text" name="KodeAp" class="form-control form-control-sm" placeholder="56610">
+                    <label class="form-label small fw-semibold text-secondary">Kode UP (ULP)</label>
+                    <select name="KodeUp" class="form-select form-select-sm">
+                        <option value="">-- Pilih ULP (Boleh Kosong) --</option>
+                        <?php foreach ($list_up as $up): ?>
+                            <option value="<?= htmlspecialchars($up['UnitUp']); ?>">
+                                <?= htmlspecialchars($up['UnitUp']); ?> - <?= htmlspecialchars($up['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-semibold text-secondary">Kode UPI</label>
-                    <input type="text" name="KodeUpi" class="form-control form-control-sm" placeholder="56">
-                </div>
+
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
                     <input type="text" name="IpServerData" class="form-control form-control-sm font-monospace" placeholder="10.96.100.123">
@@ -235,9 +286,107 @@
     </div>
 </div>
 
-<!-- SCRIPT FILTER PENCARIAN CLIENT-SIDE -->
+<!-- ========================================================= -->
+<!-- MODAL 2: EDIT MODEM -->
+<!-- ========================================================= -->
+<div class="modal fade" id="modalEditModem" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
+            <input type="hidden" name="action" value="update">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold fs-6">Edit Master Modem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">IMEI Modem (Primary Key)</label>
+                    <input type="text" name="ImeiModem" id="edit_modem_imei" class="form-control form-control-sm font-monospace bg-light" readonly>
+                </div>
+                
+                <!-- DROPDOWN SIM ID EDIT -->
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
+                    <select name="SimId" id="edit_modem_sim" class="form-select form-select-sm font-monospace">
+                        <option value="">-- Tanpa SIM Card (NULL) --</option>
+                        <?php if (!empty($list_sim)): ?>
+                            <?php foreach ($list_sim as $s): ?>
+                                <option value="<?= htmlspecialchars($s['SimId']); ?>">
+                                    <?= htmlspecialchars($s['SimId']); ?><?= isset($s['MsisdnNomor']) ? ' (' . htmlspecialchars($s['MsisdnNomor']) . ')' : ''; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+
+                <!-- DROPDOWN UNIT DINAMIS EDIT -->
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
+                    <select name="KodeUpi" id="edit_modem_upi" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih UID --</option>
+                        <?php foreach ($list_upi as $upi): ?>
+                            <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
+                                <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode AP (UP3) *</label>
+                    <select name="KodeAp" id="edit_modem_ap" class="form-select form-select-sm" required>
+                        <option value="">-- Pilih UP3 --</option>
+                        <?php foreach ($list_ap as $ap): ?>
+                            <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
+                                <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Kode UP (ULP)</label>
+                    <select name="KodeUp" id="edit_modem_up" class="form-select form-select-sm">
+                        <option value="">-- Pilih ULP (Boleh Kosong) --</option>
+                        <?php foreach ($list_up as $up): ?>
+                            <option value="<?= htmlspecialchars($up['UnitUp']); ?>">
+                                <?= htmlspecialchars($up['UnitUp']); ?> - <?= htmlspecialchars($up['SingkatanNama']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
+                    <input type="text" name="IpServerData" id="edit_modem_ipdata" class="form-control form-control-sm font-monospace">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">IP Server Engine</label>
+                    <input type="text" name="IpServerEngine" id="edit_modem_ipengine" class="form-control form-control-sm font-monospace">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-secondary">Port Engine</label>
+                    <input type="text" name="PortEngine" id="edit_modem_port" class="form-control form-control-sm font-monospace">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
+                    <select name="StatusData" id="edit_modem_status" class="form-select form-select-sm">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- JAVASCRIPT: FILTER PENCARIAN & AUTO-FILL MODAL EDIT -->
+<!-- ========================================================= -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. Live search pencarian instan
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
@@ -248,10 +397,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 const imeiText = row.querySelector('.imei-cell') ? row.querySelector('.imei-cell').textContent.toLowerCase() : '';
                 const ipText = row.querySelector('.ip-cell') ? row.querySelector('.ip-cell').textContent.toLowerCase() : '';
                 const portText = row.querySelector('.port-cell') ? row.querySelector('.port-cell').textContent.toLowerCase() : '';
-                
                 row.style.display = (imeiText.includes(keyword) || ipText.includes(keyword) || portText.includes(keyword)) ? '' : 'none';
             });
         });
     }
+
+    // 2. Auto-fill modal edit
+    const modalEditEl = document.getElementById('modalEditModem');
+    const modalEdit = new bootstrap.Modal(modalEditEl);
+
+    document.querySelectorAll('.btn-edit-modem').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit_modem_imei').value = this.getAttribute('data-imei');
+            
+            // Set auto select untuk dropdown SIM ID
+            document.getElementById('edit_modem_sim').value = this.getAttribute('data-sim') || '';
+            
+            // Set auto select untuk dropdown unit
+            document.getElementById('edit_modem_upi').value = this.getAttribute('data-upi') || '';
+            document.getElementById('edit_modem_ap').value = this.getAttribute('data-ap') || '';
+            document.getElementById('edit_modem_up').value = this.getAttribute('data-up') || '';
+            
+            document.getElementById('edit_modem_ipdata').value = this.getAttribute('data-ipdata');
+            document.getElementById('edit_modem_ipengine').value = this.getAttribute('data-ipengine');
+            document.getElementById('edit_modem_port').value = this.getAttribute('data-port');
+            document.getElementById('edit_modem_status').value = (this.getAttribute('data-status') === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+
+            modalEdit.show();
+        });
+    });
 });
 </script>
