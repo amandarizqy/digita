@@ -1,48 +1,23 @@
 <?php
-session_start();
-require_once '../../config/database.php';
+// modules/perencanaan/index.php
+// Dipanggil dari root index.php (?page=perencanaan). Root yang membungkus dengan layout,
+// jadi file ini HANYA menampilkan isi halaman (JANGAN panggil base.php di sini).
+require_once __DIR__ . '/../../config/database.php';
+chdir(__DIR__);   // supaya include relatif di file-file perencanaan tetap benar
 
-// Pastikan pengguna sudah login
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
-    exit;
-}
+$action = $_GET['action'] ?? '';
 
-// Atur judul halaman & menu aktif
-$page_title = "Perencanaan - Digita S41";
-$active_menu = 'perencanaan';      // ← ini yang membuat menu Perencanaan menyala
-
-// Ambil parameter action dari URL, jika kosong arahkan ke dashboard
-$action = isset($_GET['action']) ? $_GET['action'] : '';
-
-// Mulai menangkap output view ke dalam variabel $content
-ob_start();
-
-// ---------------------------------------------------------
-// AREA KERJA BACKEND & ROUTING: 
 switch ($action) {
-    case 'upload_riwayat':
-        // Memanggil halaman input dari folder yang sama (modules/perencanaan)
-        include 'upload_riwayat.php';
-        break;
-        
-    case 'data_riwayat':
-        include 'data_riwayat.php';
-        break;
-
-    // Tambahkan case lain sesuai kebutuhan menu di dashboard...
-
+    case 'upload_riwayat':     include __DIR__ . '/upload_riwayat.php'; break;
+    case 'input_kepentingan':  include __DIR__ . '/input_kepentingan.php'; break;
+    case 'input_survey':       include __DIR__ . '/input_survey.php'; break;
+    case 'proses_risiko':      include __DIR__ . '/proses_risiko.php'; break;
+    case 'proses_prioritas':   include __DIR__ . '/proses_prioritas.php'; break;
+    case 'data_riwayat':       include __DIR__ . '/data_riwayat.php'; break;
+    case 'hasil_kepentingan':  include __DIR__ . '/hasil_kepentingan.php'; break;
+    case 'hasil_survey':       include __DIR__ . '/hasil_survey.php'; break;
+    case 'hasil_risiko':       include __DIR__ . '/hasil_risiko.php'; break;
+    case 'hasil_prioritas':    include __DIR__ . '/hasil_prioritas.php'; break;
     default:
-        // PENTING: Gunakan ../../ untuk mundur ke root folder digita, 
-        // lalu masuk ke folder templates
-        include '../../templates/perencanaan/index.php';
-        break;
+        include __DIR__ . '/../../templates/perencanaan/index.php';
 }
-// ---------------------------------------------------------
-
-// Selesai menangkap output
-$content = ob_get_clean();
-
-// Render ke dalam layout utama
-require_once '../../templates/layouts/base.php';
-?>

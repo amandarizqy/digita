@@ -1,1 +1,1 @@
-define('BASE_URL', '/s41_monitoring');define('BASE_URL', '/s41_monitoring');
+define('BASE_URL', '/Digita');define('BASE_URL', '/s41_Digita');

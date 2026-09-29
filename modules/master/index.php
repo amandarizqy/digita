@@ -1,13 +1,12 @@
 <?php
 session_start();
-require_once __DIR__ . '/../../config/database.php';
+require_once '../../config/database.php';
 
+// 1. Verifikasi Session Pengguna
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: ../auth/login.php");
     exit;
 }
-
-$action = $_GET['action'] ?? 'index';
 
 // 1. TAMBAH PROVIDER (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {

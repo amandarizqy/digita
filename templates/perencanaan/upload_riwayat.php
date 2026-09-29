@@ -47,20 +47,6 @@
                             <input type="number" name="RpTag" class="form-control">
                         </div>
                     </div>
-                    <div class="row mb-3">
-                        <div class="col">
-                            <label class="form-label">UnitUp</label>
-                            <input type="text" name="UnitUp" class="form-control" maxlength="5">
-                        </div>
-                        <div class="col">
-                            <label class="form-label">UnitAp</label>
-                            <input type="text" name="UnitAp" class="form-control" maxlength="5">
-                        </div>
-                        <div class="col">
-                            <label class="form-label">UnitUpi</label>
-                            <input type="text" name="UnitUpi" class="form-control" maxlength="2">
-                        </div>
-                    </div>
                     <button type="submit" name="simpan_data" class="btn btn-primary w-100">Simpan Data</button>
                 </form>
             </div>
