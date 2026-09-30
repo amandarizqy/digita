@@ -1,225 +1,155 @@
-<!-- templates/perencanaan/hasil_prioritas.php -->
+<?php
+// templates/perencanaan/hasil_prioritas.php  -  Monitoring: Hasil Skala Prioritas
+// Variabel dari modules/perencanaan/hasil_prioritas.php
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-    <h4 class="mb-0">
-        <i class="bi bi-list-ol text-primary me-2"></i> Hasil Skala Prioritas Khusus
-        <span class="badge bg-dark ms-2 align-middle"><i class="bi bi-calendar3 me-1"></i>Periode <?= htmlspecialchars($periode_filter) ?></span>
-    </h4>
-    <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Cetak</button>
-        <a href="?module=perencanaan&action=proses_prioritas<?= $skala_filter > 0 ? '&skala=' . $skala_filter : '' ?>" class="btn btn-primary"><i class="bi bi-lightning-charge-fill"></i> Proses Pemeringkatan</a>
-        <a href="?module=perencanaan" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali</a>
-    </div>
+$skala_usang_n = count(array_filter($ringkasan, fn($r) => $r['usang']));
+$skala_ada     = count(array_filter($ringkasan, fn($r) => $r['jumlah_hasil'] > 0));
+$total_tagihan = array_sum(array_column($ringkasan, 'total_tagihan'));
+
+echo pr_header([
+    'title'    => 'Hasil Skala Prioritas',
+    'subtitle' => 'Peringkat pelanggan di dalam tiap Skala Prioritas. Peringkat 1 adalah yang paling perlu ditangani.',
+    'action'   => 'hasil_prioritas',
+    'badge'    => 'Periode ' . $periode_filter,
+    'buttons'  => [
+        ['label' => 'Cetak', 'icon' => 'bi-printer', 'class' => 'btn btn-outline-secondary btn-sm px-3 rounded-2', 'attrs' => 'type="button" onclick="window.print()"'],
+        ['label' => 'Proses Pemeringkatan', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_prioritas', ['skala' => $skala_filter ?: ''])],
+    ],
+]);
+
+if (!empty($pesan_error)) echo pr_alert('danger', pr_e($pesan_error));
+if ($tabel_belum_ada) {
+    echo pr_alert('warning', 'Tabel <code>hasil_prioritas</code> belum dibuat. Jalankan <code>hasil_prioritas.sql</code> sekali di database, lalu proses lewat <a href="' . pr_e(pr_url('proses_prioritas')) . '" class="alert-link">Skala Prioritas</a>.');
+}
+?>
+
+<!-- KARTU METRIK KPI -->
+<div class="row g-3 mb-4">
+    <?= pr_kpi('Pelanggan Diperingkat', pr_n($total_hasil_semua), 'Tersebar di ' . $skala_ada . ' skala', 'bi-people', 'primary') ?>
+    <?= pr_kpi('Total Tagihan', pr_rp_ringkas($total_tagihan), 'Rp ' . pr_n($total_tagihan) . ' · pelanggan diperingkat', 'bi-cash-stack', 'success', true) ?>
+    <?= pr_kpi('Perlu Update', (string) $skala_usang_n, 'Skala yang tidak sinkron dengan klasifikasi', 'bi-arrow-repeat', 'danger', $skala_usang_n > 0) ?>
+    <?= pr_kpi('Skala Terpilih', $skala_filter > 0 ? 'Prioritas ' . $skala_filter : 'Semua', $skala_filter > 0 ? pr_e(labelSkalaPrioritas($skala_filter)) : 'Pilih skala pada matriks di bawah', 'bi-funnel', 'warning') ?>
 </div>
 
-<?php if (!empty($pesan_error)): ?>
-    <div class="alert alert-danger shadow-sm"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= $pesan_error ?></div>
-<?php endif; ?>
-<?php if ($tabel_belum_ada): ?>
-    <div class="alert alert-warning shadow-sm">
-        <i class="bi bi-database-exclamation me-2"></i>
-        Tabel <code>hasil_prioritas</code> belum dibuat. Jalankan file <code>hasil_prioritas.sql</code> sekali di database, lalu proses pemeringkatan lewat modul Skala Prioritas Khusus.
-    </div>
-<?php endif; ?>
-
-<!-- Ringkasan per skala (klik untuk memfilter) -->
-<div class="row g-2 mb-4">
-    <div class="col-6 col-md-3 col-xl">
-        <a href="<?= $buat_url(['skala' => 0, 'page' => 1]) ?>" class="text-decoration-none">
-            <div class="card border-0 shadow-sm h-100 <?= $skala_filter === 0 ? 'border border-2 border-primary' : '' ?>">
-                <div class="card-body py-2 text-center">
-                    <div class="small text-muted text-uppercase fw-semibold">Semua Skala</div>
-                    <div class="fs-4 fw-bold text-dark"><?= number_format($total_hasil_semua) ?></div>
-                    <small class="text-muted">pelanggan diperingkat</small>
-                </div>
-            </div>
+<!-- MATRIKS SKALA (klik untuk memfilter) -->
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-bold text-primary fs-6">Sebaran Skala Prioritas</span>
+        <a href="<?= pr_e($buat_url(['skala' => '', 'hal' => ''])) ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= $skala_filter === 0 ? 'btn-outline-primary active' : 'btn-outline-secondary bg-white text-secondary' ?>">
+            <?= $skala_filter === 0 ? '<i class="bi bi-check2 me-1"></i>' : '' ?>Semua Skala (<?= pr_n($total_hasil_semua) ?>)
         </a>
     </div>
-    <?php for ($n = 9; $n >= 1; $n--):
-        $rg    = $ringkasan[$n];
-        $warna = warnaSkalaPrioritas($n);
-    ?>
-        <div class="col-6 col-md-3 col-xl">
-            <a href="<?= $buat_url(['skala' => $n, 'page' => 1]) ?>" class="text-decoration-none">
-                <div class="card border-0 shadow-sm h-100 border-start border-4 border-<?= $warna ?> <?= $skala_filter === $n ? 'bg-' . $warna . ' bg-opacity-10 border border-2 border-' . $warna : '' ?>">
-                    <div class="card-body py-2 text-center">
-                        <div class="small text-uppercase fw-semibold text-<?= $warna === 'warning' ? 'warning-emphasis' : $warna ?>">Prioritas <?= $n ?></div>
-                        <div class="fs-4 fw-bold text-dark"><?= number_format($rg['jumlah_hasil']) ?></div>
-                        <?php if ($rg['jumlah_hasil'] === 0): ?>
-                            <small class="text-muted"><?= $rg['jumlah_kategori'] > 0 ? '⏳ belum diperingkat' : '— kosong' ?></small>
-                        <?php elseif ($rg['usang']): ?>
-                            <small class="text-danger fw-semibold">⚠️ perlu update</small>
-                        <?php else: ?>
-                            <small class="text-muted">✅ terbaru</small>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </a>
-        </div>
-    <?php endfor; ?>
+    <div class="card-body px-4 py-4">
+        <?php
+        $grid = [];
+        for ($n = 1; $n <= 9; $n++) {
+            $rg = $ringkasan[$n];
+            if ($rg['jumlah_hasil'] === 0)  $note = $rg['jumlah_kategori'] > 0 ? pr_badge('BELUM DIPERINGKAT', 'warning', 'bi-hourglass-split') : '<span class="text-muted">Kosong</span>';
+            elseif ($rg['usang'])           $note = pr_badge('PERLU UPDATE', 'danger', 'bi-arrow-repeat');
+            else                            $note = pr_badge('TERBARU', 'success', 'bi-check2-circle');
+            $grid[$n] = ['count' => $rg['jumlah_hasil'], 'note' => $note, 'href' => $buat_url(['skala' => $n, 'hal' => ''])];
+        }
+        echo pr_skala_grid($grid, 'link', $skala_filter);
+        ?>
+    </div>
 </div>
 
-<!-- Info skala terpilih -->
-<?php if ($skala_filter > 0 && $ringkasan[$skala_filter]['jumlah_hasil'] > 0):
-    $rg = $ringkasan[$skala_filter];
-?>
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between gap-3">
-                <div>
-                    <h5 class="fw-bold mb-1">
-                        <span class="badge bg-<?= warnaSkalaPrioritas($skala_filter) ?> <?= warnaSkalaPrioritas($skala_filter) === 'warning' ? 'text-dark' : '' ?>">Prioritas <?= $skala_filter ?></span>
-                        <span class="ms-2 fs-6 text-muted"><?= htmlspecialchars(labelSkalaPrioritas($skala_filter)) ?></span>
-                    </h5>
-                    <small class="text-muted">
-                        Metode: <strong><?= htmlspecialchars(labelMetodePeringkat($rg['metode'])) ?></strong>
-                        <?php if ($rg['metode'] === 'gabungan'): ?>
-                            (bobot: nominal <?= $rg['bobot'][0] ?>% · telat <?= $rg['bobot'][1] ?>% · tunggakan <?= $rg['bobot'][2] ?>%)
-                        <?php endif; ?>
-                        · Diproses <?= htmlspecialchars((string) $rg['terakhir']) ?><?= !empty($rg['oleh']) ? ' oleh ' . htmlspecialchars($rg['oleh']) : '' ?>
-                    </small>
+<!-- INFO SKALA TERPILIH -->
+<?php if ($skala_filter > 0 && $ringkasan[$skala_filter]['jumlah_hasil'] > 0): $rg = $ringkasan[$skala_filter]; ?>
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4 border-start border-4 border-<?= warnaSkalaPrioritas($skala_filter) ?>">
+    <div class="card-body px-4 py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <?= pr_badge_prioritas($skala_filter) ?>
+                    <span class="text-muted small"><?= pr_e(labelSkalaPrioritas($skala_filter)) ?></span>
                 </div>
-                <div class="d-flex gap-4 text-center">
-                    <div><div class="small text-muted">Pelanggan</div><div class="fw-bold fs-5"><?= number_format($rg['jumlah_hasil']) ?></div></div>
-                    <div><div class="small text-muted">Total Tagihan</div><div class="fw-bold fs-5">Rp <?= number_format($rg['total_tagihan'], 0, ',', '.') ?></div></div>
-                    <div><div class="small text-muted">Rata-rata Skor</div><div class="fw-bold fs-5"><?= number_format($rg['avg_skor'], 2, ',', '.') ?></div></div>
+                <div class="text-muted small">
+                    Metode: <strong class="text-dark"><?= pr_e(labelMetodePeringkat($rg['metode'])) ?></strong>
+                    <?php if ($rg['metode'] === 'gabungan'): ?>
+                        (nominal <?= $rg['bobot'][0] ?>% · telat <?= $rg['bobot'][1] ?>% · tunggakan <?= $rg['bobot'][2] ?>%)
+                    <?php endif; ?>
+                    · Diproses <?= pr_e((string) $rg['terakhir']) ?><?= !empty($rg['oleh']) ? ' oleh ' . pr_e($rg['oleh']) : '' ?>
                 </div>
             </div>
-            <?php if ($rg['usang']): ?>
-                <div class="alert alert-warning mt-3 mb-0 py-2 small">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    Jumlah pelanggan pada skala ini di Proses Risiko (<?= number_format($rg['jumlah_kategori']) ?>) berbeda dengan hasil peringkat (<?= number_format($rg['jumlah_hasil']) ?>).
-                    <a href="?module=perencanaan&action=proses_prioritas&skala=<?= $skala_filter ?>" class="alert-link">Proses ulang skala ini</a> agar peringkat sinkron.
-                </div>
-            <?php endif; ?>
+            <div class="d-flex gap-4">
+                <div><div class="text-muted pr-label text-uppercase fw-bold">Pelanggan</div><div class="fw-bold fs-5"><?= pr_n($rg['jumlah_hasil']) ?></div></div>
+                <div><div class="text-muted pr-label text-uppercase fw-bold">Total Tagihan</div><div class="fw-bold fs-5"><?= pr_rp($rg['total_tagihan']) ?></div></div>
+                <div><div class="text-muted pr-label text-uppercase fw-bold">Rata-rata Skor</div><div class="fw-bold fs-5"><?= number_format($rg['avg_skor'], 2, ',', '.') ?></div></div>
+            </div>
         </div>
+        <?php if ($rg['usang']): ?>
+            <div class="alert alert-warning border-0 rounded-3 mt-3 mb-0 py-2 small">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                Klasifikasi mencatat <?= pr_n($rg['jumlah_kategori']) ?> pelanggan pada skala ini, sedangkan peringkat baru memuat <?= pr_n($rg['jumlah_hasil']) ?>.
+                <a href="<?= pr_e(pr_url('proses_prioritas', ['skala' => $skala_filter])) ?>" class="alert-link">Proses ulang skala ini</a> agar sinkron.
+            </div>
+        <?php endif; ?>
     </div>
+</div>
 <?php endif; ?>
 
-<!-- Filter -->
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-        <form method="GET" action="" class="row g-2 align-items-center">
-            <input type="hidden" name="module" value="perencanaan">
-            <input type="hidden" name="action" value="hasil_prioritas">
-            <div class="col-md-3">
-                <select name="skala" class="form-select" onchange="this.form.submit()">
-                    <option value="0" <?= $skala_filter === 0 ? 'selected' : '' ?>>-- Semua Skala Prioritas --</option>
-                    <?php for ($n = 9; $n >= 1; $n--): ?>
-                        <option value="<?= $n ?>" <?= $skala_filter === $n ? 'selected' : '' ?>>Prioritas <?= $n ?> (<?= number_format($ringkasan[$n]['jumlah_hasil']) ?>)</option>
-                    <?php endfor; ?>
-                </select>
-            </div>
-            <div class="col-md-6">
-                <div class="input-group">
-                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                    <input type="text" name="keyword" class="form-control" value="<?= htmlspecialchars($keyword) ?>" placeholder="Cari IDPel / Nama Pelanggan...">
-                </div>
-            </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill">Cari</button>
-                <a href="?module=perencanaan&action=hasil_prioritas" class="btn btn-outline-secondary flex-fill">Reset</a>
-            </div>
+<!-- TABEL -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">Daftar Peringkat</span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: hasil_prioritas</span>
+        </div>
+        <form method="GET" action="" class="input-group input-group-sm" style="max-width:280px;">
+            <?= pr_hidden('hasil_prioritas', ['skala' => $skala_filter ?: '']) ?>
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" name="keyword" class="form-control bg-light border-start-0" value="<?= pr_e($keyword) ?>" placeholder="Cari IDPel / nama pelanggan...">
         </form>
-    </div>
-</div>
-
-<!-- Tabel hasil -->
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-        <h6 class="fw-bold mb-0 text-secondary"><i class="bi bi-table me-1"></i> Daftar Peringkat</h6>
-        <small class="text-muted"><?= number_format($total_rows) ?> data · halaman <?= $page ?> dari <?= $total_pages ?></small>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-light text-secondary text-uppercase pr-thead">
                     <tr>
-                        <th class="text-center" style="width:90px;">Peringkat</th>
-                        <?php if ($skala_filter === 0): ?><th class="text-center">Prioritas</th><?php endif; ?>
-                        <th>IdPel</th>
+                        <th class="ps-4" style="width:90px;">Peringkat</th>
+                        <?php if ($skala_filter === 0): ?><th>Prioritas</th><?php endif; ?>
+                        <th>ID Pelanggan</th>
                         <th>Nama Pelanggan</th>
                         <th class="text-end">Total Tagihan</th>
                         <th class="text-center">Telat</th>
                         <th class="text-center">Lewat Bulan</th>
-                        <th class="text-center" style="min-width:150px;">Skor</th>
-                        <th class="text-center">Kepentingan</th>
-                        <th class="text-center">Posisi SR</th>
+                        <th style="min-width:150px;">Skor</th>
+                        <th>Kepentingan</th>
+                        <th class="pe-4">Posisi SR</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($list_hasil)): foreach ($list_hasil as $r):
-                        $rank  = (int) $r['Peringkat'];
-                        $skor  = (float) $r['SkorPrioritas'];
-                        $badge = $rank === 1 ? 'bg-warning text-dark' : ($rank <= 3 ? 'bg-secondary' : 'bg-dark');
-                    ?>
-                        <tr>
-                            <td class="text-center"><span class="badge <?= $badge ?> fs-6">#<?= $rank ?></span></td>
-                            <?php if ($skala_filter === 0): ?>
-                                <td class="text-center">
-                                    <span class="badge bg-<?= warnaSkalaPrioritas($r['SkalaPrioritas']) ?> <?= warnaSkalaPrioritas($r['SkalaPrioritas']) === 'warning' ? 'text-dark' : '' ?>">P<?= (int) $r['SkalaPrioritas'] ?></span>
-                                </td>
-                            <?php endif; ?>
-                            <td><code><?= htmlspecialchars($r['IdPel']) ?></code></td>
-                            <td><strong><?= htmlspecialchars($r['NamaPelanggan'] ?? '-') ?></strong></td>
-                            <td class="text-end">Rp <?= number_format((float) $r['TotalTagihan'], 0, ',', '.') ?></td>
-                            <td class="text-center"><?= (int) $r['JumlahTelat'] ?></td>
-                            <td class="text-center"><?= (int) $r['JumlahLewatBulan'] ?></td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="progress flex-grow-1" style="height:6px;">
-                                        <div class="progress-bar bg-<?= warnaSkalaPrioritas($r['SkalaPrioritas']) ?>" style="width: <?= max(0, min(100, $skor)) ?>%"></div>
-                                    </div>
-                                    <span class="small fw-bold"><?= number_format($skor, 2, ',', '.') ?></span>
-                                </div>
-                            </td>
-                            <td class="text-center"><span class="badge bg-light text-dark border"><?= htmlspecialchars($r['LevelKepentingan'] ?? '-') ?></span></td>
-                            <td class="text-center">
-                                <?php if ($r['PosisiSR'] === null || $r['PosisiSR'] === ''): ?>
-                                    <span class="text-muted">-</span>
-                                <?php else: ?>
-                                    <span class="badge bg-light text-dark border"><?= $r['PosisiSR'] == '1' ? 'Tergantung' : 'Mandiri' ?></span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; else: ?>
-                        <tr>
-                            <td colspan="<?= $skala_filter === 0 ? 10 : 9 ?>" class="text-center text-muted py-5">
-                                <?php if ($tabel_belum_ada || $total_hasil_semua === 0): ?>
-                                    Belum ada hasil pemeringkatan. Proses dulu lewat modul <a href="?module=perencanaan&action=proses_prioritas">Skala Prioritas Khusus</a>.
-                                <?php else: ?>
-                                    Data tidak ditemukan untuk filter ini.
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endif; ?>
+                <?php if (!empty($list_hasil)): foreach ($list_hasil as $r):
+                    $rank = (int) $r['Peringkat'];
+                    $skor = (float) $r['SkorPrioritas'];
+                    $tone = warnaSkalaPrioritas($r['SkalaPrioritas']);
+                ?>
+                    <tr>
+                        <td class="ps-4"><?= pr_badge('#' . $rank, $rank === 1 ? 'warning' : 'secondary') ?></td>
+                        <?php if ($skala_filter === 0): ?><td><?= pr_badge_prioritas($r['SkalaPrioritas'], false) ?></td><?php endif; ?>
+                        <td class="fw-bold text-dark font-monospace"><?= pr_e($r['IdPel']) ?></td>
+                        <td class="fw-semibold text-dark text-uppercase small"><?= pr_e($r['NamaPelanggan'] ?? '-') ?></td>
+                        <td class="text-end font-monospace small text-nowrap"><?= pr_rp($r['TotalTagihan']) ?></td>
+                        <td class="text-center"><?= (int) $r['JumlahTelat'] ?></td>
+                        <td class="text-center"><?= (int) $r['JumlahLewatBulan'] ?></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height:6px;"><div class="progress-bar bg-<?= $tone ?>" style="width:<?= max(0, min(100, $skor)) ?>%"></div></div>
+                                <span class="small fw-bold"><?= number_format($skor, 2, ',', '.') ?></span>
+                            </div>
+                        </td>
+                        <td><?= pr_badge_level($r['LevelKepentingan']) ?></td>
+                        <td class="pe-4"><?= pr_badge_sr($r['PosisiSR']) ?></td>
+                    </tr>
+                <?php endforeach; else:
+                    echo pr_empty_row($skala_filter === 0 ? 10 : 9, ($tabel_belum_ada || $total_hasil_semua === 0)
+                        ? 'Belum ada hasil pemeringkatan. Proses dulu lewat <a href="' . pr_e(pr_url('proses_prioritas')) . '">Skala Prioritas</a>.'
+                        : 'Data tidak ditemukan untuk filter ini.', 'bi-list-ol');
+                endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
-
-    <?php if ($total_pages > 1):
-        $awal  = max(1, $page - 2);
-        $akhir = min($total_pages, $page + 2);
-    ?>
-        <div class="card-footer bg-white">
-            <nav>
-                <ul class="pagination pagination-sm justify-content-center mb-0">
-                    <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>"><a class="page-link" href="<?= $buat_url(['page' => $page - 1]) ?>">&laquo;</a></li>
-                    <?php if ($awal > 1): ?>
-                        <li class="page-item"><a class="page-link" href="<?= $buat_url(['page' => 1]) ?>">1</a></li>
-                        <?php if ($awal > 2): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
-                    <?php endif; ?>
-                    <?php for ($i = $awal; $i <= $akhir; $i++): ?>
-                        <li class="page-item <?= $i === $page ? 'active' : '' ?>"><a class="page-link" href="<?= $buat_url(['page' => $i]) ?>"><?= $i ?></a></li>
-                    <?php endfor; ?>
-                    <?php if ($akhir < $total_pages): ?>
-                        <?php if ($akhir < $total_pages - 1): ?><li class="page-item disabled"><span class="page-link">…</span></li><?php endif; ?>
-                        <li class="page-item"><a class="page-link" href="<?= $buat_url(['page' => $total_pages]) ?>"><?= $total_pages ?></a></li>
-                    <?php endif; ?>
-                    <li class="page-item <?= $page >= $total_pages ? 'disabled' : '' ?>"><a class="page-link" href="<?= $buat_url(['page' => $page + 1]) ?>">&raquo;</a></li>
-                </ul>
-            </nav>
-        </div>
-    <?php endif; ?>
+    <?= pr_footer_tabel($page, $per_page, $total_rows, fn($h) => $buat_url(['hal' => $h])) ?>
 </div>

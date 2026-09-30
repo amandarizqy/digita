@@ -1,170 +1,96 @@
-<!-- templates/perencanaan/hasil_survey.php -->
+<?php
+// templates/perencanaan/hasil_survey.php  -  Monitoring: Hasil Survey SR
+// Variabel dari modules/perencanaan/hasil_survey.php
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-table"></i> Data Hasil Survey SR</h4>
-    <a href="?module=perencanaan&action=input_survey" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-1"></i> Input Survey Baru
-    </a>
-    <a href="?module=perencanaan" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Dashboard</a>
+$url_survey = function (array $ubah = []) use ($keyword, $posisi_sr, $limit) {
+    return pr_url('hasil_survey', array_merge(['keyword' => $keyword, 'posisi_sr' => $posisi_sr, 'limit' => $limit == 10 ? '' : $limit], $ubah));
+};
+
+echo pr_header([
+    'title'    => 'Hasil Survey SR',
+    'subtitle' => 'Posisi SR tiap pelanggan: mandiri, atau saling tergantung dengan pelanggan lain pada lokasi yang sama.',
+    'action'   => 'hasil_survey',
+    'buttons'  => [['label' => 'Input Survey Baru', 'icon' => 'bi-plus-lg', 'href' => pr_url('input_survey')]],
+]);
+
+if (!empty($pesan_sukses)) echo pr_alert('success', $pesan_sukses);
+if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
+?>
+
+<!-- KARTU METRIK KPI -->
+<div class="row g-3 mb-4">
+    <?= pr_kpi('Total Tersurvey', pr_n($total_tersurvey) . ' <span class="fs-6 fw-semibold text-muted">/ ' . pr_n($total_dil) . '</span>', pr_pct($total_tersurvey, $total_dil) . '% pelanggan DIL sudah punya Posisi SR', 'bi-clipboard-data', 'primary') ?>
+    <?= pr_kpi('Mandiri', pr_n($total_mandiri), 'Posisi SR 0 · tidak tergantung pelanggan lain', 'bi-dash-circle', 'secondary', true) ?>
+    <?= pr_kpi('Tergantung', pr_n($total_tergantung), 'Posisi SR 1 · terhubung pelanggan lain', 'bi-diagram-2', 'info', true) ?>
+    <?= pr_kpi('Belum Tersurvey', pr_n(max(0, $total_dil - $total_tersurvey)), 'Isi lewat Input Survey SR', 'bi-hourglass-split', 'warning') ?>
 </div>
 
-<!-- Alert Notifikasi -->
-<?php if (!empty($pesan_sukses)): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <?= $pesan_sukses ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
+<?= pr_pills('POSISI SR:', [
+    ['Semua',      $url_survey(['posisi_sr' => '', 'hal' => '']),  $posisi_sr === '',  $total_tersurvey],
+    ['Mandiri',    $url_survey(['posisi_sr' => '0', 'hal' => '']), $posisi_sr === '0', $total_mandiri],
+    ['Tergantung', $url_survey(['posisi_sr' => '1', 'hal' => '']), $posisi_sr === '1', $total_tergantung],
+]) ?>
 
-<?php if (!empty($pesan_error)): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <?= $pesan_error ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<!-- CARD FILTER & PENCARIAN (AUTO SUBMIT) -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <form method="GET" action="" class="row g-3 align-items-end">
-            <input type="hidden" name="module" value="perencanaan">
-            <input type="hidden" name="action" value="hasil_survey">
-
-            <!-- Pencarian Keyword (Submit saat tekan Enter atau kehilangan fokus) -->
-            <div class="col-md-5">
-                <label class="form-label fw-semibold">Cari IdPel / Nama / Unit</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" name="keyword" class="form-control" value="<?= htmlspecialchars($keyword) ?>" placeholder="Ketik lalu tekan Enter..." onchange="this.form.submit()">
-                </div>
+<!-- TABEL -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">Daftar Hasil Survey SR</span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: kategorisasi_risiko</span>
+        </div>
+        <form method="GET" action="" class="d-flex flex-wrap align-items-center gap-2">
+            <?= pr_hidden('hasil_survey', ['posisi_sr' => $posisi_sr]) ?>
+            <div class="input-group input-group-sm" style="width:260px;">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="keyword" class="form-control bg-light border-start-0" value="<?= pr_e($keyword) ?>" placeholder="Cari IDPel / nama / unit...">
             </div>
-
-            <!-- Filter Status SR (Auto Submit saat opsi dipilih) -->
-            <div class="col-md-3">
-                <label class="form-label fw-semibold">Status Sambungan SR</label>
-                <select name="posisi_sr" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- Semua Status --</option>
-                    <option value="0" <?= $posisi_sr === '0' ? 'selected' : '' ?>>0 — Tidak Terhubung (Mandiri)</option>
-                    <option value="1" <?= $posisi_sr === '1' ? 'selected' : '' ?>>1 — Terhubung Pelanggan Lain</option>
-                </select>
-            </div>
-
-            <!-- Limit per Halaman (Auto Submit saat opsi dipilih) -->
-            <div class="col-md-2">
-                <label class="form-label fw-semibold">Tampilkan</label>
-                <select name="limit" class="form-select" onchange="this.form.submit()">
-                    <option value="10" <?= $limit == 10 ? 'selected' : '' ?>>10 Data</option>
-                    <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25 Data</option>
-                    <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50 Data</option>
-                    <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100 Data</option>
-                </select>
-            </div>
-
-            <!-- Tombol Reset -->
-            <div class="col-md-2 d-grid">
-                <a href="?module=perencanaan&action=hasil_survey" class="btn btn-outline-secondary" title="Bersihkan Filter">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
-                </a>
-            </div>
+            <select name="limit" class="form-select form-select-sm bg-light" style="width:auto;" onchange="this.form.submit()" aria-label="Jumlah baris">
+                <?php foreach ([10, 25, 50, 100] as $n): ?>
+                    <option value="<?= $n ?>" <?= $limit === $n ? 'selected' : '' ?>><?= $n ?> baris</option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($keyword !== '' || $posisi_sr !== ''): ?>
+                <a href="<?= pr_e(pr_url('hasil_survey')) ?>" class="btn btn-outline-secondary btn-sm" title="Reset filter"><i class="bi bi-arrow-counterclockwise"></i></a>
+            <?php endif; ?>
         </form>
-    </div>
-</div>
-
-<!-- TABEL HASIL SURVEY -->
-<div class="card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-        <h6 class="fw-bold mb-0 text-secondary">
-            Total Data Ditemukan: <span class="badge bg-primary fs-6"><?= number_format($total_data) ?></span>
-        </h6>
-        <small class="text-muted">Halaman <?= $page ?> dari <?= $total_pages ?></small>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-light text-secondary text-uppercase pr-thead">
                     <tr>
-                        <th class="text-center" style="width: 60px;">No</th>
-                        <th>ID Pelanggan (IdPel)</th>
+                        <th class="ps-4" style="width:50px;">#</th>
+                        <th>ID Pelanggan</th>
                         <th>Nama Pelanggan</th>
-                        <th class="text-center">Status Posisi SR</th>
-                        <th class="text-center">Unit (UP / AP / UPI)</th>
-                        <th class="text-center" style="width: 100px;">Aksi</th>
+                        <th>Posisi SR</th>
+                        <th>Unit (UP / AP / UPI)</th>
+                        <th class="text-end pe-4" style="width:90px;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($data_hasil)): ?>
-                        <?php $no = $offset + 1; foreach ($data_hasil as $row): ?>
-                            <tr>
-                                <td class="text-center"><?= $no++ ?></td>
-                                <td><code><?= htmlspecialchars($row['Idpel']) ?></code></td>
-                                <td><strong><?= htmlspecialchars($row['NamaPelanggan'] ?? '— (Tidak ada di DIL)') ?></strong></td>
-                                <td class="text-center">
-                                    <span class="badge <?= $row['PosisiSR'] == '1' ? 'bg-warning text-dark' : 'bg-success' ?>">
-                                        <?= $row['PosisiSR'] == '1' ? '1 — Terhubung' : '0 — Mandiri' ?>
-                                    </span>
-                                </td>
-                                <td class="text-center small">
-                                    <?= htmlspecialchars($row['UnitUp'] ?? '-') ?> / 
-                                    <?= htmlspecialchars($row['UnitAp'] ?? '-') ?> / 
-                                    <?= htmlspecialchars($row['UnitUpi'] ?? '-') ?>
-                                </td>
-                                <td class="text-center">
-                                    <a href="?module=perencanaan&action=hasil_survey&act=delete&idpel=<?= urlencode($row['Idpel']) ?>" 
-                                       class="btn btn-outline-danger btn-sm"
-                                       onclick="return confirm('Apakah Anda yakin ingin menghapus data survey IdPel <?= htmlspecialchars($row['Idpel']) ?>?');"
-                                       title="Hapus Data">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="6" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                                Data hasil survey SR tidak ditemukan.
-                            </td>
-                        </tr>
-                    <?php endif; ?>
+                <?php if (!empty($data_hasil)): $no = $offset + 1; foreach ($data_hasil as $row): ?>
+                    <tr>
+                        <td class="ps-4 text-muted small"><?= $no++ ?></td>
+                        <td class="fw-bold text-dark font-monospace"><?= pr_e($row['Idpel']) ?></td>
+                        <td class="fw-semibold text-dark text-uppercase small"><?= pr_e($row['NamaPelanggan'] ?? '— (tidak ada di DIL)') ?></td>
+                        <td><?= pr_badge_sr($row['PosisiSR']) ?></td>
+                        <td class="font-monospace small text-muted">
+                            <span class="badge bg-light text-dark border"><?= pr_e($row['UnitUp'] ?? '-') ?></span>
+                            <span class="badge bg-light text-dark border"><?= pr_e($row['UnitAp'] ?? '-') ?></span>
+                            <span class="badge bg-light text-secondary border"><?= pr_e($row['UnitUpi'] ?? '-') ?></span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="<?= pr_e($url_survey(['act' => 'delete', 'idpel' => $row['Idpel'], 'hal' => $page])) ?>"
+                               class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus data"
+                               onclick="return confirm(<?= pr_e(json_encode('Hapus SELURUH baris kategorisasi IdPel ' . $row['Idpel'] . '? Ini juga menghapus Tingkat Kepentingan dan hasil klasifikasi risikonya.')) ?>);">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                <?php endforeach; else: echo pr_empty_row(6, 'Data hasil survey SR tidak ditemukan.', 'bi-clipboard-data'); endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
-
-    <!-- FOOTER NAVIGASI PAGINASI -->
-    <?php if ($total_pages > 1): ?>
-        <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
-            <small class="text-muted">
-                Menampilkan <?= min($offset + 1, $total_data) ?> – <?= min($offset + $limit, $total_data) ?> dari <?= number_format($total_data) ?> data
-            </small>
-
-            <nav aria-label="Navigasi Halaman">
-                <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                        <a class="page-link" href="?module=perencanaan&action=hasil_survey&page=1&keyword=<?= urlencode($keyword) ?>&posisi_sr=<?= urlencode($posisi_sr) ?>&limit=<?= $limit ?>">First</a>
-                    </li>
-                    <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                        <a class="page-link" href="?module=perencanaan&action=hasil_survey&page=<?= $page - 1 ?>&keyword=<?= urlencode($keyword) ?>&posisi_sr=<?= urlencode($posisi_sr) ?>&limit=<?= $limit ?>">&laquo;</a>
-                    </li>
-
-                    <?php
-                    $start_page = max(1, $page - 2);
-                    $end_page   = min($total_pages, $page + 2);
-                    for ($i = $start_page; $i <= $end_page; $i++):
-                    ?>
-                        <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
-                            <a class="page-link" href="?module=perencanaan&action=hasil_survey&page=<?= $i ?>&keyword=<?= urlencode($keyword) ?>&posisi_sr=<?= urlencode($posisi_sr) ?>&limit=<?= $limit ?>"><?= $i ?></a>
-                        </li>
-                    <?php endfor; ?>
-
-                    <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                        <a class="page-link" href="?module=perencanaan&action=hasil_survey&page=<?= $page + 1 ?>&keyword=<?= urlencode($keyword) ?>&posisi_sr=<?= urlencode($posisi_sr) ?>&limit=<?= $limit ?>">&raquo;</a>
-                    </li>
-                    <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
-                        <a class="page-link" href="?module=perencanaan&action=hasil_survey&page=<?= $total_pages ?>&keyword=<?= urlencode($keyword) ?>&posisi_sr=<?= urlencode($posisi_sr) ?>&limit=<?= $limit ?>">Last</a>
-                    </li>
-                </ul>
-            </nav>
-        </div>
-    <?php endif; ?>
+    <?= pr_footer_tabel($page, $limit, $total_data, fn($h) => $url_survey(['hal' => $h])) ?>
 </div>

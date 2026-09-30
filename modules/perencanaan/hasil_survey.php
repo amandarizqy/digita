@@ -32,10 +32,10 @@ if (isset($_GET['act']) && $_GET['act'] == 'delete') {
 $keyword   = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $posisi_sr = isset($_GET['posisi_sr']) && in_array($_GET['posisi_sr'], ['0', '1']) ? $_GET['posisi_sr'] : '';
 $limit     = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50, 100]) ? (int)$_GET['limit'] : 10;
-$page      = isset($_GET['page']) && (int)$_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+$page      = isset($_GET['hal']) && (int)$_GET['hal'] > 0 ? (int)$_GET['hal'] : 1;   // `page` dipakai router utama
 $offset    = ($page - 1) * $limit;
 
-$where_clauses = [];
+$where_clauses = ["k.PosisiSR IS NOT NULL AND k.PosisiSR <> ''"];   // hanya yang sudah tersurvey
 $params = [];
 
 // Filter keyword pencarian (Optimasi Index Wildcard Kanan)
@@ -107,5 +107,11 @@ try {
 // ---------------------------------------------------------
 // 5. PANGGIL TAMPILAN FRONTEND
 // ---------------------------------------------------------
-include '../../templates/perencanaan/hasil_survey.php';
+// Ringkasan untuk kartu KPI
+$total_dil     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM dil");
+$total_mandiri = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE PosisiSR = '0'");
+$total_tergantung = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE PosisiSR = '1'");
+$total_tersurvey  = $total_mandiri + $total_tergantung;
+
+include __DIR__ . '/../../templates/perencanaan/hasil_survey.php';
 ?>
