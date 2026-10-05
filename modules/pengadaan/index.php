@@ -1,78 +1,150 @@
 <?php
-// Hapus session_start() dan auth_check.php di sini karena sudah 
-// dieksekusi secara terpusat di root index.php untuk mencegah bentrok
-
-// Gunakan __DIR__ untuk path absolut yang kebal terhadap perubahan root
 require_once __DIR__ . '/../../config/database.php';
 
-// ---------------------------------------------------------
-// 1. TANGKAP PARAMETER ROUTING DARI URL
-// ---------------------------------------------------------
-$menu = isset($_GET['menu']) ? $_GET['menu'] : 'pembelian';
-$sub  = isset($_GET['sub']) ? $_GET['sub'] : 'daftar';
-
-$data = []; 
-
-// ---------------------------------------------------------
-// 2. AREA KERJA BACKEND (Query Menggunakan PDO)
-// ---------------------------------------------------------
-switch ($menu) {
-    case 'pembelian':
-        if ($sub == 'daftar') {
-            $page_title = "Daftar Pembelian - Pengadaan S41";
-            
-            $query = "SELECT f.*, u.SingkatanNama 
-                      FROM formulir_pembelian f 
-                      LEFT JOIN master_up u ON f.KodeUp = u.UnitUp 
-                      ORDER BY f.WaktuData DESC";
-            
-            $stmt = $conn->prepare($query);
-            $stmt->execute();
-            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            $data['list_pembelian'] = [];
-            if ($results) {
-                foreach ($results as $row) {
-                    $row['NamaUnit'] = !empty($row['SingkatanNama']) ? $row['SingkatanNama'] : $row['KodeUp'];
-                    $data['list_pembelian'][] = $row;
-                }
-            }
-            
-        } elseif ($sub == 'baru') {
-            $page_title = "Form Pembelian Baru - Pengadaan S41";
-            
-            $query_upi = "SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF'";
-            $stmt_upi = $conn->prepare($query_upi);
-            $stmt_upi->execute();
-            $data['list_upi'] = $stmt_upi->fetchAll(PDO::FETCH_ASSOC);
-        }
-        break;
-
-    case 'pengiriman':
-        if ($sub == 'daftar') {
-            $page_title = "Daftar Pengiriman - Pengadaan S41";
-            $data['list_pengiriman'] = []; 
-        } elseif ($sub == 'baru') {
-            $page_title = "Form Pengiriman - Pengadaan S41";
-        }
-        break;
-
-    case 'penerimaan':
-        $page_title = "Penerimaan Gudang - Pengadaan S41";
-        $sub = 'daftar'; 
-        break;
-
-    default:
-        $menu = 'pembelian';
-        $sub = 'daftar';
-        $page_title = "Pengadaan & Stok - Digita S41";
-        break;
+$kode_hak = $_SESSION['KodeHak'] ?? '';
+$allowed_roles = ['AM.UI', 'SA.KP', 'TL.AP', 'TL.UP']; 
+if (!in_array($kode_hak, $allowed_roles)) {
+    echo "<script>alert('Akses Ditolak.'); window.history.back();</script>";
+    exit;
 }
 
-// ---------------------------------------------------------
-// 3. RENDER TEMPLATE
-// ---------------------------------------------------------
-// Cukup panggil templatenya saja menggunakan __DIR__. 
-// ob_start() dan base.php DIBUANG karena sudah di-handle oleh root index.php
+// Tangkap parameter dari URL (Support format dari Sidebar)
+$menu = $_GET['menu'] ?? 'pembelian'; 
+$sub  = $_GET['sub'] ?? $menu;
+$view = $_GET['view'] ?? 'daftar'; 
+
+// Nyalakan mode exception untuk debugging yang transparan
+$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$page_title = "Pengadaan & Stok - Digita S41";
+
+// Jika menu Kartu atau Monitoring
+if ($menu === 'kartu') {
+    $sub = $_GET['sub'] ?? 'aktivasi';
+    require_once __DIR__ . '/kartu.php';
+} elseif ($menu === 'monitoring') {
+    // require_once __DIR__ . '/monitoring.php';
+}
+
+// Jika masuk ke ekosistem Barang (Pembelian / Pengiriman / Penerimaan)
+elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
+    
+    // --- 1. PEMBELIAN ---
+    if ($sub === 'pembelian') {
+        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) die("Akses Ditolak: Khusus Asman UI.");
+        
+        if ($view === 'daftar') {
+            $query = "SELECT 
+                        f.NoFormulir, f.TglBeli, f.StatusData, f.WaktuData,
+                        (SELECT COALESCE(SUM(HargaBeli), 0) FROM formulir_pembelian_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalBiaya, 
+                        (SELECT COUNT(NoRef) FROM formulir_pembelian_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                      FROM formulir_pembelian f ORDER BY f.WaktuData DESC";
+            try {
+                $stmt = $conn->prepare($query); $stmt->execute();
+                // FIX: Gunakan variabel langsung, bukan array $data
+                $list_pembelian = $stmt->fetchAll(PDO::FETCH_ASSOC); 
+            } catch (PDOException $e) {
+                die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
+            }
+        } elseif ($view === 'baru') {
+            $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+            $list_ap = $conn->query("SELECT UnitAp, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+            $list_up = $conn->query("SELECT UnitUp, NamaUnit FROM master_up WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($view === 'detail' && isset($_GET['no_form'])) {
+            $no_formulir = $_GET['no_form'];
+            $stmt = $conn->prepare("SELECT * FROM formulir_pembelian WHERE NoFormulir = :no_form");
+            $stmt->execute([':no_form' => $no_formulir]);
+            $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
+            $stmt_items->execute([':no_form' => $no_formulir]);
+            $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+
+    // --- 2. PENGIRIMAN ---
+    elseif ($sub === 'pengiriman') {
+        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) die("Akses Ditolak: Khusus Asman UI.");
+
+        if ($view === 'daftar') {
+            $query = "SELECT 
+                        f.NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusPengiriman, f.StatusData, f.WaktuData,
+                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                      FROM formulir_pengiriman f ORDER BY f.WaktuData DESC";
+            try {
+                $stmt = $conn->prepare($query); $stmt->execute();
+                $list_pengiriman = $stmt->fetchAll(PDO::FETCH_ASSOC); 
+            } catch (PDOException $e) {
+                die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
+            }
+        } elseif ($view === 'baru') {
+            $list_ap = $conn->query("SELECT UnitAp, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+            $list_up = $conn->query("SELECT UnitUp, NamaUnit FROM master_up WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($view === 'detail' && isset($_GET['no_form'])) {
+            $no_formulir = $_GET['no_form'];
+            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+                                    FROM formulir_pengiriman f 
+                                    LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
+                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp WHERE f.NoFormulir = :no_form");
+            $stmt->execute([':no_form' => $no_formulir]);
+            $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_items->execute([':no_form' => $no_formulir]);
+            $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+
+    // --- 3. PENERIMAAN ---
+    elseif ($sub === 'penerimaan') {
+        if (!in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) die("Akses Ditolak: Khusus TL Unit.");
+
+        if ($view === 'daftar') {
+            $unit_ap = $_SESSION['UnitAp'] ?? '';
+            $unit_up = $_SESSION['UnitUp'] ?? '';
+
+            if ($kode_hak === 'TL.UP') {
+                $filter_query = "f.KodeUp = :lokasi";
+                $lokasi = $unit_up;
+            } else {
+                $filter_query = "f.KodeAp = :lokasi AND (f.KodeUp IS NULL OR f.KodeUp = '')";
+                $lokasi = $unit_ap;
+            }
+            if ($kode_hak === 'SA.KP') { $filter_query = "1=1"; $lokasi = 1; }
+
+            $query = "SELECT 
+                        f.NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusPengiriman, f.TglTerima, f.WaktuData,
+                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                      FROM formulir_pengiriman f 
+                      WHERE f.StatusData = 'AKTIF' AND $filter_query
+                      ORDER BY (CASE WHEN f.StatusPengiriman = 'DIKIRIM' THEN 1 ELSE 2 END), f.WaktuData DESC";
+                      
+            try {
+                $stmt = $conn->prepare($query);
+                if ($kode_hak !== 'SA.KP') { $stmt->bindParam(':lokasi', $lokasi); }
+                $stmt->execute();
+                $list_inbound = $stmt->fetchAll(PDO::FETCH_ASSOC); 
+            } catch (PDOException $e) {
+                die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
+            }
+            
+        } elseif ($view === 'detail' && isset($_GET['no_form'])) {
+            $no_pengiriman = $_GET['no_form'];
+            
+            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+                                    FROM formulir_pengiriman f 
+                                    LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
+                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
+                                    WHERE f.NoFormulir = :no_form");
+            $stmt->execute([':no_form' => $no_pengiriman]);
+            $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_items->execute([':no_form' => $no_pengiriman]);
+            $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+}
+
+// Panggil template wrapper
 require_once __DIR__ . '/../../templates/pengadaan/index.php'; 
 ?>

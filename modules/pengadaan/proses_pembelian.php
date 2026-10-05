@@ -2,6 +2,9 @@
 session_start();
 require_once '../../config/database.php';
 
+// Pastikan PDO memunculkan exception jika ada query yang gagal
+$conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
 // Pastikan pengguna sudah login dan memiliki otoritas
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['AM.UI', 'SA.KP']; 
@@ -10,23 +13,28 @@ if (!isset($_SESSION['NamaAkun']) || !in_array($kode_hak, $allowed_roles)) {
 }
 
 $action = $_GET['action'] ?? '';
-$nama_akun = $_SESSION['NamaAkun'];
-$unit_upi  = $_SESSION['UnitUpi'] ?? '56';
-$unit_ap   = $_SESSION['UnitAp'] ?? NULL;
-$unit_up   = $_SESSION['UnitUp'] ?? NULL;
+
+// PERBAIKAN: Paksa konversi string kosong "" menjadi NULL agar MySQL (Foreign Key) tidak error
+$nama_akun = !empty($_SESSION['NamaAkun']) ? $_SESSION['NamaAkun'] : NULL;
+$unit_upi  = !empty($_SESSION['UnitUpi']) ? $_SESSION['UnitUpi'] : NULL;
+$unit_ap   = !empty($_SESSION['UnitAp']) ? $_SESSION['UnitAp'] : NULL;
+$unit_up   = !empty($_SESSION['UnitUp']) ? $_SESSION['UnitUp'] : NULL;
 
 try {
     // AKSI 1: BUAT DRAFT FORMULIR
     if ($action === 'create_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_formulir = trim($_POST['no_formulir']);
         $tgl_beli = $_POST['tgl_beli'];
-        $upi_tujuan = !empty($_POST['kode_upi']) ? $_POST['kode_upi'] : NULL;
-        $ap_tujuan = !empty($_POST['kode_ap']) ? $_POST['kode_ap'] : NULL;
-        $up_tujuan = !empty($_POST['kode_up']) ? $_POST['kode_up'] : NULL;
+        
+        // PERBAIKAN: Tangkap input form tujuan dan paksa jadi NULL jika kosong
+        $upi_tujuan = !empty($_POST['kode_upi']) ? trim($_POST['kode_upi']) : NULL;
+        $ap_tujuan  = !empty($_POST['kode_ap']) ? trim($_POST['kode_ap']) : NULL;
+        $up_tujuan  = !empty($_POST['kode_up']) ? trim($_POST['kode_up']) : NULL;
 
         $query_form = "INSERT INTO formulir_pembelian (NoFormulir, TglBeli, NamaAkun, KodeUp, KodeAp, KodeUpi, KodeUpTujuan, KodeApTujuan, KodeUpiTujuan, StatusData) 
                        VALUES (:no_form, :tgl, :akun, :up, :ap, :upi, :up_tuj, :ap_tuj, :upi_tuj, 'TIDAK')";
         $stmt_form = $conn->prepare($query_form);
+        
         $stmt_form->execute([
             ':no_form' => $no_formulir,
             ':tgl'     => $tgl_beli,
@@ -39,8 +47,7 @@ try {
             ':upi_tuj' => $upi_tujuan
         ]);
         
-        // Lempar ke halaman keranjang detail
-        header("Location: pembelian.php?view=detail&no_form=" . urlencode($no_formulir));
+        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
@@ -86,7 +93,7 @@ try {
             ]);
         }
         $conn->commit();
-        header("Location: pembelian.php?view=detail&no_form=" . urlencode($no_formulir));
+        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
@@ -96,16 +103,13 @@ try {
         
         $conn->beginTransaction();
         
-        // 1. Ubah status form menjadi AKTIF
         $stmt_update = $conn->prepare("UPDATE formulir_pembelian SET StatusData = 'AKTIF' WHERE NoFormulir = :no_form");
         $stmt_update->execute([':no_form' => $no_formulir]);
         
-        // 2. Ambil barang dari detil keranjang
         $stmt_get = $conn->prepare("SELECT NoRef FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
         $stmt_get->execute([':no_form' => $no_formulir]);
         $items = $stmt_get->fetchAll(PDO::FETCH_ASSOC);
         
-        // 3. Insert ke master_barang (Milik UI/UPI, AP & UP masih dikosongkan sampai proses pengiriman)
         $query_barang = "INSERT INTO master_barang (NoRef, UnitUpi, StatusData) VALUES (:noref, :upi, 'AKTIF')
                          ON DUPLICATE KEY UPDATE StatusData = 'AKTIF'";
         $stmt_barang = $conn->prepare($query_barang);
@@ -118,14 +122,15 @@ try {
         }
         
         $conn->commit();
-        header("Location: pembelian.php?view=daftar&status=sukses");
+        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=daftar&status=sukses");
         exit;
     }
 
 } catch (Exception $e) {
-    if ($conn->inTransaction()) {
+    if (isset($conn) && $conn->inTransaction()) {
         $conn->rollBack();
     }
-    die("Gagal memproses data: " . $e->getMessage());
+    // Menampilkan error asli dari MySQL agar tidak tersembunyi
+    die("<script>alert('Gagal memproses data! Error DB: " . addslashes($e->getMessage()) . "'); window.history.back();</script>");
 }
 ?>
