@@ -1,7 +1,3 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-box-arrow-in-down-left me-2"></i>Daftar Inbound (Penerimaan Barang)</h1>
-</div>
-
 <div class="card shadow mb-4 border-0">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -27,7 +23,7 @@
                                 
                                 <td class="text-center">
                                     <?php if($row['StatusPengiriman'] == 'DIKIRIM'): ?>
-                                        <span class="badge rounded-pill bg-warning text-dark px-3 py-2 animate__animated animate__pulse animate__infinite">
+                                        <span class="badge rounded-pill bg-warning text-dark px-3 py-2">
                                             <i class="bi bi-truck me-1"></i> Sedang Menuju Lokasi Anda
                                         </span>
                                     <?php else: ?>
@@ -39,12 +35,13 @@
                                 </td>
                                 
                                 <td class="text-center pe-4">
+                                    <!-- PERBAIKAN LINK KE FRONT CONTROLLER INDEX.PHP -->
                                     <?php if($row['StatusPengiriman'] == 'DIKIRIM'): ?>
-                                        <a href="penerimaan.php?view=detail&no_pengiriman=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-primary fw-bold shadow-sm">
+                                        <a href="index.php?page=pengadaan&menu=penerimaan&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-primary fw-bold shadow-sm">
                                             <i class="bi bi-clipboard-check"></i> Inspeksi & Terima
                                         </a>
                                     <?php else: ?>
-                                        <a href="penerimaan.php?view=detail&no_pengiriman=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-secondary">
+                                        <a href="index.php?page=pengadaan&menu=penerimaan&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-secondary">
                                             <i class="bi bi-eye"></i> Detail
                                         </a>
                                     <?php endif; ?>

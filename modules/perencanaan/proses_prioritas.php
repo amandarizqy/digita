@@ -10,7 +10,7 @@ $pesan_error     = "";
 $tabel_belum_ada = false;
 
 // Periode yang diproses (sama dengan modul proses_risiko)
-$periode_filter = '2025';
+$periode_filter = pr_periode();
 
 // ------------------------------------------------------------------
 // 1. Unit pengguna dari session
@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['proses_prioritas'])) 
             $pesan_sukses = "Pemeringkatan <strong>Skala Prioritas $skala_dipilih</strong> (Periode $periode_filter, metode "
                           . htmlspecialchars(labelMetodePeringkat($metode_dipilih)) . ") berhasil: <strong>"
                           . number_format($jumlah) . " pelanggan</strong> diperingkat. "
-                          . "<a href=\"?module=perencanaan&action=hasil_prioritas&skala=$skala_dipilih\" class=\"alert-link\">Lihat hasilnya &rarr;</a>";
+                          . "<a href=\"" . pr_e(pr_url('hasil_prioritas', ['skala' => $skala_dipilih])) . "\" class=\"alert-link\">Lihat hasilnya &rarr;</a>";
         } catch (PDOException $e) {
             if ($conn->inTransaction()) $conn->rollBack();
             if ($e->getCode() === '42S02') {

@@ -32,7 +32,7 @@ if (isset($_GET['act']) && $_GET['act'] == 'delete') {
 // ---------------------------------------------------------
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $limit   = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50, 100]) ? (int)$_GET['limit'] : 10;
-$page    = isset($_GET['page']) && (int)$_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+$page    = isset($_GET['hal']) && (int)$_GET['hal'] > 0 ? (int)$_GET['hal'] : 1;   // `page` dipakai router utama
 $offset  = ($page - 1) * $limit;
 
 $where_sql = "";
@@ -94,5 +94,13 @@ try {
 // ---------------------------------------------------------
 // 5. PANGGIL TAMPILAN FRONTEND
 // ---------------------------------------------------------
-include '../../templates/perencanaan/data_riwayat.php';
+// Ringkasan untuk kartu KPI
+$periode         = pr_periode();
+$total_baris     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t");
+$total_pelanggan = (int) pr_scalar($conn, "SELECT COUNT(DISTINCT IdPel) FROM pelunasan_ap2t");
+$total_nominal   = (float) pr_scalar($conn, "SELECT SUM(COALESCE(RpTag,0)+COALESCE(RpBK,0)) FROM pelunasan_ap2t");
+$belum_bayar     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t WHERE TglBayar IS NULL");
+$bulan_terakhir  = (string) pr_scalar($conn, "SELECT MAX(ThBlRek) FROM pelunasan_ap2t", [], '-');
+
+include __DIR__ . '/../../templates/perencanaan/data_riwayat.php';
 ?>

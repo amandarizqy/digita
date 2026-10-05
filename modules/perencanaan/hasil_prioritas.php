@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../functions/prioritas_helper.php';
 
 $pesan_error     = "";
 $tabel_belum_ada = false;
-$periode_filter  = '2025';
+$periode_filter  = pr_periode();
 
 // ------------------------------------------------------------------
 // Filter dari URL
@@ -15,7 +15,7 @@ $skala_filter = isset($_GET['skala']) ? (int) $_GET['skala'] : 0;   // 0 = semua
 if ($skala_filter < 0 || $skala_filter > 9) $skala_filter = 0;
 $keyword  = trim($_GET['keyword'] ?? '');
 $per_page = 25;
-$page     = max(1, (int) ($_GET['page'] ?? 1));
+$page     = max(1, (int) ($_GET['hal'] ?? 1));   // `page` dipakai router utama
 
 // Ringkasan per skala
 $ringkasan = [];
@@ -121,15 +121,7 @@ try {
 
 // Helper URL yang mempertahankan filter aktif
 $buat_url = function (array $override = []) use ($skala_filter, $keyword) {
-    $q = array_merge([
-        'module'  => 'perencanaan',
-        'action'  => 'hasil_prioritas',
-        'skala'   => $skala_filter,
-        'keyword' => $keyword,
-    ], $override);
-    if ($q['keyword'] === '' || $q['keyword'] === null) unset($q['keyword']);
-    if (empty($q['skala']))                             unset($q['skala']);
-    return '?' . http_build_query($q);
+    return pr_url('hasil_prioritas', array_merge(['skala' => $skala_filter ?: '', 'keyword' => $keyword], $override));
 };
 
 include __DIR__ . '/../../templates/perencanaan/hasil_prioritas.php';

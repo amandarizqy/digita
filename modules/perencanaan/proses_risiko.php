@@ -17,7 +17,7 @@ $pesan_error  = "";
 // `Periode` di kategorisasi_risiko bertipe YEAR dan merupakan salah satu
 // Primary Key bersama IdPel). Nilai Periode yang disimpan tetap diturunkan
 // dari 4 karakter awal ThBlRek, bukan dari tanggal server.
-$periode_filter = '2025';
+$periode_filter = pr_periode();
 
 // 1. Ambil Unit Pengguna dari Session
 $namaAkun = $_SESSION['NamaAkun'] ?? '';
@@ -374,6 +374,16 @@ try {
 
     $where_sql = count($where_conditions) > 0 ? " WHERE " . implode(' AND ', $where_conditions) : "";
 
+    // Paginasi (parameter `hal`; `page` dipakai router utama untuk nama modul)
+    $limit = 25;
+    $hal   = max(1, (int) ($_GET['hal'] ?? 1));
+
+    $stmt_cnt = $conn->prepare("SELECT COUNT(*) FROM dil d LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode $where_sql");
+    $stmt_cnt->execute($params_view);
+    $total_rows = (int) $stmt_cnt->fetchColumn();
+    $hal        = min($hal, max(1, (int) ceil($total_rows / $limit)));
+    $offset     = ($hal - 1) * $limit;
+
     // LEFT JOIN dibatasi ke Periode aktif via kondisi ON
     $sql_list = "
         SELECT 
@@ -393,15 +403,25 @@ try {
             CASE WHEN k.SkalaPrioritas IS NULL OR k.SkalaPrioritas = 0 THEN 0 ELSE 1 END ASC,
             k.SkalaPrioritas DESC, 
             d.Idpel ASC 
-        LIMIT 50
+        LIMIT :lim OFFSET :off
     ";
 
     $stmt_list = $conn->prepare($sql_list);
-    $stmt_list->execute($params_view);
+    foreach ($params_view as $key => $val) {
+        $stmt_list->bindValue($key, $val);
+    }
+    $stmt_list->bindValue(':lim', $limit,  PDO::PARAM_INT);
+    $stmt_list->bindValue(':off', $offset, PDO::PARAM_INT);
+    $stmt_list->execute();
     $list_preview = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
     $pesan_error = "Gagal mengambil data preview: " . $e->getMessage();
+    $list_preview = [];
+    $total_rows   = 0;
+    $limit        = 25;
+    $hal          = 1;
+    $offset       = 0;
 }
 
 include __DIR__ . '/../../templates/perencanaan/proses_risiko.php';

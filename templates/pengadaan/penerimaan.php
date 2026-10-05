@@ -40,11 +40,11 @@
                                 
                                 <td class="text-center pe-4">
                                     <?php if($row['StatusPengiriman'] == 'DIKIRIM'): ?>
-                                        <a href="penerimaan.php?view=detail&no_pengiriman=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-primary fw-bold shadow-sm">
+                                        <a href="penerimaan.php?view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-primary fw-bold shadow-sm">
                                             <i class="bi bi-clipboard-check"></i> Inspeksi & Terima
                                         </a>
                                     <?php else: ?>
-                                        <a href="penerimaan.php?view=detail&no_pengiriman=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-secondary">
+                                        <a href="penerimaan.php?view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-secondary">
                                             <i class="bi bi-eye"></i> Detail
                                         </a>
                                     <?php endif; ?>

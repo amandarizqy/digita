@@ -1,141 +1,103 @@
-<!-- templates/perencanaan/data_riwayat.php -->
+<?php
+// templates/perencanaan/data_riwayat.php  -  Monitoring: Data Riwayat Pelunasan
+// Variabel dari modules/perencanaan/data_riwayat.php
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4><i class="bi bi-upload"></i> Data Riwayat Pelunasan</h4>
-    <a href="?module=perencanaan&action=upload_riwayat" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-1"></i> Input Riwayat Baru
-    </a>
-    <a href="?module=perencanaan" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali ke Dashboard</a>
+$url_riwayat = function (array $ubah = []) use ($keyword, $limit) {
+    return pr_url('data_riwayat', array_merge(['keyword' => $keyword, 'limit' => $limit == 10 ? '' : $limit], $ubah));
+};
+
+echo pr_header([
+    'title'    => 'Data Riwayat Pelunasan',
+    'subtitle' => 'Riwayat tagihan dan tanggal bayar pelanggan (pelunasan AP2T) yang menjadi dasar hitung keterlambatan dan dampak.',
+    'action'   => 'data_riwayat',
+    'buttons'  => [['label' => 'Input Riwayat Baru', 'icon' => 'bi-plus-lg', 'href' => pr_url('upload_riwayat')]],
+]);
+
+if (!empty($pesan_sukses)) echo pr_alert('success', pr_e($pesan_sukses));
+if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
+?>
+
+<!-- KARTU METRIK KPI -->
+<div class="row g-3 mb-4">
+    <?= pr_kpi('Total Riwayat', pr_n($total_baris), 'Baris tagihan · ' . pr_n($total_pelanggan) . ' pelanggan', 'bi-clock-history', 'primary') ?>
+    <?= pr_kpi('Total Nominal', pr_rp_ringkas($total_nominal), 'Rp ' . pr_n($total_nominal) . ' · RpTag + RpBK', 'bi-cash-stack', 'success', true) ?>
+    <?= pr_kpi('Belum Dibayar', pr_n($belum_bayar), 'Tagihan tanpa Tanggal Bayar', 'bi-exclamation-circle', 'danger', $belum_bayar > 0) ?>
+    <?= pr_kpi('Rekening Terakhir', pr_e($bulan_terakhir), 'ThBlRek terbaru pada data', 'bi-calendar3', 'warning') ?>
 </div>
 
-<!-- Menampilkan Pesan Notifikasi -->
-<?php if (!empty($pesan_sukses)): ?>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <?= $pesan_sukses ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<?php if (!empty($pesan_error)): ?>
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <?= $pesan_error ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-<?php endif; ?>
-
-<!-- Card Tabel Data -->
-<div class="card shadow-sm">
-    <div class="card-header bg-white fw-bold d-flex align-items-center justify-content-between">
-        <span><i class="bi bi-table"></i> Data Riwayat Pelunasan (Terbaru)</span>
-    </div>
-
-    <div class="card-body">
-        <!-- Form Filter & Pencarian -->
-        <form method="GET" action="" class="row g-2 mb-3 align-items-center">
-            <!-- Hidden Input untuk menjaga modul & action -->
-            <input type="hidden" name="module" value="perencanaan">
-            <input type="hidden" name="action" value="data_riwayat">
-
-            <!-- Pilih Jumlah Data per Halaman -->
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-label mb-0 small text-muted">Tampilkan:</label>
-                <select name="limit" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-                    <option value="10" <?= $limit == 10 ? 'selected' : '' ?>>10</option>
-                    <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
-                    <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
-                    <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
-                </select>
-                <span class="small text-muted">data</span>
+<!-- TABEL -->
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary fs-6">Riwayat Pelunasan Terbaru</span>
+            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: pelunasan_ap2t</span>
+        </div>
+        <form method="GET" action="" class="d-flex flex-wrap align-items-center gap-2">
+            <?= pr_hidden('data_riwayat') ?>
+            <div class="input-group input-group-sm" style="width:260px;">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="keyword" class="form-control bg-light border-start-0" value="<?= pr_e($keyword) ?>" placeholder="Cari IDPel / ThBlRek / unit...">
             </div>
-
-            <!-- Field Pencarian -->
-            <div class="col-auto ms-auto d-flex gap-2">
-                <input type="text" name="keyword" class="form-control form-control-sm" placeholder="Cari IdPel / ThBlRek / Unit..." value="<?= htmlspecialchars($keyword) ?>">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Cari</button>
-                <?php if (!empty($keyword)): ?>
-                    <a href="?module=perencanaan&action=data_riwayat" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i> Reset</a>
-                <?php endif; ?>
-            </div>
+            <select name="limit" class="form-select form-select-sm bg-light" style="width:auto;" onchange="this.form.submit()" aria-label="Jumlah baris">
+                <?php foreach ([10, 25, 50, 100] as $n): ?>
+                    <option value="<?= $n ?>" <?= $limit === $n ? 'selected' : '' ?>><?= $n ?> baris</option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($keyword !== ''): ?>
+                <a href="<?= pr_e(pr_url('data_riwayat')) ?>" class="btn btn-outline-secondary btn-sm" title="Reset pencarian"><i class="bi bi-x-lg"></i></a>
+            <?php endif; ?>
         </form>
-
-        <!-- Tabel Data -->
+    </div>
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-bordered table-hover table-sm align-middle" style="font-size: 0.9rem;">
-                <thead class="table-light">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-secondary text-uppercase pr-thead">
                     <tr>
-                        <th>IdPel</th>
-                        <th>ThBlRek</th>
-                        <th>TglBayar</th>
-                        <th>RpBK</th>
-                        <th>RpTag</th>
-                        <th>UP/AP/UPI</th>
+                        <th class="ps-4">ID Pelanggan</th>
+                        <th>Rekening</th>
+                        <th>Tanggal Bayar</th>
+                        <th class="text-end">RpBK</th>
+                        <th class="text-end">RpTag</th>
+                        <th>Unit (UP / AP / UPI)</th>
                         <th>Waktu Input</th>
-                        <th class="text-center" style="width: 80px;">Aksi</th>
+                        <th class="text-end pe-4" style="width:80px;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($data_riwayat)): ?>
-                        <?php foreach ($data_riwayat as $row): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($row['IdPel']) ?></td>
-                                <td><?= htmlspecialchars($row['ThBlRek']) ?></td>
-                                <td><?= htmlspecialchars($row['TglBayar'] ?? '-') ?></td>
-                                <td>Rp <?= number_format((float)($row['RpBK'] ?? 0), 0, ',', '.') ?></td>
-                                <td>Rp <?= number_format((float)($row['RpTag'] ?? 0), 0, ',', '.') ?></td>
-                                <td><?= htmlspecialchars($row['UnitUp']) ?> / <?= htmlspecialchars($row['UnitAp']) ?> / <?= htmlspecialchars($row['UnitUpi']) ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($row['WaktuData'])) ?></td>
-                                <td class="text-center">
-                                    <!-- Tombol Hapus -->
-                                    <a href="?module=perencanaan&action=data_riwayat&act=delete&idpel=<?= urlencode($row['IdPel']) ?>&thblrek=<?= urlencode($row['ThBlRek']) ?>&keyword=<?= urlencode($keyword) ?>&limit=<?= $limit ?>&page=<?= $page ?>" 
-                                       class="btn btn-outline-danger btn-sm py-0 px-2" 
-                                       onclick="return confirm('Apakah Anda yakin ingin menghapus data IdPel: <?= htmlspecialchars($row['IdPel']) ?> (Rek: <?= htmlspecialchars($row['ThBlRek']) ?>)?');"
-                                       title="Hapus Data">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="8" class="text-center text-muted py-3">Belum ada data riwayat pelunasan.</td>
-                        </tr>
-                    <?php endif; ?>
+                <?php if (!empty($data_riwayat)): foreach ($data_riwayat as $row):
+                    $th = (string) $row['ThBlRek'];
+                    $rek_label = strlen($th) === 6 ? substr($th, 4, 2) . '/' . substr($th, 0, 4) : $th;
+                ?>
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark font-monospace"><?= pr_e($row['IdPel']) ?></td>
+                        <td><span class="badge bg-light text-dark border font-monospace" title="ThBlRek <?= pr_e($th) ?>"><?= pr_e($rek_label) ?></span></td>
+                        <td>
+                            <?php if (empty($row['TglBayar'])): ?>
+                                <?= pr_badge('BELUM BAYAR', 'danger', 'bi-x-circle') ?>
+                            <?php else: ?>
+                                <span class="font-monospace small"><?= pr_e(date('d/m/Y', strtotime($row['TglBayar']))) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="text-end font-monospace small text-nowrap"><?= pr_rp($row['RpBK'] ?? 0) ?></td>
+                        <td class="text-end font-monospace small text-nowrap"><?= pr_rp($row['RpTag'] ?? 0) ?></td>
+                        <td>
+                            <span class="badge bg-light text-dark border font-monospace"><?= pr_e($row['UnitUp'] ?? '-') ?></span>
+                            <span class="badge bg-light text-dark border font-monospace"><?= pr_e($row['UnitAp'] ?? '-') ?></span>
+                            <span class="badge bg-light text-secondary border font-monospace"><?= pr_e($row['UnitUpi'] ?? '-') ?></span>
+                        </td>
+                        <td class="text-muted font-monospace small"><?= pr_e(date('d/m/Y H:i', strtotime($row['WaktuData']))) ?></td>
+                        <td class="text-end pe-4">
+                            <a href="<?= pr_e($url_riwayat(['act' => 'delete', 'idpel' => $row['IdPel'], 'thblrek' => $row['ThBlRek'], 'hal' => $page])) ?>"
+                               class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus data"
+                               onclick="return confirm(<?= pr_e(json_encode('Hapus riwayat IdPel ' . $row['IdPel'] . ' (rekening ' . $row['ThBlRek'] . ')?')) ?>);">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                <?php endforeach; else: echo pr_empty_row(8, 'Belum ada data riwayat pelunasan.', 'bi-clock-history'); endif; ?>
                 </tbody>
             </table>
         </div>
-
-        <!-- Footer Tabel: Informasi & Paginasi -->
-        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
-            <div class="text-muted small">
-                Menampilkan <?= count($data_riwayat) > 0 ? $offset + 1 : 0 ?> - <?= min($offset + $limit, $total_data) ?> dari <?= $total_data ?> data
-            </div>
-
-            <?php if ($total_pages > 1): ?>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0">
-                        <!-- Tombol Previous -->
-                        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                            <a class="page-link" href="?module=perencanaan&action=data_riwayat&keyword=<?= urlencode($keyword) ?>&limit=<?= $limit ?>&page=<?= $page - 1 ?>">Previous</a>
-                        </li>
-
-                        <!-- Loop Nomor Halaman -->
-                        <?php 
-                        $start_page = max(1, $page - 2);
-                        $end_page   = min($total_pages, $page + 2);
-                        for ($i = $start_page; $i <= $end_page; $i++): 
-                        ?>
-                            <li class="page-item <?= $page == $i ? 'active' : '' ?>">
-                                <a class="page-link" href="?module=perencanaan&action=data_riwayat&keyword=<?= urlencode($keyword) ?>&limit=<?= $limit ?>&page=<?= $i ?>"><?= $i ?></a>
-                            </li>
-                        <?php endfor; ?>
-
-                        <!-- Tombol Next -->
-                        <li class="page-item <?= $page >= $total_pages ? 'disabled' : '' ?>">
-                            <a class="page-link" href="?module=perencanaan&action=data_riwayat&keyword=<?= urlencode($keyword) ?>&limit=<?= $limit ?>&page=<?= $page + 1 ?>">Next</a>
-                        </li>
-                    </ul>
-                </nav>
-            <?php endif; ?>
-        </div>
     </div>
+    <?= pr_footer_tabel($page, $limit, $total_data, fn($h) => $url_riwayat(['hal' => $h])) ?>
 </div>
