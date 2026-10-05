@@ -22,7 +22,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
+        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="provider_Controller.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
     </li>
@@ -31,7 +31,7 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+    <a href="provider_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Provider SIM
     </a>
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-primary active rounded-pill px-3 py-1 fw-medium" style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;">
@@ -58,7 +58,6 @@
             </div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
             <div class="d-flex justify-content-between align-items-center">
@@ -101,7 +100,7 @@
                         <th>PORT</th>
                         <th>STATUS DATA</th>
                         <th>WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -143,7 +142,7 @@
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
                                     <a href="modem_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
-                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-modem"
@@ -159,12 +158,6 @@
                                             title="Edit Modem">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
-                                    <a href="modem_Controller.php?action=delete&id=<?= htmlspecialchars(urlencode($row['ImeiModem'] ?? '')); ?>" 
-                                       class="btn btn-outline-danger py-1 px-2" 
-                                       onclick="return confirm('Apakah Anda yakin ingin menghapus modem ini?');" 
-                                       title="Hapus Modem">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -191,9 +184,7 @@
     </div>
 </div>
 
-<!-- ========================================================= -->
 <!-- MODAL 1: TAMBAH MODEM -->
-<!-- ========================================================= -->
 <div class="modal fade" id="modalTambahModem" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
@@ -207,8 +198,6 @@
                     <label class="form-label small fw-semibold text-secondary">IMEI Modem *</label>
                     <input type="text" name="ImeiModem" class="form-control form-control-sm font-monospace" placeholder="Contoh: 867749010776270" required>
                 </div>
-                
-                <!-- DROPDOWN SIM ID DARI master_nomor -->
                 <div class="col-md-6">
                     <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
                     <select name="SimId" class="form-select form-select-sm font-monospace">
@@ -222,8 +211,6 @@
                         <?php endif; ?>
                     </select>
                 </div>
-
-                <!-- DROPDOWN UNIT DINAMIS -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
                     <select name="KodeUpi" class="form-select form-select-sm" required>
@@ -257,7 +244,6 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
                     <input type="text" name="IpServerData" class="form-control form-control-sm font-monospace" placeholder="10.96.100.123">
@@ -286,9 +272,7 @@
     </div>
 </div>
 
-<!-- ========================================================= -->
-<!-- MODAL 2: EDIT MODEM -->
-<!-- ========================================================= -->
+<!-- MODAL 2: EDIT MODEM (IMEI READONLY) -->
 <div class="modal fade" id="modalEditModem" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="modem_Controller.php" method="POST" class="modal-content border-0 shadow">
@@ -299,11 +283,9 @@
             </div>
             <div class="modal-body row g-3">
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-secondary">IMEI Modem (Primary Key)</label>
+                    <label class="form-label small fw-semibold text-secondary">IMEI Modem (Primary Key - Locked)</label>
                     <input type="text" name="ImeiModem" id="edit_modem_imei" class="form-control form-control-sm font-monospace bg-light" readonly>
                 </div>
-                
-                <!-- DROPDOWN SIM ID EDIT -->
                 <div class="col-md-6">
                     <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
                     <select name="SimId" id="edit_modem_sim" class="form-select form-select-sm font-monospace">
@@ -317,8 +299,6 @@
                         <?php endif; ?>
                     </select>
                 </div>
-
-                <!-- DROPDOWN UNIT DINAMIS EDIT -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
                     <select name="KodeUpi" id="edit_modem_upi" class="form-select form-select-sm" required>
@@ -352,7 +332,6 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">IP Server Data</label>
                     <input type="text" name="IpServerData" id="edit_modem_ipdata" class="form-control form-control-sm font-monospace">
@@ -381,12 +360,8 @@
     </div>
 </div>
 
-<!-- ========================================================= -->
-<!-- JAVASCRIPT: FILTER PENCARIAN & AUTO-FILL MODAL EDIT -->
-<!-- ========================================================= -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Live search pencarian instan
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
@@ -402,22 +377,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 2. Auto-fill modal edit
     const modalEditEl = document.getElementById('modalEditModem');
     const modalEdit = new bootstrap.Modal(modalEditEl);
 
     document.querySelectorAll('.btn-edit-modem').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('edit_modem_imei').value = this.getAttribute('data-imei');
-            
-            // Set auto select untuk dropdown SIM ID
             document.getElementById('edit_modem_sim').value = this.getAttribute('data-sim') || '';
-            
-            // Set auto select untuk dropdown unit
             document.getElementById('edit_modem_upi').value = this.getAttribute('data-upi') || '';
             document.getElementById('edit_modem_ap').value = this.getAttribute('data-ap') || '';
             document.getElementById('edit_modem_up').value = this.getAttribute('data-up') || '';
-            
             document.getElementById('edit_modem_ipdata').value = this.getAttribute('data-ipdata');
             document.getElementById('edit_modem_ipengine').value = this.getAttribute('data-ipengine');
             document.getElementById('edit_modem_port').value = this.getAttribute('data-port');

@@ -31,19 +31,15 @@
 <!-- LEVEL 3: SUB ENTITAS FILTER PENGGUNA -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    
     <a href="pengguna_Controller.php?sub=semua" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'semua') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'semua') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
         <?= ($sub === 'semua') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Semua Pengguna
     </a>
-
     <a href="pengguna_Controller.php?sub=ui" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ui') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ui') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
         <?= ($sub === 'ui') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UI
     </a>
-
     <a href="pengguna_Controller.php?sub=up3" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'up3') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'up3') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
         <?= ($sub === 'up3') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UP3
     </a>
-
     <a href="pengguna_Controller.php?sub=ulp" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ulp') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ulp') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
         <?= ($sub === 'ulp') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat ULP
     </a>
@@ -65,7 +61,6 @@
             </div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
             <div class="d-flex justify-content-between align-items-center">
@@ -108,7 +103,7 @@
                         <th style="width: 180px;">UNIT PENEMPATAN</th>
                         <th style="width: 120px;">STATUS DATA</th>
                         <th style="width: 160px;">WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -156,10 +151,9 @@
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
                                     <a href="pengguna_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['NamaAkun'] ?? '')); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" 
-                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
-
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-pengguna"
                                             data-akun="<?= htmlspecialchars($row['NamaAkun'] ?? ''); ?>"
                                             data-email="<?= htmlspecialchars($row['AlamatEmail'] ?? ''); ?>"
@@ -173,13 +167,6 @@
                                             title="Edit Pengguna">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
-
-                                    <a href="pengguna_Controller.php?action=delete&id=<?= htmlspecialchars(urlencode($row['NamaAkun'] ?? '')); ?>&sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" 
-                                       class="btn btn-outline-danger py-1 px-2" 
-                                       onclick="return confirm('Apakah Anda yakin ingin menghapus akun ini?');" 
-                                       title="Hapus Akun">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -194,7 +181,6 @@
         </div>
     </div>
 
-    <!-- Paginasi -->
     <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
         <small class="text-muted">Menampilkan 1 - <?= !empty($users) ? count($users) : 0; ?> dari <?= $total_akun ?? (!empty($users) ? count($users) : 0); ?> total data master pengguna</small>
         <nav>
@@ -252,8 +238,6 @@
                         <option value="SA.KP">SA.KP (Super Administrator Pusat)</option>
                     </select>
                 </div>
-
-                <!-- DROPDOWN UNIT DINAMIS -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Unit UPI (UID)</label>
                     <select name="UnitUpi" class="form-select form-select-sm">
@@ -287,7 +271,6 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-12">
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <select name="StatusData" class="form-select form-select-sm">
@@ -304,7 +287,7 @@
     </div>
 </div>
 
-<!-- MODAL 2: EDIT PENGGUNA -->
+<!-- MODAL 2: EDIT PENGGUNA (USERNAME READONLY) -->
 <div class="modal fade" id="modalEditPengguna" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="pengguna_Controller.php?sub=<?= htmlspecialchars(urlencode($sub ?? 'semua')); ?>" method="POST" class="modal-content border-0 shadow">
@@ -315,7 +298,7 @@
             </div>
             <div class="modal-body row g-3">
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-secondary">Username (Kunci Utama)</label>
+                    <label class="form-label small fw-semibold text-secondary">Username (Primary Key - Locked)</label>
                     <input type="text" name="NamaAkun" id="edit_pengguna_akun" class="form-control form-control-sm font-monospace bg-light" readonly>
                 </div>
                 <div class="col-md-6">
@@ -349,8 +332,6 @@
                         <option value="SA.KP">SA.KP (Super Administrator Pusat)</option>
                     </select>
                 </div>
-
-                <!-- DROPDOWN UNIT DINAMIS PADA MODAL EDIT -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Unit UPI (UID)</label>
                     <select name="UnitUpi" id="edit_pengguna_upi" class="form-select form-select-sm">
@@ -384,7 +365,6 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-12">
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <select name="StatusData" id="edit_pengguna_status" class="form-select form-select-sm">
@@ -401,10 +381,8 @@
     </div>
 </div>
 
-<!-- JAVASCRIPT: FILTER PENCARIAN & AUTO-FILL MODAL EDIT -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Live search client-side
     const inputCari = document.getElementById('cariPengguna');
     const tabel = document.getElementById('tabelPengguna');
     if (inputCari && tabel) {
@@ -420,7 +398,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 2. Auto-fill modal edit
     const modalEditEl = document.getElementById('modalEditPengguna');
     const modalEdit = new bootstrap.Modal(modalEditEl);
 
@@ -432,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_pengguna_kontak').value = this.getAttribute('data-kontak');
             document.getElementById('edit_pengguna_hak').value = this.getAttribute('data-hak');
             
-            // Auto select value untuk unit dropdown
             document.getElementById('edit_pengguna_upi').value = this.getAttribute('data-upi') || '';
             document.getElementById('edit_pengguna_ap').value = this.getAttribute('data-ap') || '';
             document.getElementById('edit_pengguna_up').value = this.getAttribute('data-up') || '';
