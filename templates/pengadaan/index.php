@@ -1,60 +1,95 @@
-<div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
-        <h3 class="fw-bold text-dark mb-1">Modul Pengadaan & Stok</h3>
-        <p class="text-muted small">Kelola siklus logistik perangkat S41 mulai dari pembelian, pengiriman ke unit, hingga penerimaan di gudang.</p>
-    </div>
-    <a href="?menu=<?= $menu ?>&sub=baru" class="btn btn-primary btn-sm px-3 py-2">
-        <i class="bi bi-plus-lg me-1"></i> Buat Formulir
-    </a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-box me-2"></i>Modul Pengadaan & Stok</h1>
 </div>
 
-<!-- LEVEL 2: Menu Utama -->
-<div class="card shadow-sm mb-4 border-0">
-    <div class="card-body p-2">
-        <ul class="nav nav-pills">
-            <li class="nav-item">
-                <a class="nav-link px-4 fw-bold <?= ($menu == 'pembelian') ? 'active' : 'text-secondary' ?>" href="?menu=pembelian">
-                    <i class="bi bi-cart-plus me-2"></i> Pembelian (UI)
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link px-4 fw-bold <?= ($menu == 'pengiriman') ? 'active' : 'text-secondary' ?>" href="?menu=pengiriman">
-                    <i class="bi bi-truck me-2"></i> Pengiriman
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link px-4 fw-bold <?= ($menu == 'penerimaan') ? 'active' : 'text-secondary' ?>" href="?menu=penerimaan">
-                    <i class="bi bi-box-arrow-in-down me-2"></i> Penerimaan
-                </a>
-            </li>
-        </ul>
+<?php 
+// Normalisasi menu untuk UI
+$is_barang = in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan']); 
+$sub = in_array($menu, ['pembelian', 'pengiriman', 'penerimaan']) ? $menu : $sub;
+?>
+
+<!-- MENU LEVEL 2 (Tab Atas) -->
+<ul class="nav nav-tabs mb-4 border-bottom-0">
+    <li class="nav-item">
+        <a class="nav-link <?= ($is_barang) ? 'active bg-primary text-white border-primary shadow-sm' : 'bg-light border text-secondary' ?> me-1" href="index.php?page=pengadaan&menu=pembelian">
+            <i class="bi bi-box me-1"></i> Barang
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($menu == 'kartu') ? 'active bg-primary text-white border-primary shadow-sm' : 'bg-light border text-secondary' ?> me-1" href="index.php?page=pengadaan&menu=kartu">
+            <i class="bi bi-sim me-1"></i> Kartu
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($menu == 'monitoring') ? 'active bg-primary text-white border-primary shadow-sm' : 'bg-light border text-secondary' ?>" href="index.php?page=pengadaan&menu=monitoring">
+            <i class="bi bi-display me-1"></i> Monitoring
+        </a>
+    </li>
+</ul>
+
+<!-- MENU LEVEL 3 (Sub Entitas) & AKSI DAFTAR/BARU -->
+<div class="d-flex align-items-center mb-4 bg-white p-3 rounded shadow-sm border">
+    <span class="text-muted fw-bold me-3 text-uppercase small" style="letter-spacing: 1px;">Sub Entitas:</span>
+    <div class="btn-group me-4 shadow-sm" role="group">
+        <?php if ($is_barang): ?>
+            <a href="index.php?page=pengadaan&menu=pembelian" class="btn btn-sm <?= ($sub == 'pembelian') ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>">
+                <i class="bi bi-cart-plus me-1"></i> Pembelian (UI)
+            </a>
+            <a href="index.php?page=pengadaan&menu=pengiriman" class="btn btn-sm <?= ($sub == 'pengiriman') ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>">
+                <i class="bi bi-truck me-1"></i> Pengiriman
+            </a>
+            <a href="index.php?page=pengadaan&menu=penerimaan" class="btn btn-sm <?= ($sub == 'penerimaan') ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>">
+                <i class="bi bi-box-arrow-in-down me-1"></i> Penerimaan
+            </a>
+        <?php elseif ($menu === 'kartu'): ?>
+            <a href="index.php?page=pengadaan&menu=kartu&sub=aktivasi" class="btn btn-sm <?= ($sub == 'aktivasi') ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>">
+                <i class="bi bi-sim me-1"></i> Aktivasi Perdana
+            </a>
+            <a href="index.php?page=pengadaan&menu=kartu&sub=pulsa" class="btn btn-sm <?= ($sub == 'pulsa') ? 'btn-primary fw-bold' : 'btn-outline-primary' ?>">
+                <i class="bi bi-wallet2 me-1"></i> Isi Pulsa
+            </a>
+        <?php endif; ?>
+    </div>
+    
+    <div class="btn-group rounded-pill border" role="group">
+        <a href="index.php?page=pengadaan&menu=<?= $menu ?>&sub=<?= $sub ?>&view=daftar" class="btn btn-sm rounded-pill <?= ($view == 'daftar') ? 'btn-primary fw-bold' : 'btn-light text-muted' ?> px-4">
+            Daftar Data
+        </a>
+        <?php if ($sub !== 'penerimaan'): ?>
+        <a href="index.php?page=pengadaan&menu=<?= $menu ?>&sub=<?= $sub ?>&view=baru" class="btn btn-sm rounded-pill <?= ($view == 'baru') ? 'btn-light fw-bold text-dark border' : 'btn-light text-muted' ?> px-4">
+            <i class="bi bi-plus-lg"></i> Form Baru
+        </a>
+        <?php endif; ?>
     </div>
 </div>
 
-<!-- LEVEL 3: Sub Entitas (Hanya tampil jika bukan menu penerimaan) -->
-<?php if ($menu != 'penerimaan'): ?>
-<div class="d-flex align-items-center mb-4">
-    <span class="text-muted fw-bold me-3" style="font-size: 0.75rem; letter-spacing: 1px;">SUB ENTITAS:</span>
-    <a href="?menu=<?= $menu ?>&sub=daftar" class="btn rounded-pill me-2 px-4 btn-sm <?= ($sub == 'daftar') ? 'btn-outline-primary fw-bold' : 'btn-outline-secondary' ?>" <?= ($sub == 'daftar') ? 'style="background-color: #eff6ff;"' : '' ?>>
-        Daftar Data
-    </a>
-    <a href="?menu=<?= $menu ?>&sub=baru" class="btn rounded-pill me-2 px-4 btn-sm <?= ($sub == 'baru') ? 'btn-outline-primary fw-bold' : 'btn-outline-secondary' ?>" <?= ($sub == 'baru') ? 'style="background-color: #eff6ff;"' : '' ?>>
-        <i class="bi bi-plus-lg me-1"></i> Form Baru
-    </a>
+<div class="mt-2">
+    <?php
+    if ($is_barang) {
+        if ($sub === 'pembelian') {
+            if ($view === 'daftar') require_once __DIR__ . '/pembelian_daftar.php';
+            elseif ($view === 'baru') require_once __DIR__ . '/pembelian_baru.php';
+            elseif ($view === 'detail') require_once __DIR__ . '/pembelian.php'; 
+        } 
+        elseif ($sub === 'pengiriman') {
+            if ($view === 'daftar') require_once __DIR__ . '/pengiriman_daftar.php';
+            elseif ($view === 'baru') require_once __DIR__ . '/pengiriman_baru.php';
+            elseif ($view === 'detail') require_once __DIR__ . '/pengiriman.php'; 
+        } 
+        elseif ($sub === 'penerimaan') {
+            if ($view === 'daftar') require_once __DIR__ . '/penerimaan_daftar.php';
+            elseif ($view === 'detail') require_once __DIR__ . '/penerimaan.php'; 
+        }
+    } 
+    elseif ($menu === 'kartu') {
+        if ($sub === 'aktivasi') {
+            if ($view === 'daftar') require_once __DIR__ . '/kartu_aktivasi_daftar.php';
+            elseif ($view === 'baru') require_once __DIR__ . '/kartu_aktivasi_baru.php';
+        }
+        elseif ($sub === 'pulsa') {
+            if ($view === 'daftar') require_once __DIR__ . '/kartu_pulsa_daftar.php';
+            elseif ($view === 'baru') require_once __DIR__ . '/kartu_pulsa_baru.php';
+        }
+    }
+    ?>
 </div>
-<?php endif; ?>
-
-<!-- SUMMARY CARDS DINAMIS -->
-
-
-<!-- TABEL DATA / FORM RENDER AREA -->
-<div class="card-body p-0">
-        <?php 
-            $render_file = __DIR__ . '/' . $menu . '_' . $sub . '.php';
-            if (file_exists($render_file)) {
-                require_once $render_file;
-            } else {
-                echo '<div class="p-5 text-center text-muted"><i class="bi bi-file-earmark-x fs-1 d-block mb-3"></i>Modul <strong>' . htmlspecialchars($menu . '_' . $sub) . '.php</strong> belum dibuat.</div>';
-            }
-        ?>
-    </div>

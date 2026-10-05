@@ -1,11 +1,32 @@
+<?php 
+// Pindahkan data dari router ke variabel lokal
+$formulir = $data['formulir'] ?? false;
+$items = $data['items'] ?? [];
+$no_formulir = $_GET['no_form'] ?? '';
+
+// Proteksi: Jika data tidak ditemukan di database, tampilkan pesan error rapi, bukan crash PHP
+if (!$formulir): 
+?>
+    <div class="alert alert-danger shadow-sm mt-4">
+        <h4 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Data Tidak Ditemukan!</h4>
+        <p>Formulir dengan nomor <strong><?= htmlspecialchars($no_formulir) ?></strong> tidak ditemukan di database.</p>
+        <hr>
+        <p class="mb-0 small">Kemungkinan penyebab: Nomor formulir melebihi batas <strong>17 karakter</strong> (Sesuai database) sehingga terpotong oleh sistem. Silakan kembali dan buat formulir baru dengan format yang lebih pendek.</p>
+    </div>
+    <a href="index.php?page=pengadaan&menu=barang&sub=pembelian&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar</a>
+<?php 
+    return; // Hentikan eksekusi kode HTML di bawahnya
+endif; 
+?>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-cart me-2"></i>Keranjang Pembelian</h1>
-    <a href="pembelian.php?view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
+    <a href="index.php?page=pengadaan&menu=barang&sub=pembelian" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
 </div>
 
 <!-- Informasi Header -->
 <div class="alert alert-primary shadow-sm mb-4">
-    <strong>No. Form:</strong> <?= htmlspecialchars($no_formulir) ?> &bull; 
+    <strong>No. Form:</strong> <?= htmlspecialchars($formulir['NoFormulir']) ?> &bull; 
     <strong>Tanggal:</strong> <?= htmlspecialchars($formulir['TglBeli']) ?> &bull;
     <strong>Pembuat:</strong> <?= htmlspecialchars($formulir['NamaAkun']) ?>
 </div>
@@ -27,28 +48,28 @@
         <div class="tab-content">
             <!-- TAB MANUAL -->
             <div class="tab-pane fade show active" id="manual" role="tabpanel">
-                <form action="../../modules/pengadaan/proses_pembelian.php?action=add_item" method="POST">
+                <form action="modules/pengadaan/proses_pembelian.php?action=add_item" method="POST">
                     <input type="hidden" name="metode" value="manual">
-                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
                     
                     <div class="row align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Nomor Ref (NoRef)</label>
+                            <label class="form-label fw-bold small text-muted">Nomor Ref (NoRef)</label>
                             <input type="text" class="form-control" name="no_ref" placeholder="Contoh: S41-001" required>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Harga Beli (Rp)</label>
+                            <label class="form-label fw-bold small text-muted">Harga Beli (Rp)</label>
                             <input type="number" class="form-control" name="harga" required>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label fw-bold">Stiker QC</label>
+                            <label class="form-label fw-bold small text-muted">Stiker QC</label>
                             <select class="form-select" name="stiker_qc" required>
                                 <option value="ADA">ADA</option>
                                 <option value="TIDAK">TIDAK</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label fw-bold">Cacat Fisik</label>
+                            <label class="form-label fw-bold small text-muted">Cacat Fisik</label>
                             <select class="form-select" name="cacat_fisik" required>
                                 <option value="TIDAK">TIDAK</option>
                                 <option value="YA">YA</option>
@@ -63,12 +84,12 @@
 
             <!-- TAB EXCEL -->
             <div class="tab-pane fade" id="excel" role="tabpanel">
-                <form action="../../modules/pengadaan/proses_pembelian.php?action=add_item" method="POST" enctype="multipart/form-data">
+                <form action="modules/pengadaan/proses_pembelian.php?action=add_item" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="metode" value="excel">
-                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
                     <div class="row align-items-end">
                         <div class="col-md-9">
-                            <label class="form-label fw-bold">Pilih File Data (.csv)</label>
+                            <label class="form-label fw-bold small text-muted">Pilih File Data (.csv)</label>
                             <input class="form-control" type="file" name="file_excel" accept=".csv" required>
                             <small class="form-text">Format header: <i>NoRef;HargaBeli;StikerQC;CacatFisik</i></small>
                         </div>
@@ -93,7 +114,7 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4">NO REF</th>
+                        <th class="ps-4 py-3">NO REF</th>
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
                         <th class="pe-4 text-end">HARGA BELI</th>
@@ -107,16 +128,16 @@
                             $total += $item['HargaBeli'];
                     ?>
                         <tr>
-                            <td class="fw-bold ps-4"><?= htmlspecialchars($item['NoRef']) ?></td>
+                            <td class="fw-bold ps-4 text-primary"><?= htmlspecialchars($item['NoRef']) ?></td>
                             <td><?= htmlspecialchars($item['StikerQC']) ?></td>
                             <td><?= htmlspecialchars($item['CacatFisik']) ?></td>
-                            <td class="pe-4 text-end">Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
+                            <td class="pe-4 text-end fw-bold">Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
                         </tr>
                     <?php 
                         endforeach; 
                     else: 
                     ?>
-                        <tr><td colspan="4" class="text-center py-4 text-muted">Belum ada barang di keranjang ini.</td></tr>
+                        <tr><td colspan="4" class="text-center py-5 text-muted"><i class="bi bi-box fs-1 d-block mb-2 text-secondary"></i>Belum ada barang di keranjang ini.</td></tr>
                     <?php endif; ?>
                 </tbody>
                 <?php if (!empty($items)): ?>
@@ -134,8 +155,8 @@
     <!-- Tombol Eksekusi -->
     <?php if ($formulir['StatusData'] === 'TIDAK' && !empty($items)): ?>
     <div class="card-footer bg-white p-3">
-        <form action="../../modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST">
-            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+        <form action="modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST">
+            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
             <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold" onclick="return confirm('Yakin ingin eksekusi? Aset akan didaftarkan permanen ke Master Barang.')">
                 <i class="bi bi-check2-all me-2"></i>FINALISASI & EKSEKUSI PEMBELIAN
             </button>

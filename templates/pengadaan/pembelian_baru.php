@@ -12,7 +12,7 @@
                         <h6 class="fw-bold text-dark mb-3">Informasi Utama</h6>
                         <div class="mb-3">
                             <label class="form-label text-muted small fw-bold">Nomor Formulir</label>
-                            <input type="text" class="form-control" name="no_formulir" placeholder="KODEUPIXXXYYYYMMDD-F.A" required maxlength="20">
+                            <input type="text" class="form-control" name="no_formulir" placeholder="KODEUPIXXXYYYYMMDD-F.A" required maxlength="17">
                             <small class="text-secondary">Gunakan format standar PLN UID.</small>
                         </div>
                         <div class="mb-3">

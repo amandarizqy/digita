@@ -1,22 +1,11 @@
 <?php
-session_start();
-require_once '../../config/database.php';
+require_once __DIR__ . '/../../config/database.php';
 
-// Pastikan pengguna sudah login
-if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
-    exit;
-}
-
-// Atur judul halaman & menu aktif
+// Atur judul halaman
 $page_title = "Perencanaan - Digita S41";
-$active_menu = 'perencanaan';      // ← ini yang membuat menu Perencanaan menyala
 
-// Ambil parameter action dari URL, jika kosong arahkan ke dashboard
+// Ambil parameter action dari URL, jika kosong arahkan ke dashboard/default
 $action = isset($_GET['action']) ? $_GET['action'] : '';
-
-// Mulai menangkap output view ke dalam variabel $content
-ob_start();
 
 // ---------------------------------------------------------
 // AREA KERJA BACKEND & ROUTING: 
