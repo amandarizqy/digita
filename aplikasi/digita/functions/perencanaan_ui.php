@@ -97,9 +97,6 @@ function pr_pct($bagian, $total, int $desimal = 0): string
 function pr_menu(): array
 {
     return [
-        'ringkasan' => [
-            'label' => 'Ringkasan', 'icon' => 'bi-grid-1x2', 'items' => [],
-        ],
         'input' => [
             'label' => 'Input Data', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'upload_riwayat'    => ['Riwayat Pelunasan', 'bi-upload'],
@@ -125,7 +122,7 @@ function pr_menu(): array
     ];
 }
 
-/** Kunci grup menu untuk sebuah action ('' -> ringkasan). */
+/** Kunci grup menu untuk sebuah action (default: input). */
 function pr_group_of(string $action): string
 {
     foreach (pr_menu() as $key => $grp) {
@@ -133,7 +130,7 @@ function pr_group_of(string $action): string
             return $key;
         }
     }
-    return 'ringkasan';
+    return 'input';
 }
 
 /** CSS kecil khusus modul (dicetak sekali per halaman). */
@@ -175,6 +172,8 @@ function pr_header(array $o, bool $tampil_pill = true): string
     $menu   = pr_menu();
 
     $h  = pr_styles();
+    $nav_saja = !empty($o['nav_saja']);   // hanya tab + pill, tanpa judul (untuk halaman input lama)
+    if (!$nav_saja) {
     $h .= '<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">';
     $h .= '<div><h4 class="fw-bold text-dark mb-1">' . pr_e($o['title'] ?? 'Modul Perencanaan');
     if (!empty($o['badge'])) {
@@ -194,11 +193,12 @@ function pr_header(array $o, bool $tampil_pill = true): string
         $h    .= "<$tag$href class=\"" . pr_e($cls) . '" ' . ($b['attrs'] ?? '') . '>' . $icon . pr_e($b['label']) . "</$tag>";
     }
     $h .= '</div></div>';
+    }
 
     // LEVEL 2
     $h .= '<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle flex-wrap">';
     foreach ($menu as $key => $g) {
-        $target = $key === 'ringkasan' ? '' : (string) array_key_first($g['items']);
+        $target = (string) array_key_first($g['items']);
         $aktif  = $key === $grup;
         $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium ' . ($aktif ? 'active text-white' : 'text-secondary') . '"'
             . ($aktif ? ' style="background-color:#0d6efd;"' : '') . ' href="' . pr_e(pr_url($target)) . '">'

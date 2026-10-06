@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../functions/perencanaan_ui.php';
 chdir(__DIR__);   // supaya include relatif di file-file perencanaan yang belum dirombak tetap benar
 
-$action = $_GET['action'] ?? '';
+$action = $_GET['action'] ?? 'upload_riwayat';   // tanpa Ringkasan: langsung ke Input
 
 switch ($action) {
     case 'upload_riwayat':     include __DIR__ . '/upload_riwayat.php'; break;
@@ -20,5 +20,5 @@ switch ($action) {
     case 'hasil_risiko':       include __DIR__ . '/hasil_risiko.php'; break;
     case 'hasil_prioritas':    include __DIR__ . '/hasil_prioritas.php'; break;
     default:
-        include __DIR__ . '/dashboard.php';
+        include __DIR__ . '/upload_riwayat.php';
 }
