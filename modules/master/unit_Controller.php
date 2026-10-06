@@ -4,15 +4,29 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../config/database.php';
 
+// 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: /modules/auth/login.php");
+    exit;
+}
+
+// 2. Proteksi Hak Akses (AM.UI Ditolak)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+
+if ($user_role === 'AM.UI') {
+    $_SESSION['flash_alert'] = [
+        'title' => 'Akses Ditolak!',
+        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
+        'icon'  => 'error'
+    ];
+    header("Location: /modules/master/pesan_Controller.php");
     exit;
 }
 
 $sub    = $_GET['sub'] ?? 'ui';
 $action = $_GET['action'] ?? 'index';
 
-// 1. TAMBAH UNIT (POST - store)
+// 3. Tambah Unit (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
@@ -51,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// 2. EDIT UNIT (POST - update) -> KODE PRIMARY TIDAK BISA DIUBAH
+// 4. Edit Unit (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     $id_primary     = trim($_POST['IdPrimary'] ?? '');
     $nama_unit      = trim($_POST['NamaUnit'] ?? '');
@@ -76,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// 3. TOGGLE STATUS (GET - toggle_status) -> PENGGANTI DELETE
+// 5. Toggle Status (GET - toggle_status)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -110,22 +124,19 @@ if ($action === 'toggle_status') {
     exit;
 }
 
-// AMBIL DATA
+// 6. Query Data & Metrik
 if ($sub === 'up3') {
     $stmt = $conn->query("SELECT a.*, i.SingkatanNama AS NamaIndukUpi FROM master_ap a LEFT JOIN master_upi i ON a.UnitUpi = i.UnitUpi ORDER BY a.UnitAp ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_ap";
     $label_unit = "Unit Pelaksana (UP3)";
 } elseif ($sub === 'ulp') {
     $stmt = $conn->query("SELECT u.*, a.SingkatanNama AS NamaIndukAp, i.SingkatanNama AS NamaIndukUpi FROM master_up u LEFT JOIN master_ap a ON u.UnitAp = a.UnitAp LEFT JOIN master_upi i ON u.UnitUpi = i.UnitUpi ORDER BY u.UnitUp ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_up";
     $label_unit = "Unit Layanan (ULP)";
 } else {
     $sub = 'ui';
     $stmt = $conn->query("SELECT * FROM master_upi ORDER BY UnitUpi ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_upi";
     $label_unit = "Unit Induk (UI)";
 }
 
@@ -136,7 +147,6 @@ foreach ($units as $u) {
 }
 $persentase_aktif = ($total_unit > 0) ? round(($total_aktif / $total_unit) * 100) : 0;
 
-$master_tab_aktif = 'unit';
 $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF' ORDER BY UnitUpi ASC")->fetchAll(PDO::FETCH_ASSOC);
 $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
