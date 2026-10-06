@@ -171,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $katBaru += $stmt->rowCount();
                 }
                 $conn->commit();
+                unset($_SESSION['pr_periode_data']);
             }
 
             $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak,

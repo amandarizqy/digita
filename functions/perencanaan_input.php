@@ -77,6 +77,7 @@ if (!function_exists('pi_proses')) {
                 $stmt->execute($param);
             }
             $conn->commit();
+            unset($_SESSION['pr_periode_data']);   // daftar tahun di pemilih periode diperbarui
         } catch (Throwable $e) {
             if ($conn->inTransaction()) $conn->rollBack();
             throw $e;

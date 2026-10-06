@@ -21,6 +21,8 @@ function pr_url(string $action = '', array $params = []): string
     if ($action !== '') {
         $q['action'] = $action;
     }
+    $q['periode'] = $params['periode'] ?? pr_periode();   // pilihan periode ikut ke semua link
+    unset($params['periode']);
     foreach ($params as $k => $v) {
         if ($v === null || $v === '') {
             continue;
@@ -34,7 +36,8 @@ function pr_url(string $action = '', array $params = []): string
 function pr_hidden(string $action, array $extra = []): string
 {
     $html = '<input type="hidden" name="page" value="perencanaan">'
-          . '<input type="hidden" name="action" value="' . pr_e($action) . '">';
+          . '<input type="hidden" name="action" value="' . pr_e($action) . '">'
+          . '<input type="hidden" name="periode" value="' . pr_e(pr_periode()) . '">';
     foreach ($extra as $k => $v) {
         if ($v === null || $v === '') {
             continue;
@@ -57,10 +60,51 @@ function pr_scalar(PDO $conn, string $sql, array $params = [], $default = 0)
     }
 }
 
-/** Periode tagihan yang diproses modul Perencanaan (sama dengan proses_risiko & proses_prioritas). */
+/** Daftar tahun yang sudah ada di data (di-cache di session 2 menit). */
+function pr_periode_data(): array
+{
+    $c = $_SESSION['pr_periode_data'] ?? null;
+    if (is_array($c) && ($c['t'] ?? 0) > time() - 120) return $c['v'];
+    $v = [];
+    if (!empty($GLOBALS['conn'])) {
+        try { $v = array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT Periode FROM kategorisasi_risiko ORDER BY Periode DESC")->fetchAll(PDO::FETCH_COLUMN)); }
+        catch (Throwable $e) { $v = []; }
+    }
+    $_SESSION['pr_periode_data'] = ['t' => time(), 'v' => $v];
+    return $v;
+}
+
+/**
+ * Periode (tahun) yang sedang dipilih untuk seluruh modul Perencanaan.
+ * Urutan: ?periode= di URL -> pilihan terakhir di session -> tahun terbaru di data -> tahun berjalan.
+ */
 function pr_periode(): string
 {
-    return '2025';
+    static $p = null;
+    if ($p !== null) return $p;
+    $sah = fn($v) => is_string($v) && preg_match('/^\d{4}$/', $v) && $v >= 1901 && $v <= 2155;
+
+    if ($sah($_GET['periode'] ?? null))          $p = $_GET['periode'];
+    elseif ($sah($_SESSION['pr_periode'] ?? null)) $p = $_SESSION['pr_periode'];
+    else                                          $p = pr_periode_data()[0] ?? date('Y');
+    $_SESSION['pr_periode'] = $p;
+    return $p;
+}
+
+/** Dropdown pemilih periode untuk header halaman. */
+function pr_periode_pilih(string $action): string
+{
+    $p     = pr_periode();
+    $tahun = array_unique(array_merge(pr_periode_data(), [$p, date('Y')]));
+    rsort($tahun);
+    $h  = '<form method="GET" action="" class="d-flex align-items-center gap-2 me-1">'
+        . '<input type="hidden" name="page" value="perencanaan"><input type="hidden" name="action" value="' . pr_e($action) . '">'
+        . '<label for="pr_periode" class="text-secondary fw-bold text-uppercase pr-label mb-0">Periode</label>'
+        . '<select name="periode" id="pr_periode" class="form-select form-select-sm bg-white fw-semibold" style="width:auto;" onchange="this.form.submit()">';
+    foreach ($tahun as $y) {
+        $h .= '<option value="' . pr_e($y) . '"' . ((string) $y === $p ? ' selected' : '') . '>' . pr_e($y) . '</option>';
+    }
+    return $h . '</select></form>';
 }
 
 /** Format angka bulat gaya Indonesia (4.800). */
@@ -176,15 +220,14 @@ function pr_header(array $o, bool $tampil_pill = true): string
     if (!$nav_saja) {
     $h .= '<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">';
     $h .= '<div><h4 class="fw-bold text-dark mb-1">' . pr_e($o['title'] ?? 'Modul Perencanaan');
-    if (!empty($o['badge'])) {
-        $h .= ' <span class="badge bg-light text-secondary border font-monospace align-middle ms-1" style="font-size:.7rem;">'
-            . '<i class="bi bi-calendar3 me-1"></i>' . pr_e($o['badge']) . '</span>';
-    }
     $h .= '</h4>';
     if (!empty($o['subtitle'])) {
         $h .= '<p class="text-muted small mb-0">' . pr_e($o['subtitle']) . '</p>';
     }
-    $h .= '</div><div class="d-flex flex-wrap gap-2">';
+    $h .= '</div><div class="d-flex flex-wrap gap-2 align-items-center">';
+    if (!empty($o['periode'])) {
+        $h .= pr_periode_pilih($action);
+    }
     foreach (($o['buttons'] ?? []) as $b) {
         $cls   = $b['class'] ?? 'btn btn-primary btn-sm px-3 shadow-sm rounded-2';
         $icon  = !empty($b['icon']) ? '<i class="bi ' . pr_e($b['icon']) . ' me-1"></i> ' : '';

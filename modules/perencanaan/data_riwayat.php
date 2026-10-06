@@ -35,17 +35,17 @@ $limit   = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50, 1
 $page    = isset($_GET['hal']) && (int)$_GET['hal'] > 0 ? (int)$_GET['hal'] : 1;   // `page` dipakai router utama
 $offset  = ($page - 1) * $limit;
 
-$where_sql = "";
-$params = [];
+$where_sql = " WHERE ThBlRek LIKE :thn";            // tahun periode terpilih
+$params = [':thn' => pr_periode() . '%'];
 
 if (!empty($keyword)) {
     // Jika input berupa angka 12 digit (IdPel persis), gunakan pencarian langsung (Sangat Cepat)
     if (ctype_digit($keyword) && strlen($keyword) >= 11) {
-        $where_sql = " WHERE IdPel = :kw_exact";
+        $where_sql .= " AND IdPel = :kw_exact";
         $params[':kw_exact'] = $keyword;
     } else {
         // Gunakan Wildcard Kanan (keyword%) agar Index pada IdPel/UnitUp tetap berfungsi
-        $where_sql = " WHERE (IdPel LIKE :kw OR ThBlRek LIKE :kw OR UnitUp LIKE :kw OR UnitAp LIKE :kw)";
+        $where_sql .= " AND (IdPel LIKE :kw OR ThBlRek LIKE :kw OR UnitUp LIKE :kw OR UnitAp LIKE :kw)";
         $params[':kw'] = $keyword . '%'; 
     }
 }
@@ -96,11 +96,11 @@ try {
 // ---------------------------------------------------------
 // Ringkasan untuk kartu KPI
 $periode         = pr_periode();
-$total_baris     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t");
-$total_pelanggan = (int) pr_scalar($conn, "SELECT COUNT(DISTINCT IdPel) FROM pelunasan_ap2t");
-$total_nominal   = (float) pr_scalar($conn, "SELECT SUM(COALESCE(RpTag,0)+COALESCE(RpBK,0)) FROM pelunasan_ap2t");
-$belum_bayar     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t WHERE TglBayar IS NULL");
-$bulan_terakhir  = (string) pr_scalar($conn, "SELECT MAX(ThBlRek) FROM pelunasan_ap2t", [], '-');
+$total_baris     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t WHERE ThBlRek LIKE ?", [$periode . '%']);
+$total_pelanggan = (int) pr_scalar($conn, "SELECT COUNT(DISTINCT IdPel) FROM pelunasan_ap2t WHERE ThBlRek LIKE ?", [$periode . '%']);
+$total_nominal   = (float) pr_scalar($conn, "SELECT SUM(COALESCE(RpTag,0)+COALESCE(RpBK,0)) FROM pelunasan_ap2t WHERE ThBlRek LIKE ?", [$periode . '%']);
+$belum_bayar     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM pelunasan_ap2t WHERE TglBayar IS NULL AND ThBlRek LIKE ?", [$periode . '%']);
+$bulan_terakhir  = (string) pr_scalar($conn, "SELECT MAX(ThBlRek) FROM pelunasan_ap2t WHERE ThBlRek LIKE ?", [$periode . '%'], '-');
 
 include __DIR__ . '/../../templates/perencanaan/data_riwayat.php';
 ?>
