@@ -50,7 +50,6 @@
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL MODEM TERDAFTAR</span>
                     <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_modem; ?> Modem</h2>
-                    <span class="text-muted small">Tabel referensi: <code class="text-danger">master_modem</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
                     <i class="bi bi-hdd-network fs-4"></i>
@@ -79,7 +78,6 @@
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-primary fs-6">Daftar Master Modem Gateway</span>
-            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_modem</span>
         </div>
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
@@ -155,7 +153,7 @@
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">Belum ada rekaman data di tabel master_modem.</td>
+                            <td colspan="9" class="text-center text-muted py-4">Belum ada rekaman data.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -193,7 +191,7 @@
                     <input type="text" name="ImeiModem" class="form-control form-control-sm font-monospace" placeholder="Contoh: 867749010776270" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
+                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID</label>
                     <select name="SimId" class="form-select form-select-sm font-monospace">
                         <option value="">-- Tanpa SIM Card (NULL) --</option>
                         <?php if (!empty($list_sim)): ?>
@@ -206,14 +204,12 @@
                     </select>
                 </div>
 
-                <!-- KODE UPI: LANGSUNG 56 UID BANTEN (READONLY) -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
                     <input type="hidden" name="KodeUpi" value="56">
                     <input type="text" class="form-control form-control-sm bg-light fw-bold text-dark" value="56 - UID BANTEN" readonly>
                 </div>
 
-                <!-- KODE AP (UP3) -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode AP (UP3) *</label>
                     <select name="KodeAp" id="add_select_ap" class="form-select form-select-sm" required>
@@ -226,7 +222,6 @@
                     </select>
                 </div>
 
-                <!-- KODE UP (ULP) -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode UP (ULP)</label>
                     <select name="KodeUp" id="add_select_up" class="form-select form-select-sm" disabled>
@@ -247,7 +242,6 @@
                     <input type="text" name="PortEngine" class="form-control form-control-sm font-monospace" placeholder="COM13">
                 </div>
 
-                <!-- STATUS OPERASIONAL: DIKUNCI HANYA AKTIF -->
                 <div class="col-md-12">
                     <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
                     <input type="text" name="StatusData" class="form-control form-control-sm bg-light fw-bold text-success" value="AKTIF" readonly>
@@ -276,7 +270,7 @@
                     <input type="text" name="ImeiModem" id="edit_modem_imei" class="form-control form-control-sm font-monospace bg-light" readonly>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID (Tabel: master_nomor)</label>
+                    <label class="form-label small fw-semibold text-secondary">Pilih SIM ID</label>
                     <select name="SimId" id="edit_modem_sim" class="form-select form-select-sm font-monospace">
                         <option value="">-- Tanpa SIM Card (NULL) --</option>
                         <?php if (!empty($list_sim)): ?>
@@ -289,7 +283,6 @@
                     </select>
                 </div>
 
-                <!-- KODE UPI EDIT: FIXED 56 UID BANTEN -->
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-secondary">Kode UPI (UID) *</label>
                     <input type="hidden" name="KodeUpi" value="56">
@@ -341,10 +334,8 @@
     </div>
 </div>
 
-<!-- SCRIPT JAVASCRIPT MURNI (BEBAS DARI ERROR PARSER VS CODE) -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Membaca master data ULP dari elemen data-json HTML
     const ulpContainer = document.getElementById('ulpMasterData');
     let masterDataULP = [];
     if (ulpContainer) {
@@ -355,7 +346,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 1. Pencarian Tabel
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
@@ -380,7 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Render Opsi ULP berdasarkan UP3 yang dipilih
     function renderUlpOptions(selectElement, selectedApValue, targetUlpValue) {
         selectElement.innerHTML = '<option value="">-- Pilih ULP --</option>';
         if (!selectedApValue) {
@@ -404,7 +393,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectElement.disabled = false;
     }
 
-    // 2. Cascading Unit pada Form Tambah
     const addAp = document.getElementById('add_select_ap');
     const addUp = document.getElementById('add_select_up');
 
@@ -414,7 +402,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 3. Cascading Unit pada Form Edit
     const editAp = document.getElementById('edit_modem_ap');
     const editUp = document.getElementById('edit_modem_up');
 
@@ -424,7 +411,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Populator Modal Edit
     const modalEditEl = document.getElementById('modalEditModem');
     let modalEdit = null;
     if (modalEditEl && window.bootstrap) {

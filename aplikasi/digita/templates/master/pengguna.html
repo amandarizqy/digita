@@ -53,7 +53,6 @@
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PENGGUNA TERDAFTAR</span>
                     <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_akun; ?> Akun</h2>
-                    <span class="text-muted small">Tabel referensi: <code class="text-danger">master_pengguna</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
                     <i class="bi bi-people fs-4"></i>
@@ -82,7 +81,6 @@
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-primary fs-6">Daftar Data Master Pengguna</span>
-            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: master_pengguna</span>
         </div>
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
@@ -359,7 +357,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Membaca master data ULP dari elemen data-json HTML
     const ulpContainer = document.getElementById('ulpMasterData');
     let masterDataULP = [];
     if (ulpContainer) {
@@ -370,7 +367,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 2. Fungsi Render Opsi ULP Berdasarkan UP3 yang dipilih
     function renderUlpOptions(selectElement, selectedApValue, targetUlpValue) {
         selectElement.innerHTML = '<option value="">-- Pilih ULP --</option>';
         if (!selectedApValue) {
@@ -394,7 +390,6 @@ document.addEventListener('DOMContentLoaded', function() {
         selectElement.disabled = false;
     }
 
-    // 3. Event Listener Cascading untuk Modal Tambah
     const addAp = document.getElementById('add_user_ap');
     const addUp = document.getElementById('add_user_up');
     if (addAp && addUp) {
@@ -403,7 +398,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 4. Event Listener Cascading untuk Modal Edit
     const editAp = document.getElementById('edit_user_ap');
     const editUp = document.getElementById('edit_user_up');
     if (editAp && editUp) {
@@ -412,7 +406,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 5. Fitur Pencarian Tabel
     const inputCari = document.getElementById('cariPengguna');
     const tabel = document.getElementById('tabelPengguna');
     if (inputCari && tabel) {
@@ -426,7 +419,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 6. Populator Modal Edit
     const modalEditEl = document.getElementById('modalEditPengguna');
     let modalEdit = null;
     if (modalEditEl && window.bootstrap) {
