@@ -10,14 +10,23 @@ if (!isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
-// Tangkap sub entitas filter (default: 'semua')
-$sub       = $_GET['sub'] ?? 'semua';
-$action    = $_GET['action'] ?? 'index';
-$user_role = $_SESSION['Role'] ?? $_SESSION['KodeHak'] ?? 'SF.UP';
+// 2. Proteksi Hak Akses (AM.UI Ditolak)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'SF.UP';
 
-// ---------------------------------------------------------
-// 2. TAMBAH PENGGUNA (POST - store)
-// ---------------------------------------------------------
+if ($user_role === 'AM.UI') {
+    $_SESSION['flash_alert'] = [
+        'title' => 'Akses Ditolak!',
+        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
+        'icon'  => 'error'
+    ];
+    header("Location: /modules/master/pesan_Controller.php");
+    exit;
+}
+
+$sub    = $_GET['sub'] ?? 'semua';
+$action = $_GET['action'] ?? 'index';
+
+// 3. Tambah Pengguna (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $nama_akun   = trim($_POST['NamaAkun'] ?? '');
     $email       = trim($_POST['AlamatEmail'] ?? '');
@@ -25,18 +34,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $kontak      = trim($_POST['NomorKontak'] ?? '');
     $kata_kunci  = trim($_POST['KataKunci'] ?? '');
     $kode_hak    = $_POST['KodeHak'] ?? 'SF.AP';
-    $unit_upi    = '56'; // Default UID Banten
+    $unit_upi    = '56';
     $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : null;
     $unit_up     = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : null;
     $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
-    // Mencegah pembuatan role SA.KP
     if ($kode_hak === 'SA.KP') {
         $kode_hak = 'SF.UP';
     }
 
     if (!empty($nama_akun) && !empty($kata_kunci)) {
-        // Kata kunci disimpan langsung tanpa md5
         $stmt = $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
         $stmt->execute([$nama_akun, $email, $nama_user, $kontak, $kata_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data]);
     }
@@ -44,9 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// ---------------------------------------------------------
-// 3. EDIT PENGGUNA (POST - update)
-// ---------------------------------------------------------
+// 4. Edit Pengguna (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     $nama_akun   = trim($_POST['NamaAkun'] ?? '');
     $email       = trim($_POST['AlamatEmail'] ?? '');
@@ -64,11 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 
     if (!empty($kata_kunci)) {
-        // Jika kata kunci diisi, diubah tanpa md5
         $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KataKunci = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
         $stmt->execute([$email, $nama_user, $kontak, $kata_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
     } else {
-        // Jika kata kunci tidak diubah
         $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
         $stmt->execute([$email, $nama_user, $kontak, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
     }
@@ -77,9 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// ---------------------------------------------------------
-// 4. TOGGLE STATUS (GET - toggle_status)
-// ---------------------------------------------------------
+// 5. Toggle Status (GET - toggle_status)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -97,9 +98,7 @@ if ($action === 'toggle_status') {
     exit;
 }
 
-// ---------------------------------------------------------
-// 5. QUERY DATA & FILTER SUB ENTITAS (TANPA SA.KP)
-// ---------------------------------------------------------
+// 6. Query Data & Metrik KPI
 $sql = "SELECT p.*, i.SingkatanNama AS NamaUpi, a.SingkatanNama AS NamaAp, u.SingkatanNama AS NamaUp 
         FROM master_pengguna p 
         LEFT JOIN master_upi i ON p.UnitUpi = i.UnitUpi 
@@ -120,7 +119,6 @@ $sql .= " ORDER BY p.NamaAkun ASC";
 $stmt = $conn->query($sql);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Hitung metrik KPI
 $total_akun = count($users);
 $total_aktif = 0;
 foreach ($users as $pg) {
@@ -128,11 +126,8 @@ foreach ($users as $pg) {
 }
 $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
 
-$master_tab_aktif = 'pengguna';
 $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF' ORDER BY UnitUpi ASC")->fetchAll(PDO::FETCH_ASSOC);
 $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
-
-// MENAMBAHKAN UnitAp PADA QUERY ULP AGAR BISA DIFILTER JAVASCRIPT
 $list_up  = $conn->query("SELECT UnitUp, SingkatanNama, UnitAp FROM master_up WHERE StatusData = 'AKTIF' ORDER BY UnitUp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $page_title = "Master Pengguna - Digita S41";

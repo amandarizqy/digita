@@ -1,15 +1,31 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../../config/database.php';
 
+// 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: ../auth/login.php");
     exit;
 }
 
+// 2. Proteksi Hak Akses (SF.UI Ditolak)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+
+if ($user_role === 'SF.UI') {
+    $_SESSION['flash_alert'] = [
+        'title' => 'Akses Ditolak!',
+        'text'  => 'Peran SF.UI tidak memiliki hak akses untuk membuka halaman Perintah Baku.',
+        'icon'  => 'error'
+    ];
+    header("Location: /modules/master/provider_Controller.php");
+    exit;
+}
+
 $action = $_GET['action'] ?? 'index';
 
-// 1. TAMBAH PERINTAH BAKU (POST - store)
+// 3. Tambah Perintah Baku (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $isi_pesan       = trim($_POST['IsiPesan']);
     $keterangan      = trim($_POST['Keterangan']);
@@ -27,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// 2. EDIT PERINTAH BAKU (POST - update)
+// 4. Edit Perintah Baku (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     $id              = trim($_POST['Id']);
     $isi_pesan       = trim($_POST['IsiPesan']);
@@ -46,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// 3. HAPUS PERINTAH BAKU (GET - delete)
+// 5. Hapus Perintah Baku (GET - delete)
 if ($action === 'delete') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -62,7 +78,7 @@ if ($action === 'delete') {
     exit;
 }
 
-// 4. TOGGLE STATUS (GET - toggle_status)
+// 6. Toggle Status (GET - toggle_status)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -80,7 +96,7 @@ if ($action === 'toggle_status') {
     exit;
 }
 
-// 5. QUERY DATA & HITUNG METRIK
+// 7. Query Data & Metrik
 $stmt = $conn->query("SELECT * FROM baku_outbox ORDER BY Id ASC");
 $perintah = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
