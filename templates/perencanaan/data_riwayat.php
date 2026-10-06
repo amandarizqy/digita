@@ -10,6 +10,7 @@ echo pr_header([
     'title'    => 'Data Riwayat Pelunasan',
     'subtitle' => 'Riwayat tagihan dan tanggal bayar pelanggan (pelunasan AP2T) yang menjadi dasar hitung keterlambatan dan dampak.',
     'action'   => 'data_riwayat',
+    'periode'  => true,
     'buttons'  => [['label' => 'Input Riwayat Baru', 'icon' => 'bi-plus-lg', 'href' => pr_url('upload_riwayat')]],
 ]);
 

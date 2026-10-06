@@ -13,7 +13,7 @@ echo pr_header([
     'title'    => 'Skala Prioritas',
     'subtitle' => 'Peringkatkan pelanggan di dalam satu skala (1-9) berdasarkan nominal tagihan, frekuensi telat, dan tunggakan.',
     'action'   => 'proses_prioritas',
-    'badge'    => 'Periode ' . $periode_filter,
+    'periode'  => true,
     'buttons'  => [['label' => 'Lihat Hasil Prioritas', 'icon' => 'bi-list-ol', 'href' => pr_url('hasil_prioritas', ['skala' => $skala_dipilih > 0 ? $skala_dipilih : ''])]],
 ]);
 

@@ -10,6 +10,7 @@ echo pr_header([
     'title'    => 'Hasil Survey SR',
     'subtitle' => 'Posisi SR tiap pelanggan: mandiri, atau saling tergantung dengan pelanggan lain pada lokasi yang sama.',
     'action'   => 'hasil_survey',
+    'periode'  => true,
     'buttons'  => [['label' => 'Input Survey Baru', 'icon' => 'bi-plus-lg', 'href' => pr_url('input_survey')]],
 ]);
 

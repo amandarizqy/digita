@@ -12,7 +12,7 @@ echo pr_header([
     'title'    => 'Hasil Tingkat Kepentingan',
     'subtitle' => 'Seberapa penting tiap pelanggan secara bisnis. Menjadi sumbu Kepentingan pada matriks kemungkinan.',
     'action'   => 'hasil_kepentingan',
-    'badge'    => 'Periode ' . $periode,
+    'periode'  => true,
     'buttons'  => [['label' => 'Input Tingkat Kepentingan', 'icon' => 'bi-plus-lg', 'href' => pr_url('input_kepentingan')]],
 ]);
 

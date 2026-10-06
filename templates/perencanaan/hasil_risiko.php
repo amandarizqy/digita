@@ -15,7 +15,7 @@ echo pr_header([
     'title'    => 'Hasil Klasifikasi Level Risiko',
     'subtitle' => 'Daftar pelanggan beserta kuadran, level kemungkinan, level dampak, dan Skala Prioritas hasil klasifikasi.',
     'action'   => 'hasil_risiko',
-    'badge'    => 'Periode ' . $periode,
+    'periode'  => true,
     'buttons'  => [
         ['label' => 'Cetak', 'icon' => 'bi-printer', 'class' => 'btn btn-outline-secondary btn-sm px-3 rounded-2', 'attrs' => 'type="button" onclick="window.print()"'],
         ['label' => 'Klasifikasi Ulang', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_risiko')],

@@ -2,8 +2,6 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
-// Gunakan __DIR__ agar alamat file config selalu tepat dari mana pun dipanggil
 require_once __DIR__ . '/../../config/database.php';
 
 // 1. Verifikasi Sesi Login
@@ -12,11 +10,22 @@ if (!isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
+// 2. Proteksi Hak Akses (AM.UI Ditolak)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+
+if ($user_role === 'AM.UI') {
+    $_SESSION['flash_alert'] = [
+        'title' => 'Akses Ditolak!',
+        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
+        'icon'  => 'error'
+    ];
+    header("Location: /modules/master/pesan_Controller.php");
+    exit;
+}
+
 $action = $_GET['action'] ?? 'index';
 
-// ---------------------------------------------------------
-// 2. TAMBAH PROVIDER (POST - store)
-// ---------------------------------------------------------
+// 3. Tambah Provider (POST - store)
 if ($action === 'store' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
     $status_data   = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
@@ -29,9 +38,7 @@ if ($action === 'store' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// ---------------------------------------------------------
-// 3. EDIT PROVIDER (POST - update)
-// ---------------------------------------------------------
+// 4. Edit Provider (POST - update)
 if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $kode_provider = trim($_POST['KodeProvider'] ?? '');
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
@@ -45,9 +52,7 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// ---------------------------------------------------------
-// 4. HAPUS PROVIDER (GET - delete)
-// ---------------------------------------------------------
+// 5. Hapus Provider (GET - delete)
 if ($action === 'delete') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -66,9 +71,7 @@ if ($action === 'delete') {
     exit;
 }
 
-// ---------------------------------------------------------
-// 5. TOGGLE STATUS (AKTIF / TIDAK)
-// ---------------------------------------------------------
+// 6. Toggle Status (AKTIF / TIDAK)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -86,23 +89,16 @@ if ($action === 'toggle_status') {
     exit;
 }
 
-// ---------------------------------------------------------
-// 6. AMBIL DATA & RENDER TAMPILAN
-// ---------------------------------------------------------
+// 7. Query Data & Metrik KPI
 $stmt = $conn->query("SELECT * FROM master_provider ORDER BY KodeProvider ASC");
 $providers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Hitung metrik KPI
 $total_operator = count($providers);
 $total_aktif = 0;
 foreach ($providers as $p) {
     if (($p['StatusData'] ?? '') === 'AKTIF') $total_aktif++;
 }
 $persentase_aktif = ($total_operator > 0) ? round(($total_aktif / $total_operator) * 100) : 0;
-
-// Penanda Navigasi Tab Aktif
-$master_tab_aktif = 'pesan';
-$pesan_sub_aktif  = 'provider';
 
 $page_title = "Master Provider - Digita S41";
 

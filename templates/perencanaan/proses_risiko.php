@@ -10,7 +10,7 @@ echo pr_header([
     'title'    => 'Klasifikasi Level Risiko',
     'subtitle' => 'Hitung kuadran, level kemungkinan, level dampak, dan Skala Prioritas 1-9 untuk setiap pelanggan.',
     'action'   => 'proses_risiko',
-    'badge'    => 'Periode ' . $periode_filter,
+    'periode'  => true,
     'buttons'  => [[
         'label' => 'Proses Semua Data', 'icon' => 'bi-lightning-charge-fill',
         'attrs' => 'type="submit" form="formRisiko" name="proses_semua" value="1" onclick="return confirm(\'Kalkulasi ulang SELURUH data Periode ' . pr_e($periode_filter) . ' sekaligus? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.\');"',

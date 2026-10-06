@@ -12,8 +12,8 @@ if (isset($_GET['act']) && $_GET['act'] == 'delete') {
 
     if (!empty($idpel_delete)) {
         try {
-            $stmt_del = $conn->prepare("DELETE FROM kategorisasi_risiko WHERE Idpel = ?");
-            $stmt_del->execute([$idpel_delete]);
+            $stmt_del = $conn->prepare("DELETE FROM kategorisasi_risiko WHERE Idpel = ? AND Periode = ?");
+            $stmt_del->execute([$idpel_delete, pr_periode()]);
 
             if ($stmt_del->rowCount() > 0) {
                 $pesan_sukses = "Data survey untuk IdPel <strong>" . htmlspecialchars($idpel_delete) . "</strong> berhasil dihapus!";
@@ -35,8 +35,8 @@ $limit     = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50,
 $page      = isset($_GET['hal']) && (int)$_GET['hal'] > 0 ? (int)$_GET['hal'] : 1;   // `page` dipakai router utama
 $offset    = ($page - 1) * $limit;
 
-$where_clauses = ["k.PosisiSR IS NOT NULL AND k.PosisiSR <> ''"];   // hanya yang sudah tersurvey
-$params = [];
+$where_clauses = ["k.Periode = :periode_pr", "k.PosisiSR IS NOT NULL AND k.PosisiSR <> ''"];   // periode terpilih, hanya yang sudah tersurvey
+$params = [':periode_pr' => pr_periode()];
 
 // Filter keyword pencarian (Optimasi Index Wildcard Kanan)
 if (!empty($keyword)) {
@@ -109,8 +109,8 @@ try {
 // ---------------------------------------------------------
 // Ringkasan untuk kartu KPI
 $total_dil     = (int) pr_scalar($conn, "SELECT COUNT(*) FROM dil");
-$total_mandiri = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE PosisiSR = '0'");
-$total_tergantung = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE PosisiSR = '1'");
+$total_mandiri = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE Periode = ? AND PosisiSR = '0'", [pr_periode()]);
+$total_tergantung = (int) pr_scalar($conn, "SELECT COUNT(*) FROM kategorisasi_risiko WHERE Periode = ? AND PosisiSR = '1'", [pr_periode()]);
 $total_tersurvey  = $total_mandiri + $total_tergantung;
 
 include __DIR__ . '/../../templates/perencanaan/hasil_survey.php';

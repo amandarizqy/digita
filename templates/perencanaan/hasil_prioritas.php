@@ -10,7 +10,7 @@ echo pr_header([
     'title'    => 'Hasil Skala Prioritas',
     'subtitle' => 'Peringkat pelanggan di dalam tiap Skala Prioritas. Peringkat 1 adalah yang paling perlu ditangani.',
     'action'   => 'hasil_prioritas',
-    'badge'    => 'Periode ' . $periode_filter,
+    'periode'  => true,
     'buttons'  => [
         ['label' => 'Cetak', 'icon' => 'bi-printer', 'class' => 'btn btn-outline-secondary btn-sm px-3 rounded-2', 'attrs' => 'type="button" onclick="window.print()"'],
         ['label' => 'Proses Pemeringkatan', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_prioritas', ['skala' => $skala_filter ?: ''])],

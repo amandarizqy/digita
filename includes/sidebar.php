@@ -7,6 +7,9 @@ $menus = [];
 // Ambil page aktif dari URL saat ini (default: dashboard)
 $current_page = $_GET['page'] ?? 'dashboard';
 
+// Ambil jalur URI saat ini untuk deteksi halaman di luar query parameter ?page=
+$request_uri = $_SERVER['REQUEST_URI'] ?? '';
+
 if (!empty($kode_hak)) {
     try {
         $query_menu = "SELECT m.NamaMenu, m.UrlRoute, m.Icon 
@@ -29,7 +32,7 @@ if (!empty($kode_hak)) {
         <span class="fs-4 fw-bold">DIGITA</span>
     </a>
     <hr class="text-secondary">
-    <div class="small text-uppercase text-muted fw-bold ps-2 mb-2" style="font-size: 0.75rem;">Menu Utama</div>
+    <div class="small text-uppercase text-muted fw-bold ps-2 mb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">Menu Utama</div>
     
     <ul class="nav nav-pills flex-column mb-auto">
         <?php foreach ($menus as $menu): ?>
@@ -43,12 +46,27 @@ if (!empty($kode_hak)) {
                     $module_name = 'dashboard';
                 }
 
-                // 2. Cocokkan dengan page saat ini untuk menyalakan warna biru
-                $is_active = ($current_page === $module_name) ? 'active bg-primary' : '';
+                // 2. LOGIKA PENTING: Tentukan apakah menu ini sedang aktif
+                $is_active = false;
+                if ($current_page === $module_name) {
+                    $is_active = true;
+                } elseif ($module_name === 'master' && strpos($request_uri, '/modules/master/') !== false) {
+                    // Menyala biru jika URL sedang mengakses controller di modul master
+                    $is_active = true;
+                }
+
+                $active_class = $is_active ? 'active bg-primary' : '';
+
+                // 3. LOGIKA PENTING: Tentukan tautan URL
+                // Jika menu adalah Master Data, langsung arahkan ke unit_Controller.php
+                if ($module_name === 'master') {
+                    $target_url = "/modules/master/unit_Controller.php";
+                } else {
+                    $target_url = "/index.php?page=" . htmlspecialchars($module_name);
+                }
             ?>
             <li class="nav-item mb-1">
-                <!-- 3. Arahkan link menggunakan format Front Controller yang baru -->
-                <a href="/index.php?page=<?= htmlspecialchars($module_name) ?>" class="nav-link text-white <?= $is_active ?>">
+                <a href="<?= $target_url; ?>" class="nav-link text-white <?= $active_class ?>">
                     <i class="bi <?= htmlspecialchars($menu['Icon']) ?> me-2"></i> <?= htmlspecialchars($menu['NamaMenu']) ?>
                 </a>
             </li>

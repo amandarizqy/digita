@@ -22,7 +22,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="index.php">
+        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="provider_Controller.php">
             <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
         </a>
     </li>
@@ -31,7 +31,7 @@
 <!-- LEVEL 3: SUB ENTITAS TERHUBUNG -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    <a href="index.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
+    <a href="provider_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
         Provider SIM
     </a>
     <a href="modem_Controller.php" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 text-secondary" style="background-color: #fff;">
@@ -50,7 +50,6 @@
                 <div>
                     <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL PERINTAH TERDAFTAR</span>
                     <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_perintah; ?> Format</h2>
-                    <span class="text-muted small">Tabel referensi: <code class="text-danger">baku_outbox</code></span>
                 </div>
                 <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
                     <i class="bi bi-terminal fs-4"></i>
@@ -58,7 +57,6 @@
             </div>
         </div>
     </div>
-
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
             <div class="d-flex justify-content-between align-items-center">
@@ -80,7 +78,6 @@
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-primary fs-6">Daftar Perintah Baku Transmisi Relai</span>
-            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: baku_outbox</span>
         </div>
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
@@ -100,7 +97,7 @@
                         <th style="width: 130px;">DB TUJUAN</th>
                         <th style="width: 130px;">STATUS</th>
                         <th style="width: 170px;">WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 150px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -131,7 +128,7 @@
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
                                     <a href="pesan_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($row['Id'])); ?>" 
-                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status">
+                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-perintah"
@@ -144,19 +141,13 @@
                                             title="Edit Perintah">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
-                                    <a href="pesan_Controller.php?action=delete&id=<?= htmlspecialchars(urlencode($row['Id'])); ?>" 
-                                       class="btn btn-outline-danger py-1 px-2" 
-                                       onclick="return confirm('Apakah Anda yakin ingin menghapus perintah ini?');" 
-                                       title="Hapus Perintah">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
                                 </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">Belum ada data perintah di tabel baku_outbox.</td>
+                            <td colspan="8" class="text-center text-muted py-4">Belum ada data perintah di tabel.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -223,7 +214,7 @@
     </div>
 </div>
 
-<!-- MODAL EDIT PERINTAH BAKU -->
+<!-- MODAL EDIT PERINTAH BAKU (ID READONLY) -->
 <div class="modal fade" id="modalEditPerintah" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="pesan_Controller.php" method="POST" class="modal-content border-0 shadow">
@@ -235,7 +226,7 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">ID Perintah</label>
+                    <label class="form-label small fw-semibold text-secondary">ID Perintah (Locked)</label>
                     <input type="text" id="edit_perintah_id_display" class="form-control form-control-sm font-monospace bg-light" readonly>
                 </div>
                 <div class="mb-3">

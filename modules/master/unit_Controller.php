@@ -1,113 +1,96 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/../../config/database.php';
 
 // 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
+    header("Location: /modules/auth/login.php");
+    exit;
+}
+
+// 2. Proteksi Hak Akses (AM.UI Ditolak)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+
+if ($user_role === 'AM.UI') {
+    $_SESSION['flash_alert'] = [
+        'title' => 'Akses Ditolak!',
+        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
+        'icon'  => 'error'
+    ];
+    header("Location: /modules/master/pesan_Controller.php");
     exit;
 }
 
 $sub    = $_GET['sub'] ?? 'ui';
 $action = $_GET['action'] ?? 'index';
 
-// ---------------------------------------------------------
-// 2. TAMBAH UNIT (POST - store)
-// ---------------------------------------------------------
+// 3. Tambah Unit (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
     if ($sub === 'ui') {
-        $unit_upi       = trim($_POST['UnitUpi']);
-        $nama_unit      = trim($_POST['NamaUnit']);
-        $singkatan_nama = trim($_POST['SingkatanNama']);
+        $unit_upi       = trim($_POST['UnitUpi'] ?? '');
+        $nama_unit      = trim($_POST['NamaUnit'] ?? '');
+        $singkatan_nama = trim($_POST['SingkatanNama'] ?? '');
 
         if (!empty($unit_upi) && !empty($nama_unit)) {
             $stmt = $conn->prepare("INSERT INTO master_upi (UnitUpi, NamaUnit, SingkatanNama, StatusData, WaktuData) VALUES (?, ?, ?, ?, NOW())");
             $stmt->execute([$unit_upi, $nama_unit, $singkatan_nama, $status_data]);
         }
     } elseif ($sub === 'up3') {
-        $unit_ap        = trim($_POST['UnitAp']);
-        $unit_upi       = trim($_POST['UnitUpi']);
-        $nama_unit      = trim($_POST['NamaUnit']);
-        $singkatan_nama = trim($_POST['SingkatanNama']);
+        $unit_ap        = trim($_POST['UnitAp'] ?? '');
+        $unit_upi       = trim($_POST['UnitUpi'] ?? '');
+        $nama_unit      = trim($_POST['NamaUnit'] ?? '');
+        $singkatan_nama = trim($_POST['SingkatanNama'] ?? '');
 
         if (!empty($unit_ap) && !empty($nama_unit)) {
             $stmt = $conn->prepare("INSERT INTO master_ap (UnitAp, UnitUpi, NamaUnit, SingkatanNama, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, NOW())");
             $stmt->execute([$unit_ap, $unit_upi, $nama_unit, $singkatan_nama, $status_data]);
         }
     } elseif ($sub === 'ulp') {
-        $unit_up        = trim($_POST['UnitUp']);
-        $unit_ap        = trim($_POST['UnitAp']);
-        $unit_upi       = trim($_POST['UnitUpi']);
-        $nama_unit      = trim($_POST['NamaUnit']);
-        $singkatan_nama = trim($_POST['SingkatanNama']);
+        $unit_up        = trim($_POST['UnitUp'] ?? '');
+        $unit_ap        = trim($_POST['UnitAp'] ?? '');
+        $unit_upi       = trim($_POST['UnitUpi'] ?? '');
+        $nama_unit      = trim($_POST['NamaUnit'] ?? '');
+        $singkatan_nama = trim($_POST['SingkatanNama'] ?? '');
 
         if (!empty($unit_up) && !empty($nama_unit)) {
             $stmt = $conn->prepare("INSERT INTO master_up (UnitUp, UnitAp, UnitUpi, NamaUnit, SingkatanNama, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, ?, NOW())");
             $stmt->execute([$unit_up, $unit_ap, $unit_upi, $nama_unit, $singkatan_nama, $status_data]);
         }
     }
-    header("Location: unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
     exit;
 }
 
-// ---------------------------------------------------------
-// 3. EDIT UNIT (POST - update)
-// ---------------------------------------------------------
+// 4. Edit Unit (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
-    $id_primary     = trim($_POST['IdPrimary']);
-    $nama_unit      = trim($_POST['NamaUnit']);
-    $singkatan_nama = trim($_POST['SingkatanNama']);
+    $id_primary     = trim($_POST['IdPrimary'] ?? '');
+    $nama_unit      = trim($_POST['NamaUnit'] ?? '');
+    $singkatan_nama = trim($_POST['SingkatanNama'] ?? '');
     $status_data    = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
     if ($sub === 'ui') {
         $stmt = $conn->prepare("UPDATE master_upi SET NamaUnit = ?, SingkatanNama = ?, StatusData = ?, WaktuData = NOW() WHERE UnitUpi = ?");
         $stmt->execute([$nama_unit, $singkatan_nama, $status_data, $id_primary]);
     } elseif ($sub === 'up3') {
-        $unit_upi = trim($_POST['UnitUpi']);
+        $unit_upi = trim($_POST['UnitUpi'] ?? '');
         $stmt = $conn->prepare("UPDATE master_ap SET UnitUpi = ?, NamaUnit = ?, SingkatanNama = ?, StatusData = ?, WaktuData = NOW() WHERE UnitAp = ?");
         $stmt->execute([$unit_upi, $nama_unit, $singkatan_nama, $status_data, $id_primary]);
     } elseif ($sub === 'ulp') {
-        $unit_ap  = trim($_POST['UnitAp']);
-        $unit_upi = trim($_POST['UnitUpi']);
+        $unit_ap  = trim($_POST['UnitAp'] ?? '');
+        $unit_upi = trim($_POST['UnitUpi'] ?? '');
         $stmt = $conn->prepare("UPDATE master_up SET UnitAp = ?, UnitUpi = ?, NamaUnit = ?, SingkatanNama = ?, StatusData = ?, WaktuData = NOW() WHERE UnitUp = ?");
         $stmt->execute([$unit_ap, $unit_upi, $nama_unit, $singkatan_nama, $status_data, $id_primary]);
     }
 
-    header("Location: unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
     exit;
 }
 
-// ---------------------------------------------------------
-// 4. HAPUS UNIT (GET - delete)
-// ---------------------------------------------------------
-if ($action === 'delete') {
-    $id = $_GET['id'] ?? null;
-    if ($id) {
-        try {
-            if ($sub === 'ui') {
-                $stmt = $conn->prepare("DELETE FROM master_upi WHERE UnitUpi = ?");
-                $stmt->execute([$id]);
-            } elseif ($sub === 'up3') {
-                $stmt = $conn->prepare("DELETE FROM master_ap WHERE UnitAp = ?");
-                $stmt->execute([$id]);
-            } elseif ($sub === 'ulp') {
-                $stmt = $conn->prepare("DELETE FROM master_up WHERE UnitUp = ?");
-                $stmt->execute([$id]);
-            }
-        } catch (PDOException $e) {
-            echo "<script>alert('Gagal menghapus! Data unit ini masih terkait dengan data pengguna, nomor, atau sub-unit lain.'); window.location.href='unit_Controller.php?sub=" . urlencode($sub) . "';</script>";
-            exit;
-        }
-    }
-    header("Location: unit_Controller.php?sub=" . urlencode($sub));
-    exit;
-}
-
-// ---------------------------------------------------------
-// 5. TOGGLE UBAH STATUS (GET - toggle_status)
-// ---------------------------------------------------------
+// 5. Toggle Status (GET - toggle_status)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -137,28 +120,23 @@ if ($action === 'toggle_status') {
             }
         }
     }
-    header("Location: unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
     exit;
 }
 
-// ---------------------------------------------------------
-// 6. AMBIL DATA & DROPDOWN REFERENSI
-// ---------------------------------------------------------
+// 6. Query Data & Metrik
 if ($sub === 'up3') {
     $stmt = $conn->query("SELECT a.*, i.SingkatanNama AS NamaIndukUpi FROM master_ap a LEFT JOIN master_upi i ON a.UnitUpi = i.UnitUpi ORDER BY a.UnitAp ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_ap";
     $label_unit = "Unit Pelaksana (UP3)";
 } elseif ($sub === 'ulp') {
     $stmt = $conn->query("SELECT u.*, a.SingkatanNama AS NamaIndukAp, i.SingkatanNama AS NamaIndukUpi FROM master_up u LEFT JOIN master_ap a ON u.UnitAp = a.UnitAp LEFT JOIN master_upi i ON u.UnitUpi = i.UnitUpi ORDER BY u.UnitUp ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_up";
     $label_unit = "Unit Layanan (ULP)";
 } else {
     $sub = 'ui';
     $stmt = $conn->query("SELECT * FROM master_upi ORDER BY UnitUpi ASC");
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $table_ref = "master_upi";
     $label_unit = "Unit Induk (UI)";
 }
 
@@ -169,7 +147,6 @@ foreach ($units as $u) {
 }
 $persentase_aktif = ($total_unit > 0) ? round(($total_aktif / $total_unit) * 100) : 0;
 
-// Ambil list untuk dropdown pemilihan induk unit
 $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF' ORDER BY UnitUpi ASC")->fetchAll(PDO::FETCH_ASSOC);
 $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
