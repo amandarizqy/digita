@@ -24,33 +24,7 @@
     <div class="content-body"><?= $content ?? '' ?></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<<<<<<< HEAD
   <!-- SweetAlert2 CSS & JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-=======
-
-  <!-- TAMBAHAN: SweetAlert2 JS CDN & Script Notifikasi Flash Alert -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <?php if (isset($_SESSION['flash_alert'])): ?>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        Swal.fire({
-            title: '<?= addslashes($_SESSION['flash_alert']['title']); ?>',
-            text: '<?= addslashes($_SESSION['flash_alert']['text']); ?>',
-            icon: '<?= $_SESSION['flash_alert']['icon']; ?>',
-            confirmButtonColor: '#0d6efd',
-            confirmButtonText: 'Mengerti',
-            customClass: {
-                popup: 'rounded-4 shadow'
-            }
-        });
-    });
-  </script>
-  <?php 
-      // Hapus alert setelah dipanggil agar tidak muncul lagi saat di-refresh
-      unset($_SESSION['flash_alert']); 
-  endif; 
-  ?>
->>>>>>> main
 </body>
 </html>
