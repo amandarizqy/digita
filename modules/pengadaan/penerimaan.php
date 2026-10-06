@@ -6,7 +6,36 @@ require_once '../../config/database.php';
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['TL.AP', 'TL.UP', 'SA.KP']; // Super admin diizinkan untuk bypass/testing
 if (!in_array($kode_hak, $allowed_roles)) {
-    die("<script>alert('Akses Ditolak: Modul Penerimaan hanya untuk Team Leader (TL).'); window.location.href='../../index.php';</script>");
+    echo "
+    <!DOCTYPE html>
+    <html lang='id'>
+    <head>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>Akses Ditolak</title>
+        <!-- SweetAlert2 CSS & JS CDN -->
+        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+    </head>
+    <body class='bg-light'>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Akses Ditolak',
+                text: 'Modul Penerimaan hanya untuk Team Leader (TL).',
+                confirmButtonText: 'Kembali',
+                confirmButtonColor: '#4e73df',
+                allowOutsideClick: false,
+                allowEscapeKey: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '../../index.php';
+                }
+            });
+        </script>
+    </body>
+    </html>
+    ";
+    exit;
 }
 
 $active_menu = 'penerimaan';

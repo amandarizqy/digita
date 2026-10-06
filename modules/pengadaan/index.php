@@ -2,27 +2,67 @@
 require_once __DIR__ . '/../../config/database.php';
 
 $kode_hak = $_SESSION['KodeHak'] ?? '';
-$allowed_roles = ['AM.UI', 'SA.KP', 'TL.AP', 'TL.UP']; 
+$allowed_roles = ['MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SA.KP']; 
 if (!in_array($kode_hak, $allowed_roles)) {
-    echo "<script>alert('Akses Ditolak.'); window.history.back();</script>";
+    echo "
+    <!DOCTYPE html>
+    <html lang='id'>
+    <head>
+        <meta charset='UTF-8'>
+        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+    </head>
+    <body class='bg-light'>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Akses Ditolak',
+                text: 'Anda tidak memiliki hak otoritas untuk mengakses modul ini.',
+                confirmButtonText: 'Kembali',
+                confirmButtonColor: '#4e73df',
+                allowOutsideClick: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.history.back();
+                }
+            });
+        </script>
+    </body>
+    </html>
+    ";
     exit;
 }
 
-// Tangkap parameter dari URL (Support format dari Sidebar)
+// OTOMATIS REDIRECT BERDASARKAN ROLE JIKA USER KLIK MENU PENGADAAN
+if (!isset($_GET['menu'])) {
+    if (in_array($kode_hak, ['TL.AP', 'TL.UP'])) {
+        header("Location: index.php?page=pengadaan&menu=penerimaan&view=daftar");
+        exit;
+    } elseif (in_array($kode_hak, ['AM.UI', 'SA.KP', 'MB.UI'])) {
+        header("Location: index.php?page=pengadaan&menu=pembelian&view=daftar");
+        exit;
+    } else {
+        header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
+        exit;
+    }
+}
+
+// Tangkap parameter dari URL
 $menu = $_GET['menu'] ?? 'pembelian'; 
 $sub  = $_GET['sub'] ?? $menu;
 $view = $_GET['view'] ?? 'daftar'; 
 
-// Nyalakan mode exception untuk debugging yang transparan
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $page_title = "Pengadaan & Stok - Digita S41";
 
-// Jika menu Kartu atau Monitoring
+// Jika menu Kartu
 if ($menu === 'kartu') {
     $sub = $_GET['sub'] ?? 'aktivasi';
     require_once __DIR__ . '/kartu.php';
-} elseif ($menu === 'monitoring') {
-    // require_once __DIR__ . '/monitoring.php';
+} 
+// Jika menu Monitoring (Panggil file backend logic saja)
+elseif ($menu === 'monitoring') {
+    $sub = $_GET['sub'] ?? 'aset';
+    require_once __DIR__ . '/monitoring.php';
 }
 
 // Jika masuk ke ekosistem Barang (Pembelian / Pengiriman / Penerimaan)
@@ -30,8 +70,51 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
     
     // --- 1. PEMBELIAN ---
     if ($sub === 'pembelian') {
-        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) die("Akses Ditolak: Khusus Asman UI.");
+        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+            echo "
+            <!DOCTYPE html>
+            <html lang='id'>
+            <head>
+                <meta charset='UTF-8'>
+                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+            </head>
+            <body>
+                <script>
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Akses Ditolak',
+                        text: 'Modul Pembelian hanya untuk Asman UI.',
+                        confirmButtonColor: '#4e73df',
+                        allowOutsideClick: false
+                    }).then(() => {
+                        window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
+                    });
+                </script>
+            </body>
+            </html>
+            ";
+            exit;
+        }
         
+        if ($view === 'daftar') {
+            $keyword = '%' . trim($_GET['q'] ?? '') . '%';
+            $query = "SELECT 
+                        f.NoFormulir, f.TglBeli, f.StatusData, f.WaktuData,
+                        (SELECT COALESCE(SUM(HargaBeli), 0) FROM formulir_pembelian_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalBiaya, 
+                        (SELECT COUNT(NoRef) FROM formulir_pembelian_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                    FROM formulir_pembelian f 
+                    WHERE f.NoFormulir LIKE :keyword
+                    ORDER BY f.WaktuData DESC";
+            try {
+                $stmt = $conn->prepare($query); 
+                $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+                $stmt->execute();
+                $list_pembelian = $stmt->fetchAll(PDO::FETCH_ASSOC); 
+            } catch (PDOException $e) {
+                die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
+            }
+        }
+
         if ($view === 'daftar') {
             $query = "SELECT 
                         f.NoFormulir, f.TglBeli, f.StatusData, f.WaktuData,
@@ -40,7 +123,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                       FROM formulir_pembelian f ORDER BY f.WaktuData DESC";
             try {
                 $stmt = $conn->prepare($query); $stmt->execute();
-                // FIX: Gunakan variabel langsung, bukan array $data
                 $list_pembelian = $stmt->fetchAll(PDO::FETCH_ASSOC); 
             } catch (PDOException $e) {
                 die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
@@ -63,7 +145,49 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
 
     // --- 2. PENGIRIMAN ---
     elseif ($sub === 'pengiriman') {
-        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) die("Akses Ditolak: Khusus Asman UI.");
+        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+            echo "
+            <!DOCTYPE html>
+            <html lang='id'>
+            <head>
+                <meta charset='UTF-8'>
+                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+            </head>
+            <body>
+                <script>
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Akses Ditolak',
+                        text: 'Modul Pengiriman hanya untuk Asman UI.',
+                        confirmButtonColor: '#4e73df',
+                        allowOutsideClick: false
+                    }).then(() => {
+                        window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
+                    });
+                </script>
+            </body>
+            </html>
+            ";
+            exit;
+        }
+
+        if ($view === 'daftar') {
+            $keyword = '%' . trim($_GET['q'] ?? '') . '%';
+            $query = "SELECT 
+                        f.NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusPengiriman, f.StatusData, f.WaktuData,
+                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                    FROM formulir_pengiriman f 
+                    WHERE f.NoFormulir LIKE :keyword
+                    ORDER BY f.WaktuData DESC";
+            try {
+                $stmt = $conn->prepare($query); 
+                $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+                $stmt->execute();
+                $list_pengiriman = $stmt->fetchAll(PDO::FETCH_ASSOC); 
+            } catch (PDOException $e) {
+                die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
+            }
+        }
 
         if ($view === 'daftar') {
             $query = "SELECT 
@@ -96,7 +220,31 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
 
     // --- 3. PENERIMAAN ---
     elseif ($sub === 'penerimaan') {
-        if (!in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) die("Akses Ditolak: Khusus TL Unit.");
+        if (!in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) {
+            echo "
+            <!DOCTYPE html>
+            <html lang='id'>
+            <head>
+                <meta charset='UTF-8'>
+                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+            </head>
+            <body>
+                <script>
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Akses Ditolak',
+                        text: 'Akses Ditolak: Khusus Team Leader (TL) Unit.',
+                        confirmButtonColor: '#4e73df',
+                        allowOutsideClick: false
+                    }).then(() => {
+                        window.history.back();
+                    });
+                </script>
+            </body>
+            </html>
+            ";
+            exit;
+        }
 
         if ($view === 'daftar') {
             $unit_ap = $_SESSION['UnitAp'] ?? '';
@@ -145,6 +293,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
     }
 }
 
-// Panggil template wrapper
+// Panggil template wrapper utama
 require_once __DIR__ . '/../../templates/pengadaan/index.php'; 
 ?>

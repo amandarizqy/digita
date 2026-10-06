@@ -1,11 +1,34 @@
 <?php
-// Tidak perlu memanggil database lagi karena sudah dipanggil di modul utama pengadaan/index.php
-
 // Hak Akses Kartu: TL.AP, TL.UP, SA.KP
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['TL.AP', 'TL.UP', 'SA.KP']; 
 if (!in_array($kode_hak, $allowed_roles)) {
-    echo "<script>alert('Akses Ditolak: Modul Kartu hanya untuk Team Leader.'); window.history.back();</script>";
+    // KODE BARU (Profesional & Modern)
+    echo "
+        <!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+        </head>
+        <body class='bg-light'>
+            <script>
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Akses Ditolak',
+                    text: 'Modul ini hanya dapat diakses oleh Team Leader atau Otoritas terkait.',
+                    confirmButtonText: 'Kembali',
+                    confirmButtonColor: '#4e73df',
+                    allowOutsideClick: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.history.back();
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    ";
     exit;
 }
 
@@ -15,6 +38,7 @@ $view = $_GET['view'] ?? 'daftar';
 $unit_ap = $_SESSION['UnitAp'] ?? '';
 $unit_up = $_SESSION['UnitUp'] ?? '';
 
+$keyword = '%' . trim($_GET['q'] ?? '') . '%';
 // ---------------------------------------------------------
 // QUERY BACKEND BERDASARKAN SUB-ENTITAS
 // ---------------------------------------------------------
@@ -28,11 +52,12 @@ if ($sub === 'aktivasi') {
                   FROM master_nomor n
                   LEFT JOIN master_provider p ON n.KodeProvider = p.KodeProvider
                   LEFT JOIN master_provider_produk pp ON n.KodeProduk = pp.KodeProduk
-                  WHERE $filter_query
+                  WHERE $filter_query AND (n.SimId LIKE :keyword OR n.NomorAkun LIKE :keyword)
                   ORDER BY n.WaktuData DESC";
                   
         $stmt = $conn->prepare($query);
         if ($kode_hak !== 'SA.KP') { $stmt->bindParam(':lokasi', $lokasi); }
+        $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
         $stmt->execute();
         $data['list_kartu'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
@@ -50,16 +75,19 @@ if ($sub === 'aktivasi') {
         $lokasi = ($kode_hak === 'TL.UP') ? $unit_up : $unit_ap;
         if ($kode_hak === 'SA.KP') { $filter_query = "1=1"; $lokasi = 1;}
         
-        $query = "SELECT SimId, NomorAkun, JumlahKredit, TglPulsaTerakhir 
+        // Kalkulasi otomatis: Masa Aktif = TglPulsaTerakhir + 30 Hari
+        $query = "SELECT SimId, NomorAkun, JumlahKredit, TglPulsaTerakhir, 
+                         DATE_ADD(TglPulsaTerakhir, INTERVAL 30 DAY) AS MasaAktif,
+                         DATEDIFF(DATE_ADD(TglPulsaTerakhir, INTERVAL 30 DAY), CURDATE()) AS SisaHari
                   FROM master_nomor 
-                  WHERE JumlahKredit IS NOT NULL AND $filter_query
+                  WHERE JumlahKredit IS NOT NULL AND $filter_query AND (SimId LIKE :keyword OR NomorAkun LIKE :keyword)
                   ORDER BY TglPulsaTerakhir DESC";
                   
         $stmt = $conn->prepare($query);
         if ($kode_hak !== 'SA.KP') { $stmt->bindParam(':lokasi', $lokasi); }
+        $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
         $stmt->execute();
         $data['list_pulsa'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
-// Tidak ada load template di sini. Kontrol dikembalikan ke index.php
 ?>

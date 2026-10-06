@@ -1,5 +1,19 @@
 <div class="card shadow mb-4 border-0">
     <div class="card-body p-0">
+        <!-- Form Smart Search Barang -->
+        <form action="index.php" method="GET" class="mb-3 px-4 pt-3">
+            <input type="hidden" name="page" value="pengadaan">
+            <input type="hidden" name="menu" value="pembelian"> <!-- Sesuaikan jadi pengiriman di file pengiriman -->
+            <input type="hidden" name="view" value="daftar">
+
+            <div class="input-group input-group-sm" style="max-width: 320px;">
+                <input type="text" class="form-control" name="q" placeholder="Cari No Formulir..." value="<?= htmlspecialchars($_GET['q'] ?? '') ?>">
+                <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+                <?php if (!empty($_GET['q'])): ?>
+                    <a href="index.php?page=pengadaan&menu=pembelian&view=daftar" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+                <?php endif; ?>
+            </div>
+        </form>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light text-muted">
