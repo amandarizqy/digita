@@ -2,7 +2,7 @@
 session_start();
 
 // Panggil konfigurasi database
-require_once __DIR__ . '/../../config/database.php';
+require_once '../../config/database.php';
 
 // Jika pengguna sudah login, arahkan langsung ke dashboard
 if (isset($_SESSION['NamaAkun'])) {
@@ -48,5 +48,5 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Muat tampilan UI (View)
-require_once __DIR__ . '/../../templates/auth/login.php';
+require_once '../../templates/auth/login.php';
 ?>
