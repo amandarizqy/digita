@@ -1,6 +1,6 @@
 <?php
 // Pastikan auth_check.php dipanggil pertama kali
-require_once 'includes/auth_check.php';
+require_once __DIR__ . '/includes/auth_check.php';
 
 $pages = [
     'dashboard'    => 'Dashboard',
@@ -41,5 +41,5 @@ if (file_exists($module_file)) {
 $content = ob_get_clean();
 
 // Render sidebar + navbar + konten utama
-require_once 'templates/layouts/base.php';
+require_once __DIR__ . '/templates/layouts/base.php';
 ?>
