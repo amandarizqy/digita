@@ -13,7 +13,7 @@
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end text-small shadow" aria-labelledby="dropdownUser1">
                     <!-- ABSOLUTE PATH UNTUK LOGOUT -->
-                    <li><a class="dropdown-item text-danger" href="/modules/auth/logout.php"><i class="bi bi-box-arrow-right me-2"></i>Keluar</a></li>
+                    <li><a class="dropdown-item" href="<?= BASE_URL ?>/modules/auth/logout.php">Logout</a></li>
                 </ul>
             </div>
         </div>
