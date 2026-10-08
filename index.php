@@ -1,4 +1,14 @@
 <?php
+// Deteksi protokol HTTP atau HTTPS
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+// Deteksi domain/IP
+$domain = $_SERVER['HTTP_HOST'];
+// Deteksi path folder
+$path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+
+// Buat konstanta BASE_URL yang bisa dipakai di seluruh file HTML/PHP
+define('BASE_URL', $protocol . $domain . $path);
+
 // Pastikan auth_check.php dipanggil pertama kali
 require_once 'includes/auth_check.php';
 

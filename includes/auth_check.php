@@ -3,14 +3,20 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// 1. BUAT PENDETEKSI PATH DINAMIS
+// dirname() akan mengambil nama folder tempat index.php dipanggil
+// rtrim() digunakan untuk membersihkan kelebihan garis miring di akhir URL
+$base_path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+
+// 2. PERBAIKI REDIRECT LOGIN
 if (!isset($_SESSION['NamaAkun']) || !isset($_SESSION['KodeHak'])) {
-    header("Location: /modules/auth/login.php");
+    // Sisipkan $base_path di depan URL
+    header("Location: " . $base_path . "/modules/auth/login.php");
     exit;
 }
 
 $page_request = $_GET['page'] ?? 'dashboard'; 
 
-// Dashboard dan root selalu diizinkan bagi yang sudah login
 if ($page_request === 'dashboard' || empty($page_request)) {
     return;
 }
@@ -30,7 +36,6 @@ try {
     $allowed_menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($allowed_menus as $menu) {
-        // Ekstrak nama modul dari database
         $path_parts = explode('/', trim($menu['UrlRoute'], '/'));
         $module_name = $path_parts[1] ?? 'dashboard';
         
@@ -38,7 +43,6 @@ try {
             $module_name = 'dashboard';
         }
         
-        // Cocokkan nama modul dengan URL yang sedang diakses pengguna
         if ($module_name === $page_request) {
             $is_authorized = true;
             break;
@@ -48,8 +52,10 @@ try {
     die("Kesalahan sistem pengecekan akses: " . $e->getMessage());
 }
 
+// 3. PERBAIKI REDIRECT JAVASCRIPT JIKA AKSES DITOLAK
 if (!$is_authorized) {
-    echo "<script>alert('Akses Ditolak: Anda tidak memiliki wewenang untuk membuka modul " . htmlspecialchars($page_request) . ".'); window.location.href='/index.php';</script>";
+    // Sisipkan $base_path pada window.location.href
+    echo "<script>alert('Akses Ditolak: Anda tidak memiliki wewenang untuk membuka modul " . htmlspecialchars($page_request) . ".'); window.location.href='" . $base_path . "/index.php';</script>";
     exit;
 }
 ?>
