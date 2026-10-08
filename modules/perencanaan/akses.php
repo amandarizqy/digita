@@ -28,6 +28,7 @@ if (!function_exists('pa_matriks')) {
             'hasil_kepentingan' => $semua,                          // Hasil tingkat kepentingan
             'hasil_survey'      => $tanpa_vd,                       // Hasil survei SR
             'hasil_prioritas'   => $tanpa_vd,                       // Hasil skala prioritas
+            'riwayat'           => $tanpa_vd,                       // Hasil riwayat pelunasan
             // 'data_riwayat' tidak ada di tabel -> hanya untuk pa_penuh()
         ];
     }

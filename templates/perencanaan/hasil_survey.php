@@ -37,7 +37,6 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-primary fs-6">Daftar Hasil Survey SR</span>
-            <span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: kategorisasi_risiko</span>
         </div>
         <form method="GET" action="" class="d-flex flex-wrap align-items-center gap-2">
             <?= pr_hidden('hasil_survey', ['posisi_sr' => $posisi_sr]) ?>
