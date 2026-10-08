@@ -10,23 +10,28 @@ if (!isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
-// 2. Proteksi Hak Akses (AM.UI Ditolak)
-$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+// 2. Ambil Role Aktif
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
 
+// Jika role AM.UI, paksa ke halaman pesan
 if ($user_role === 'AM.UI') {
-    $_SESSION['flash_alert'] = [
-        'title' => 'Akses Ditolak!',
-        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
-        'icon'  => 'error'
-    ];
-    header("Location: /modules/master/pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
+    exit;
+}
+
+// PERBAIKAN UTAMA: Berikan izin penuh untuk SA.KP dan SF.UI
+if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+    echo "<script>
+        alert('Akses Ditolak: Peran " . htmlspecialchars($user_role) . " tidak memiliki wewenang untuk membuka modul provider.');
+        window.location.href = 'index.php?page=dashboard';
+    </script>";
     exit;
 }
 
 $action = $_GET['action'] ?? 'index';
 
 // 3. Tambah Provider (POST - store)
-if ($action === 'store' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
     $status_data   = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
@@ -34,12 +39,12 @@ if ($action === 'store' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare("INSERT INTO master_provider (NamaProvider, StatusData, WaktuData) VALUES (?, ?, NOW())");
         $stmt->execute([$nama_provider, $status_data]);
     }
-    header("Location: /modules/master/provider_Controller.php");
+    header("Location: index.php?page=master&sub=provider");
     exit;
 }
 
 // 4. Edit Provider (POST - update)
-if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     $kode_provider = trim($_POST['KodeProvider'] ?? '');
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
     $status_data   = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
@@ -48,30 +53,11 @@ if ($action === 'update' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare("UPDATE master_provider SET NamaProvider = ?, StatusData = ?, WaktuData = NOW() WHERE KodeProvider = ?");
         $stmt->execute([$nama_provider, $status_data, $kode_provider]);
     }
-    header("Location: /modules/master/provider_Controller.php");
+    header("Location: index.php?page=master&sub=provider");
     exit;
 }
 
-// 5. Hapus Provider (GET - delete)
-if ($action === 'delete') {
-    $id = $_GET['id'] ?? null;
-    if ($id) {
-        try {
-            $stmt = $conn->prepare("DELETE FROM master_provider WHERE KodeProvider = ?");
-            $stmt->execute([$id]);
-        } catch (PDOException $e) {
-            echo "<script>
-                alert('Gagal menghapus provider! Data ini sedang digunakan di tabel lain.');
-                window.location.href = '/modules/master/provider_Controller.php';
-            </script>";
-            exit;
-        }
-    }
-    header("Location: /modules/master/provider_Controller.php");
-    exit;
-}
-
-// 6. Toggle Status (AKTIF / TIDAK)
+// 5. Toggle Status (GET - toggle_status)
 if ($action === 'toggle_status') {
     $id = $_GET['id'] ?? null;
     if ($id) {
@@ -85,11 +71,11 @@ if ($action === 'toggle_status') {
             $update->execute([$status_baru, $id]);
         }
     }
-    header("Location: /modules/master/provider_Controller.php");
+    header("Location: index.php?page=master&sub=provider");
     exit;
 }
 
-// 7. Query Data & Metrik KPI
+// 6. Query Data Provider
 $stmt = $conn->query("SELECT * FROM master_provider ORDER BY KodeProvider ASC");
 $providers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -102,6 +88,7 @@ $persentase_aktif = ($total_operator > 0) ? round(($total_aktif / $total_operato
 
 $page_title = "Master Provider - Digita S41";
 
+// RENDER DENGAN BASE LAYOUT LENGKAP
 ob_start();
 require_once __DIR__ . '/../../templates/master/provider.html';
 $content = ob_get_clean();

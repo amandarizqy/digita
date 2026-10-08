@@ -10,16 +10,16 @@ if (!isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
-// 2. Proteksi Hak Akses (AM.UI Ditolak)
-$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+// 2. Proteksi Hak Akses (Hanya SA.KP dan SF.UI)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
 
 if ($user_role === 'AM.UI') {
-    $_SESSION['flash_alert'] = [
-        'title' => 'Akses Ditolak!',
-        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
-        'icon'  => 'error'
-    ];
-    header("Location: /modules/master/pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
+    exit;
+}
+
+if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+    header("Location: index.php?page=dashboard");
     exit;
 }
 
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt->execute([$unit_up, $unit_ap, $unit_upi, $nama_unit, $singkatan_nama, $status_data]);
         }
     }
-    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: index.php?page=master&sub=" . urlencode($sub));
     exit;
 }
 
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $stmt->execute([$unit_ap, $unit_upi, $nama_unit, $singkatan_nama, $status_data, $id_primary]);
     }
 
-    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: index.php?page=master&sub=" . urlencode($sub));
     exit;
 }
 
@@ -120,7 +120,7 @@ if ($action === 'toggle_status') {
             }
         }
     }
-    header("Location: /modules/master/unit_Controller.php?sub=" . urlencode($sub));
+    header("Location: index.php?page=master&sub=" . urlencode($sub));
     exit;
 }
 
@@ -157,4 +157,3 @@ require_once __DIR__ . '/../../templates/master/unit.html';
 $content = ob_get_clean();
 
 require_once __DIR__ . '/../../templates/layouts/base.php';
-?>

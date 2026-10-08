@@ -6,20 +6,20 @@ require_once __DIR__ . '/../../config/database.php';
 
 // 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
+    header("Location: /modules/auth/login.php");
     exit;
 }
 
-// 2. Proteksi Hak Akses (AM.UI Ditolak)
-$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'SA.KP';
+// 2. Proteksi Hak Akses (Hanya SA.KP dan SF.UI)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
 
 if ($user_role === 'AM.UI') {
-    $_SESSION['flash_alert'] = [
-        'title' => 'Akses Ditolak!',
-        'text'  => 'Peran AM.UI hanya memiliki hak akses untuk halaman Perintah Baku.',
-        'icon'  => 'error'
-    ];
-    header("Location: /modules/master/pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
+    exit;
+}
+
+if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+    header("Location: index.php?page=dashboard");
     exit;
 }
 
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($kode_upi) || empty($kode_ap)) {
         echo "<script>
             alert('Gagal menyimpan! Unit Induk (UPI) dan UP3 (AP) wajib diisi/dipilih.');
-            window.location.href='modem_Controller.php';
+            window.location.href='index.php?page=master&sub=modem';
         </script>";
         exit;
     }
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
             $stmt->execute([$imei_modem, $kode_up_val, $kode_ap, $kode_upi, $sim_id_val, $ip_data_val, $ip_engine_val, $port_val, $status_data]);
 
-            header("Location: modem_Controller.php");
+            header("Location: index.php?page=master&sub=modem");
             exit;
         } catch (PDOException $e) {
             $err_msg = $e->getMessage();
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             echo "<script>
                 alert(" . json_encode($pesan) . ");
-                window.location.href='modem_Controller.php';
+                window.location.href='index.php?page=master&sub=modem';
             </script>";
             exit;
         }
@@ -122,12 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 WHERE ImeiModem = ?");
             $stmt->execute([$kode_up_val, $kode_ap, $kode_upi, $sim_id_val, $ip_data_val, $ip_engine_val, $port_val, $status_data, $imei_modem]);
 
-            header("Location: modem_Controller.php");
+            header("Location: index.php?page=master&sub=modem");
             exit;
         } catch (PDOException $e) {
             echo "<script>
                 alert('Gagal update database:\n" . addslashes($e->getMessage()) . "');
-                window.location.href='modem_Controller.php';
+                window.location.href='index.php?page=master&sub=modem';
             </script>";
             exit;
         }
@@ -142,11 +142,11 @@ if ($action === 'delete') {
             $stmt = $conn->prepare("DELETE FROM master_modem WHERE ImeiModem = ?");
             $stmt->execute([$imei]);
         } catch (PDOException $e) {
-            echo "<script>alert('Gagal menghapus modem! Data sedang digunakan.'); window.location.href='modem_Controller.php';</script>";
+            echo "<script>alert('Gagal menghapus modem! Data sedang digunakan.'); window.location.href='index.php?page=master&sub=modem';</script>";
             exit;
         }
     }
-    header("Location: modem_Controller.php");
+    header("Location: index.php?page=master&sub=modem");
     exit;
 }
 
@@ -199,4 +199,3 @@ require_once __DIR__ . '/../../templates/master/nomor_server.html';
 $content = ob_get_clean();
 
 require_once __DIR__ . '/../../templates/layouts/base.php';
-?>
