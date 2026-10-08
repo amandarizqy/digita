@@ -27,7 +27,7 @@ if (!empty($kode_hak)) {
 }
 ?>
 <div class="sidebar d-flex flex-column flex-shrink-0 p-3 bg-dark text-white min-vh-100" style="width: 250px;">
-    <a href="index.php" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none ps-2">
+    <a href="/index.php" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none ps-2">
         <i class="bi bi-lightning-charge-fill text-warning fs-4 me-2"></i>
         <span class="fs-4 fw-bold">DIGITA</span>
     </a>
@@ -69,7 +69,7 @@ if (!empty($kode_hak)) {
                 }
             ?>
             <li class="nav-item mb-1">
-                <a href="<?= $target_url; ?>" class="nav-link text-white <?= $active_class ?>">
+                <a href="<?= BASE_URL . $target_url; ?>" class="nav-link text-white <?= $active_class ?>">
                     <i class="bi <?= htmlspecialchars($menu['Icon']) ?> me-2"></i> <?= htmlspecialchars($menu['NamaMenu']) ?>
                 </a>
             </li>
