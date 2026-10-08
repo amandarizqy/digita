@@ -1,6 +1,11 @@
 <?php 
 require_once __DIR__ . '/../config/database.php';
 
+// Pengaman: kalau BASE_URL belum didefinisikan di tempat lain, pakai kosong (root server)
+if (!defined('BASE_URL')) {
+    define('BASE_URL', '');
+}
+
 $kode_hak = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
 $menus = [];
 
@@ -27,7 +32,7 @@ if (!empty($kode_hak)) {
 }
 ?>
 <div class="sidebar d-flex flex-column flex-shrink-0 p-3 bg-dark text-white min-vh-100" style="width: 250px;">
-    <a href="/index.php" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none ps-2">
+    <a href="<?= BASE_URL ?>/index.php" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none ps-2">
         <i class="bi bi-lightning-charge-fill text-warning fs-4 me-2"></i>
         <span class="fs-4 fw-bold">DIGITA</span>
     </a>
@@ -56,16 +61,16 @@ if (!empty($kode_hak)) {
 
                 $active_class = $is_active ? 'active bg-primary' : '';
 
-                // 3. PERBAIKAN LOGIKA TAUTAN URL:
-                // Disesuaikan dengan role agar SF.UI dan AM.UI masuk ke sub-modul yang berhak
+                // 3. Tautan URL (diawali "/" supaya aman dengan BASE_URL),
+                //    disesuaikan dengan role agar SF.UI dan AM.UI masuk ke sub-modul yang berhak
                 if ($module_name === 'master') {
                     if ($kode_hak === 'AM.UI') {
-                        $target_url = "index.php?page=master&sub=pesan";
+                        $target_url = "/index.php?page=master&sub=pesan";
                     } else {
-                        $target_url = "index.php?page=master&sub=unit";
+                        $target_url = "/index.php?page=master&sub=unit";
                     }
                 } else {
-                    $target_url = "index.php?page=" . htmlspecialchars($module_name);
+                    $target_url = "/index.php?page=" . urlencode($module_name);
                 }
             ?>
             <li class="nav-item mb-1">
@@ -85,7 +90,7 @@ if (!empty($kode_hak)) {
         <ul class="dropdown-menu dropdown-menu-dark text-small shadow">
             <li><a class="dropdown-item" href="#">Profil</a></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-danger" href="modules/auth/logout.php">Keluar (Logout)</a></li>
+            <li><a class="dropdown-item text-danger" href="<?= BASE_URL ?>/modules/auth/logout.php">Keluar (Logout)</a></li>
         </ul>
     </div>
 </div>
