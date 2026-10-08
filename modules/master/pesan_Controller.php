@@ -6,20 +6,15 @@ require_once __DIR__ . '/../../config/database.php';
 
 // 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: ../auth/login.php");
+    header("Location: /modules/auth/login.php");
     exit;
 }
 
-// 2. Proteksi Hak Akses (SF.UI Ditolak)
-$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? '';
+// 2. Proteksi Hak Akses (Hanya SA.KP dan AM.UI)
+$user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
 
-if ($user_role === 'SF.UI') {
-    $_SESSION['flash_alert'] = [
-        'title' => 'Akses Ditolak!',
-        'text'  => 'Peran SF.UI tidak memiliki hak akses untuk membuka halaman Perintah Baku.',
-        'icon'  => 'error'
-    ];
-    header("Location: /modules/master/provider_Controller.php");
+if (!in_array($user_role, ['SA.KP', 'AM.UI'])) {
+    header("Location: index.php?page=dashboard");
     exit;
 }
 
@@ -39,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             VALUES (?, ?, ?, ?, ?, NOW())");
         $stmt->execute([$isi_pesan, $keterangan, $jenis_perintah, $database_tujuan, $status_data]);
     }
-    header("Location: pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
     exit;
 }
 
@@ -58,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             WHERE Id = ?");
         $stmt->execute([$isi_pesan, $keterangan, $jenis_perintah, $database_tujuan, $status_data, $id]);
     }
-    header("Location: pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
     exit;
 }
 
@@ -70,11 +65,11 @@ if ($action === 'delete') {
             $stmt = $conn->prepare("DELETE FROM baku_outbox WHERE Id = ?");
             $stmt->execute([$id]);
         } catch (PDOException $e) {
-            echo "<script>alert('Gagal menghapus perintah! Data sedang dipakai oleh daemon SMS.'); window.location.href='pesan_Controller.php';</script>";
+            echo "<script>alert('Gagal menghapus perintah! Data sedang dipakai oleh daemon SMS.'); window.location.href='index.php?page=master&sub=pesan';</script>";
             exit;
         }
     }
-    header("Location: pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
     exit;
 }
 
@@ -92,7 +87,7 @@ if ($action === 'toggle_status') {
             $update->execute([$status_baru, $id]);
         }
     }
-    header("Location: pesan_Controller.php");
+    header("Location: index.php?page=master&sub=pesan");
     exit;
 }
 
@@ -114,4 +109,3 @@ require_once __DIR__ . '/../../templates/master/pesan.html';
 $content = ob_get_clean();
 
 require_once __DIR__ . '/../../templates/layouts/base.php';
-?>

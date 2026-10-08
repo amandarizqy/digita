@@ -1,36 +1,52 @@
 <?php
 /**
- * Router / Pintu Masuk Modul Master Data
+ * Router Inner Modul Master Data
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Gunakan __DIR__ agar alamat file config selalu pas dari mana pun dipanggil
 require_once __DIR__ . '/../../config/database.php';
 
-// Verifikasi Session Login Pengguna
 if (!isset($_SESSION['NamaAkun'])) {
     header("Location: /modules/auth/login.php");
     exit;
 }
 
-// Pemetaan sub-modul master ke file controller masing-masing
+$role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
+$sub  = $_GET['sub'] ?? '';
+
+// Jika AM.UI mencoba mengakses selain pesan, kunci ke pesan
+if ($role === 'AM.UI' && $sub !== 'pesan') {
+    $sub = 'pesan';
+}
+
+// Peta rute sub-modul
 $peta_sub = [
     'unit'     => 'unit_Controller.php',
+    'ui'       => 'unit_Controller.php',
+    'up3'      => 'unit_Controller.php',
+    'ulp'      => 'unit_Controller.php',
     'pengguna' => 'pengguna_Controller.php',
     'provider' => 'provider_Controller.php',
+    'nomor_server' => 'modem_Controller.php',
     'modem'    => 'modem_Controller.php',
     'pesan'    => 'pesan_Controller.php',
 ];
 
-$sub = $_GET['sub'] ?? 'provider';
+if (empty($sub)) {
+    $sub = ($role === 'AM.UI') ? 'pesan' : 'unit';
+}
 
 if (isset($peta_sub[$sub])) {
-    header("Location: /modules/master/" . $peta_sub[$sub]);
+    require_once __DIR__ . '/' . $peta_sub[$sub];
     exit;
 }
 
-// Fallback default ke provider
-header("Location: /modules/master/provider_Controller.php");
+// Fallback
+if ($role === 'AM.UI') {
+    require_once __DIR__ . '/pesan_Controller.php';
+} else {
+    require_once __DIR__ . '/unit_Controller.php';
+}
 exit;

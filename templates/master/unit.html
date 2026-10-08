@@ -1,76 +1,28 @@
-<!-- HEADER MODUL & TOMBOL TAMBAH UNIT -->
-<div class="d-flex justify-content-between align-items-start mb-3">
-    <div>
-        <h4 class="fw-bold text-dark mb-1">Modul Master Data</h4>
-        <p class="text-muted small mb-0">Kelola konfigurasi organisasi PLN tingkat Unit Induk (UI), Unit Pelaksana (UP3), dan Unit Layanan (ULP).</p>
-    </div>
-    <button class="btn btn-primary btn-sm px-3 shadow-sm rounded-2" data-bs-toggle="modal" data-bs-target="#modalTambahUnit" style="background-color: #0d6efd; border-color: #0d6efd;">
-        <i class="bi bi-plus-lg me-1"></i> Tambah Unit
-    </button>
-</div>
+<?php
+// Evaluasi Otoritas Role
+$role           = $_SESSION['KodeHak'] ?? 'GUEST';
+$akses_unit     = ($role === 'SA.KP' || $role === 'SF.UI');
+$akses_pengguna = ($role === 'SA.KP' || $role === 'SF.UI');
+$akses_provider = ($role === 'SA.KP' || $role === 'SF.UI');
+$akses_modem    = ($role === 'SA.KP' || $role === 'SF.UI');
+$akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
+?>
+<?php require_once __DIR__ . '/../../functions/master_ui.php'; ?>
 
-<!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
-<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle">
-    <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium active text-white" style="background-color: #0d6efd;" href="unit_Controller.php">
-            <i class="bi bi-diagram-3 me-2"></i> Unit (UI / UP3 / ULP)
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="pengguna_Controller.php">
-            <i class="bi bi-people me-2"></i> Pengguna
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium text-secondary" href="index.php">
-            <i class="bi bi-chat-left-dots me-2"></i> Pusat Pesan
-        </a>
-    </li>
-</ul>
+<?= ms_header([
+    'title'    => 'Master Unit Organisasi',
+    'subtitle' => 'Kelola konfigurasi organisasi PLN tingkat Unit Induk (UI), Unit Pelaksana (UP3), dan Unit Layanan (ULP).',
+    'tombol'   => ['label'=>'Tambah Unit','target'=>'modalTambahUnit','icon'=>'bi-plus-lg'],
+], ['unit'=>$akses_unit,'pengguna'=>$akses_pengguna,'provider'=>$akses_provider,'modem'=>$akses_modem,'pesan'=>$akses_pesan], 'unit', [
+    ['label'=>'Tingkat UI (Unit Induk)',      'href'=>'index.php?page=master&sub=ui',  'on'=>$sub === 'ui'],
+    ['label'=>'Tingkat UP3 (Unit Pelaksana)', 'href'=>'index.php?page=master&sub=up3', 'on'=>$sub === 'up3'],
+    ['label'=>'Tingkat ULP (Unit Layanan)',   'href'=>'index.php?page=master&sub=ulp', 'on'=>$sub === 'ulp'],
+]) ?>
 
-<!-- LEVEL 3: SUB ENTITAS HIERARKI UNIT -->
-<div class="d-flex align-items-center gap-2 mb-4">
-    <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
-    <a href="unit_Controller.php?sub=ui" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ui') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ui') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
-        <?= ($sub === 'ui') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UI (Unit Induk)
-    </a>
-    <a href="unit_Controller.php?sub=up3" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'up3') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'up3') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
-        <?= ($sub === 'up3') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat UP3 (Unit Pelaksana)
-    </a>
-    <a href="unit_Controller.php?sub=ulp" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub === 'ulp') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub === 'ulp') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
-        <?= ($sub === 'ulp') ? '<i class="bi bi-check2 me-1"></i>' : '' ?> Tingkat ULP (Unit Layanan)
-    </a>
-</div>
-
-<!-- KARTU METRIK KPI UNIT -->
+<!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">TOTAL <?= strtoupper($sub); ?> TERDAFTAR</span>
-                    <h2 class="fw-bold text-dark mt-2 mb-1"><?= $total_unit; ?> Unit</h2>
-                </div>
-                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #e7f1ff; color: #0d6efd;">
-                    <i class="bi bi-building fs-4"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white border-start border-success border-4">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">STATUS OPERASIONAL</span>
-                    <h2 class="fw-bold text-success mt-2 mb-1"><?= $total_aktif; ?> / <?= $total_unit; ?> Aktif</h2>
-                    <span class="text-muted small"><?= $persentase_aktif; ?>% Unit Beroperasi Normal</span>
-                </div>
-                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; background-color: #d1e7dd; color: #198754;">
-                    <i class="bi bi-check2-circle fs-4"></i>
-                </div>
-            </div>
-        </div>
-    </div>
+    <?= ms_kpi('Total ' . strtoupper($sub) . ' Terdaftar', ms_kpi_nilai($total_unit, 'Unit'), 'Populasi unit organisasi terdaftar', 'bi-building', 'primary') ?>
+    <?= ms_kpi('Status Operasional', ms_n($total_aktif) . ' <span class="fs-6 fw-semibold text-muted">/ ' . ms_n($total_unit) . ' Aktif</span>', $persentase_aktif . '% unit beroperasi normal', 'bi-check2-circle', 'success', true) ?>
 </div>
 
 <!-- TABEL MASTER UNIT -->
@@ -78,17 +30,18 @@
     <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
         <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-primary fs-6">Daftar Master <?= $label_unit; ?></span>
+            <?= ms_badge_tabel(($sub === 'up3' ? 'master_ap' : ($sub === 'ulp' ? 'master_up' : 'master_upi'))) ?>
         </div>
         <div class="input-group input-group-sm" style="max-width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" id="cariUnit" class="form-control bg-light border-start-0" placeholder="Cari kode, nama unit...">
         </div>
     </div>
-    
+
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0" id="tabelUnit">
-                <thead class="table-light text-secondary small text-uppercase" style="font-size: 0.75rem;">
+                <thead class="table-light text-secondary text-uppercase ms-thead">
                     <tr>
                         <th style="width: 40px;" class="ps-4">#</th>
                         <th style="width: 130px;">KODE <?= strtoupper($sub); ?></th>
@@ -124,16 +77,12 @@
                             </td>
                             <?php endif; ?>
                             <td>
-                                <?php if (($row['StatusData'] ?? '') === 'AKTIF'): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1 font-monospace" style="font-size: 0.75rem;">• AKTIF</span>
-                                <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger px-2 py-1 font-monospace" style="font-size: 0.75rem;">• NONAKTIF</span>
-                                <?php endif; ?>
+                                <?= ms_badge_status($row['StatusData'] ?? '') ?>
                             </td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="unit_Controller.php?action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>&sub=<?= htmlspecialchars(urlencode($sub)); ?>" 
+                                    <a href="index.php?page=master&sub=<?= htmlspecialchars(urlencode($sub)); ?>&action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>" 
                                        class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
@@ -152,50 +101,39 @@
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr>
-                            <td colspan="8" class="text-center text-muted py-4">Belum ada data unit pada tingkat ini.</td>
-                        </tr>
+                        <?= ms_empty_row(8, 'Belum ada data unit pada tingkat ini.') ?>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <div class="card-footer bg-white py-3 px-4 border-top d-flex justify-content-between align-items-center">
-        <small class="text-muted">Menampilkan 1 - <?= count($units); ?> dari <?= $total_unit; ?> total data</small>
-        <nav>
-            <ul class="pagination pagination-sm mb-0">
-                <li class="page-item disabled"><a class="page-link" href="#">Sebelumnya</a></li>
-                <li class="page-item active"><a class="page-link" style="background-color: #0d6efd; border-color: #0d6efd;" href="#">1</a></li>
-                <li class="page-item disabled"><a class="page-link" href="#">Selanjutnya</a></li>
-            </ul>
-        </nav>
-    </div>
+    <?= ms_footer_tabel((int) count($units)) ?>
 </div>
 
 <!-- MODAL 1: TAMBAH UNIT -->
 <div class="modal fade" id="modalTambahUnit" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form action="unit_Controller.php?sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow">
+        <form action="index.php?page=master&sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow rounded-4">
             <input type="hidden" name="action" value="store">
-            <div class="modal-header border-bottom">
-                <h5 class="modal-title fw-bold fs-6">Tambah Master <?= $label_unit; ?></h5>
+            <div class="modal-header border-bottom px-4 py-3">
+                <h5 class="modal-title fw-bold">Tambah Master <?= $label_unit; ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body px-4 py-4">
                 <?php if ($sub === 'ui'): ?>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Kode Unit Induk (UnitUpi) *</label>
-                        <input type="text" name="UnitUpi" class="form-control form-control-sm font-monospace" placeholder="Contoh: 56" required>
+                        <label class="form-label">Kode Unit Induk (UnitUpi) *</label>
+                        <input type="text" name="UnitUpi" class="form-control font-monospace" placeholder="Contoh: 56" required>
                     </div>
                 <?php elseif ($sub === 'up3'): ?>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Kode UP3 (UnitAp) *</label>
-                        <input type="text" name="UnitAp" class="form-control form-control-sm font-monospace" placeholder="Contoh: 56650" required>
+                        <label class="form-label">Kode UP3 (UnitAp) *</label>
+                        <input type="text" name="UnitAp" class="form-control font-monospace" placeholder="Contoh: 56650" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Unit Induk (UID) Pembina *</label>
-                        <select name="UnitUpi" class="form-select form-select-sm" required>
+                        <label class="form-label">Unit Induk (UID) Pembina *</label>
+                        <select name="UnitUpi" class="form-select" required>
                             <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
@@ -205,12 +143,12 @@
                     </div>
                 <?php elseif ($sub === 'ulp'): ?>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Kode ULP (UnitUp) *</label>
-                        <input type="text" name="UnitUp" class="form-control form-control-sm font-monospace" placeholder="Contoh: 56611" required>
+                        <label class="form-label">Kode ULP (UnitUp) *</label>
+                        <input type="text" name="UnitUp" class="form-control font-monospace" placeholder="Contoh: 56611" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Pilih UP3 Pembina *</label>
-                        <select name="UnitAp" class="form-select form-select-sm" required>
+                        <label class="form-label">Pilih UP3 Pembina *</label>
+                        <select name="UnitAp" class="form-select" required>
                             <?php foreach ($list_ap as $ap): ?>
                                 <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
                                     <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
@@ -219,8 +157,8 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Pilih Unit Induk (UID) *</label>
-                        <select name="UnitUpi" class="form-select form-select-sm" required>
+                        <label class="form-label">Pilih Unit Induk (UID) *</label>
+                        <select name="UnitUpi" class="form-select" required>
                             <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
@@ -231,51 +169,51 @@
                 <?php endif; ?>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Singkatan Nama *</label>
-                    <input type="text" name="SingkatanNama" class="form-control form-control-sm" placeholder="Contoh: UID BANTEN / UP3 CIKUPA" required>
+                    <label class="form-label">Singkatan Nama *</label>
+                    <input type="text" name="SingkatanNama" class="form-control" placeholder="Contoh: UID BANTEN / UP3 CIKUPA" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Nama Lengkap Unit *</label>
-                    <input type="text" name="NamaUnit" class="form-control form-control-sm text-uppercase" placeholder="Contoh: UNIT INDUK DISTRIBUSI BANTEN" required>
+                    <label class="form-label">Nama Lengkap Unit *</label>
+                    <input type="text" name="NamaUnit" class="form-control text-uppercase" placeholder="Contoh: UNIT INDUK DISTRIBUSI BANTEN" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
-                    <select name="StatusData" class="form-select form-select-sm">
+                    <label class="form-label">Status Operasional</label>
+                    <select name="StatusData" class="form-select">
                         <option value="AKTIF">AKTIF</option>
                         <option value="TIDAK">TIDAK AKTIF</option>
                     </select>
                 </div>
             </div>
-            <div class="modal-footer border-top">
-                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Unit</button>
+            <div class="modal-footer border-top px-4 py-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Unit</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- MODAL 2: EDIT UNIT (KODE LOCKED READONLY) -->
+<!-- MODAL 2: EDIT UNIT -->
 <div class="modal fade" id="modalEditUnit" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form action="unit_Controller.php?sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow">
+        <form action="index.php?page=master&sub=<?= htmlspecialchars(urlencode($sub)); ?>" method="POST" class="modal-content border-0 shadow rounded-4">
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="IdPrimary" id="edit_id_primary">
 
-            <div class="modal-header border-bottom">
-                <h5 class="modal-title fw-bold fs-6">Edit Data <?= $label_unit; ?></h5>
+            <div class="modal-header border-bottom px-4 py-3">
+                <h5 class="modal-title fw-bold">Edit Data <?= $label_unit; ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body px-4 py-4">
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Kode Unit (Primary Key - Locked)</label>
-                    <input type="text" id="edit_kode_display" class="form-control form-control-sm font-monospace bg-light" readonly>
+                    <label class="form-label">Kode Unit (Primary Key - Locked)</label>
+                    <input type="text" id="edit_kode_display" class="form-control font-monospace bg-light" readonly>
                     <small class="text-muted" style="font-size: 0.725rem;">* Kode unit terkunci untuk menghindari kegagalan integritas data terikat.</small>
                 </div>
 
                 <?php if ($sub === 'up3'): ?>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Unit Induk (UID) *</label>
-                        <select name="UnitUpi" id="edit_unit_upi" class="form-select form-select-sm" required>
+                        <label class="form-label">Unit Induk (UID) *</label>
+                        <select name="UnitUpi" id="edit_unit_upi" class="form-select" required>
                             <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
@@ -285,8 +223,8 @@
                     </div>
                 <?php elseif ($sub === 'ulp'): ?>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Pilih UP3 Pembina *</label>
-                        <select name="UnitAp" id="edit_unit_ap" class="form-select form-select-sm" required>
+                        <label class="form-label">Pilih UP3 Pembina *</label>
+                        <select name="UnitAp" id="edit_unit_ap" class="form-select" required>
                             <?php foreach ($list_ap as $ap): ?>
                                 <option value="<?= htmlspecialchars($ap['UnitAp']); ?>">
                                     <?= htmlspecialchars($ap['UnitAp']); ?> - <?= htmlspecialchars($ap['SingkatanNama']); ?>
@@ -295,8 +233,8 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-secondary">Pilih Unit Induk (UID) *</label>
-                        <select name="UnitUpi" id="edit_unit_upi_ulp" class="form-select form-select-sm" required>
+                        <label class="form-label">Pilih Unit Induk (UID) *</label>
+                        <select name="UnitUpi" id="edit_unit_upi_ulp" class="form-select" required>
                             <?php foreach ($list_upi as $upi): ?>
                                 <option value="<?= htmlspecialchars($upi['UnitUpi']); ?>">
                                     <?= htmlspecialchars($upi['UnitUpi']); ?> - <?= htmlspecialchars($upi['SingkatanNama']); ?>
@@ -307,24 +245,24 @@
                 <?php endif; ?>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Singkatan Nama *</label>
-                    <input type="text" name="SingkatanNama" id="edit_singkatan" class="form-control form-control-sm" required>
+                    <label class="form-label">Singkatan Nama *</label>
+                    <input type="text" name="SingkatanNama" id="edit_singkatan" class="form-control" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Nama Lengkap Unit *</label>
-                    <input type="text" name="NamaUnit" id="edit_nama" class="form-control form-control-sm text-uppercase" required>
+                    <label class="form-label">Nama Lengkap Unit *</label>
+                    <input type="text" name="NamaUnit" id="edit_nama" class="form-control text-uppercase" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold text-secondary">Status Operasional</label>
-                    <select name="StatusData" id="edit_status" class="form-select form-select-sm">
+                    <label class="form-label">Status Operasional</label>
+                    <select name="StatusData" id="edit_status" class="form-select">
                         <option value="AKTIF">AKTIF</option>
                         <option value="TIDAK">TIDAK AKTIF</option>
                     </select>
                 </div>
             </div>
-            <div class="modal-footer border-top">
-                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-sm btn-primary" style="background-color: #0d6efd; border-color: #0d6efd;">Simpan Perubahan</button>
+            <div class="modal-footer border-top px-4 py-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Perubahan</button>
             </div>
         </form>
     </div>
