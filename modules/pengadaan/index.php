@@ -128,9 +128,9 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                 die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
             }
         } elseif ($view === 'baru') {
-            $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
-            $list_ap = $conn->query("SELECT UnitAp, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
-            $list_up = $conn->query("SELECT UnitUp, NamaUnit FROM master_up WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+            // REDIRECT LANGSUNG KE PROSES PEMBUATAN DRAFT (Tanpa menampilkan form html)
+            header("Location: modules/pengadaan/proses_pembelian.php?action=create_draft");
+            exit;
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
             $no_formulir = $_GET['no_form'];
             $stmt = $conn->prepare("SELECT * FROM formulir_pembelian WHERE NoFormulir = :no_form");
@@ -201,16 +201,40 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                 die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
             }
         } elseif ($view === 'baru') {
-            $list_ap = $conn->query("SELECT UnitAp, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
-            $list_up = $conn->query("SELECT UnitUp, NamaUnit FROM master_up WHERE StatusData = 'AKTIF'")->fetchAll(PDO::FETCH_ASSOC);
+            // Ambil UnitUpi user yang sedang login (default '56' jika kosong)
+            $unit_upi_login = $_SESSION['UnitUpi'] ?? '56';
+
+            // Filter master_ap dan master_up agar hanya menampilkan unit yang sesuai dengan UPI pengguna
+            $stmt_ap = $conn->prepare("SELECT UnitAp, NamaUnit FROM master_ap WHERE UnitUpi = :upi AND StatusData = 'AKTIF'");
+            $stmt_ap->execute([':upi' => $unit_upi_login]);
+            $list_ap = $stmt_ap->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmt_up = $conn->prepare("SELECT UnitUp, NamaUnit FROM master_up WHERE UnitUpi = :upi AND StatusData = 'AKTIF'");
+            $stmt_up->execute([':upi' => $unit_upi_login]);
+            $list_up = $stmt_up->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
             $no_formulir = $_GET['no_form'];
-            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+            
+            // Gunakan kueri aman dengan COALESCE agar tidak bernilai false/bool
+            $stmt = $conn->prepare("SELECT f.*, 
+                                    COALESCE(u.NamaUnit, '-') as NamaUP, 
+                                    COALESCE(a.NamaUnit, '-') as NamaAP 
                                     FROM formulir_pengiriman f 
                                     LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
-                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp WHERE f.NoFormulir = :no_form");
+                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
+                                    WHERE f.NoFormulir = :no_form");
             $stmt->execute([':no_form' => $no_formulir]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // PENGAMAN MUTLAK: Jika data tidak ditemukan, jadikan array kosong agar view tidak error
+            if (!$formulir) {
+                $formulir = [
+                    'NoFormulir' => $no_formulir,
+                    'TglFormulir' => date('Y-m-d'),
+                    'NamaAP' => '-',
+                    'NamaUP' => '-'
+                ];
+            }
             
             $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
             $stmt_items->execute([':no_form' => $no_formulir]);

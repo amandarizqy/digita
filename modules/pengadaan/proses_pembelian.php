@@ -2,10 +2,8 @@
 session_start();
 require_once '../../config/database.php';
 
-// Pastikan PDO memunculkan exception jika ada query yang gagal
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-// Pastikan pengguna sudah login dan memiliki otoritas
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['AM.UI', 'SA.KP']; 
 if (!isset($_SESSION['NamaAkun']) || !in_array($kode_hak, $allowed_roles)) {
@@ -14,23 +12,46 @@ if (!isset($_SESSION['NamaAkun']) || !in_array($kode_hak, $allowed_roles)) {
 
 $action = $_GET['action'] ?? '';
 
-// PERBAIKAN: Paksa konversi string kosong "" menjadi NULL agar MySQL (Foreign Key) tidak error
 $nama_akun = !empty($_SESSION['NamaAkun']) ? $_SESSION['NamaAkun'] : NULL;
-$unit_upi  = !empty($_SESSION['UnitUpi']) ? $_SESSION['UnitUpi'] : NULL;
+$unit_upi  = !empty($_SESSION['UnitUpi']) ? $_SESSION['UnitUpi'] : '56'; // Default Banten (56)
 $unit_ap   = !empty($_SESSION['UnitAp']) ? $_SESSION['UnitAp'] : NULL;
 $unit_up   = !empty($_SESSION['UnitUp']) ? $_SESSION['UnitUp'] : NULL;
 
 try {
-    // AKSI 1: BUAT DRAFT FORMULIR
-    if ($action === 'create_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $no_formulir = trim($_POST['no_formulir']);
-        $tgl_beli = $_POST['tgl_beli'];
+    // AKSI 1: BUAT DRAFT FORMULIR SECARA OTOMATIS (ONE-CLICK)
+    if ($action === 'create_draft') {
+        $tgl_beli = date('Y-m-d');
+        $tgl_format = date('Ymd'); // Output: 20261008
         
-        // PERBAIKAN: Tangkap input form tujuan dan paksa jadi NULL jika kosong
-        $upi_tujuan = !empty($_POST['kode_upi']) ? trim($_POST['kode_upi']) : NULL;
-        $ap_tujuan  = !empty($_POST['kode_ap']) ? trim($_POST['kode_ap']) : NULL;
-        $up_tujuan  = !empty($_POST['kode_up']) ? trim($_POST['kode_up']) : NULL;
+        $upi_tujuan = NULL;
+        $ap_tujuan  = NULL;
+        $up_tujuan  = NULL;
 
+        // KODE GENERATOR NOMOR FORMULIR (Format: UPI + 001 + YYYYMMDD + -F.A) = 17 Karakter
+        $kode_unit = !empty($unit_upi) ? $unit_upi : '56'; 
+        
+        // Cari no formulir terakhir di database untuk hari yang sama
+        $pola_pencarian = $kode_unit . '___' . $tgl_format . '-F.A'; 
+        $stmt_seq = $conn->prepare("SELECT NoFormulir FROM formulir_pembelian WHERE NoFormulir LIKE :pola ORDER BY NoFormulir DESC LIMIT 1");
+        $stmt_seq->execute([':pola' => $pola_pencarian]);
+        $last_form = $stmt_seq->fetchColumn();
+        
+        if ($last_form) {
+            // Jika hari ini sudah ada form, ambil 3 digit urutannya (Karakter ke-3 sampai ke-5)
+            $urutan_terakhir = (int) substr($last_form, 2, 3);
+            $urutan_baru = $urutan_terakhir + 1;
+        } else {
+            // Jika belum ada form di hari ini, mulai dari 1
+            $urutan_baru = 1;
+        }
+        
+        // Jadikan format 3 digit (Contoh: 1 menjadi 001)
+        $urutan_str = str_pad($urutan_baru, 3, '0', STR_PAD_LEFT); 
+        
+        // Gabungkan semuanya menjadi 17 Karakter!
+        $no_formulir = $kode_unit . $urutan_str . $tgl_format . '-F.A';
+
+        // INSERT DENGAN PARAMETER NoFormulir YANG SUDAH DI-GENERATE
         $query_form = "INSERT INTO formulir_pembelian (NoFormulir, TglBeli, NamaAkun, KodeUp, KodeAp, KodeUpi, KodeUpTujuan, KodeApTujuan, KodeUpiTujuan, StatusData) 
                        VALUES (:no_form, :tgl, :akun, :up, :ap, :upi, :up_tuj, :ap_tuj, :upi_tuj, 'TIDAK')";
         $stmt_form = $conn->prepare($query_form);
@@ -47,7 +68,8 @@ try {
             ':upi_tuj' => $upi_tujuan
         ]);
         
-        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=detail&no_form=" . urlencode($no_formulir));
+        // REDIRECT KE HALAMAN DETAIL MENGGUNAKAN NOMOR YANG DIBUAT PHP
+        header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
@@ -64,7 +86,7 @@ try {
         if ($metode === 'excel' && isset($_FILES['file_excel']['tmp_name'])) {
             $file = $_FILES['file_excel']['tmp_name'];
             if (($handle = fopen($file, "r")) !== FALSE) {
-                fgetcsv($handle, 1000, ";"); // Skip baris header
+                fgetcsv($handle, 1000, ";"); 
                 while (($row = fgetcsv($handle, 1000, ";")) !== FALSE) {
                     $no_ref = trim($row[0] ?? '');
                     $harga  = (int) preg_replace('/[^0-9]/', '', $row[1] ?? '0');
@@ -93,7 +115,7 @@ try {
             ]);
         }
         $conn->commit();
-        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=detail&no_form=" . urlencode($no_formulir));
+        header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
@@ -122,7 +144,7 @@ try {
         }
         
         $conn->commit();
-        header("Location: ../../index.php?page=pengadaan&menu=barang&sub=pembelian&view=daftar&status=sukses");
+        header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=daftar&status=sukses");
         exit;
     }
 
@@ -130,7 +152,6 @@ try {
     if (isset($conn) && $conn->inTransaction()) {
         $conn->rollBack();
     }
-    // Menampilkan error asli dari MySQL agar tidak tersembunyi
     die("<script>alert('Gagal memproses data! Error DB: " . addslashes($e->getMessage()) . "'); window.history.back();</script>");
 }
 ?>

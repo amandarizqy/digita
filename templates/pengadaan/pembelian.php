@@ -1,7 +1,7 @@
 <?php 
-// Pindahkan data dari router ke variabel lokal
-$formulir = $data['formulir'] ?? false;
-$items = $data['items'] ?? [];
+// PERBAIKAN: Hapus pemanggilan array $data[]
+$formulir = $formulir ?? false;
+$items = $items ?? [];
 $no_formulir = $_GET['no_form'] ?? '';
 
 // Proteksi: Jika data tidak ditemukan di database, tampilkan pesan error rapi, bukan crash PHP
