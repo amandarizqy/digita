@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Digita</title>
+    <link rel="icon" type="image/png" href="../../assets/img/icon.png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Memanggil file CSS eksternal dari folder assets -->
     <link rel="stylesheet" href="../../assets/css/style.css">
@@ -14,6 +15,7 @@
         <div class="col-md-4">
             <div class="card card-login p-4 shadow">
                 <div class="text-center mb-4">
+                    <img src="../../assets/img/logo2.png" alt="Logo DIGITA" class="img-fluid mb-3" style="max-height: 70px;">
                     <h3 class="fw-bold text-dark mb-1">DIGITA</h3>
                     <span class="text-muted small">Manajemen Mutu & Siklus Aset PLN</span>
                 </div>

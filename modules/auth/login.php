@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Inisialisasi Session RBAC S41
             $_SESSION['NamaAkun'] = $user['NamaAkun'];
             $_SESSION['NamaPengguna'] = $user['NamaPengguna'];
-            $_SESSION['KodeHak'] = $user['KodeHak']; // Contoh: 'SUP', 'ADM', 'STF'
+            $_SESSION['KodeHak'] = $user['KodeHak']; 
             $_SESSION['UnitUpi'] = $user['UnitUpi'];
             $_SESSION['UnitAp'] = $user['UnitAp'];
             $_SESSION['UnitUp'] = $user['UnitUp'];
