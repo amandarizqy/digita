@@ -1,6 +1,11 @@
+<?php 
+// Ambil No Formulir yang valid langsung dari data database yang terambil
+$no_formulir_valid = $formulir['NoFormulir'] ?? ($_GET['no_form'] ?? '');
+?>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-box-seam me-2"></i>Keranjang Pengiriman: <?= htmlspecialchars($no_formulir) ?></h1>
-    <a href="pengiriman.php?view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
+    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-box-seam me-2"></i>Keranjang Pengiriman: <?= htmlspecialchars($no_formulir_valid) ?></h1>
+    <a href="index.php?page=pengadaan&menu=pengiriman&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
 </div>
 
 <?php 
@@ -13,13 +18,13 @@ if (isset($_SESSION['flash_error'])): ?>
 
 <!-- Informasi Header -->
 <div class="alert alert-info shadow-sm mb-4">
-    <strong>No. Form:</strong> <?= htmlspecialchars($no_formulir) ?> &bull; 
-    <strong>Tanggal:</strong> <?= htmlspecialchars($formulir['TglFormulir']) ?> &bull;
-    <strong>Tujuan:</strong> <?= htmlspecialchars($formulir['NamaAP'] ?? 'UP3') ?> <?= !empty($formulir['NamaUP']) ? ' - ' . htmlspecialchars($formulir['NamaUP']) : '' ?>
+    <strong>No. Form:</strong> <?= htmlspecialchars($no_formulir_valid) ?> &bull; 
+    <strong>Tanggal:</strong> <?= htmlspecialchars($formulir['TglFormulir'] ?? '-') ?> &bull;
+    <strong>Tujuan:</strong> <?= htmlspecialchars($formulir['NamaAP'] ?? '-') ?><?= !empty($formulir['NamaUP']) && $formulir['NamaUP'] !== '-' ? ' - ' . htmlspecialchars($formulir['NamaUP']) : '' ?>
 </div>
 
 <!-- Form Input (Hanya tampil jika status masih Draft/TIDAK) -->
-<?php if ($formulir['StatusData'] === 'TIDAK'): ?>
+<?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
 <div class="card shadow mb-4">
     <div class="card-header bg-white">
         <ul class="nav nav-tabs card-header-tabs" id="pengirimanTabs" role="tablist">
@@ -35,9 +40,9 @@ if (isset($_SESSION['flash_error'])): ?>
         <div class="tab-content">
             <!-- TAB MANUAL -->
             <div class="tab-pane fade show active" id="manual" role="tabpanel">
-                <form action="../../modules/pengadaan/proses_pengiriman.php?action=add_item" method="POST">
+                <form action="modules/pengadaan/proses_pengiriman.php?action=add_item" method="POST">
                     <input type="hidden" name="metode" value="manual">
-                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
                     
                     <div class="row align-items-end">
                         <div class="col-md-5">
@@ -67,9 +72,9 @@ if (isset($_SESSION['flash_error'])): ?>
 
             <!-- TAB EXCEL -->
             <div class="tab-pane fade" id="excel" role="tabpanel">
-                <form action="../../modules/pengadaan/proses_pengiriman.php?action=add_item" method="POST" enctype="multipart/form-data">
+                <form action="modules/pengadaan/proses_pengiriman.php?action=add_item" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="metode" value="excel">
-                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
                     <div class="row align-items-end">
                         <div class="col-md-9">
                             <label class="form-label fw-bold">Pilih File CSV Perangkat (Pemisah Titik Koma ';')</label>
@@ -133,10 +138,10 @@ if (isset($_SESSION['flash_error'])): ?>
     </div>
     
     <!-- Tombol Eksekusi -->
-    <?php if ($formulir['StatusData'] === 'TIDAK' && !empty($items)): ?>
+    <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items)): ?>
     <div class="card-footer bg-white p-3">
-        <form action="../../modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST">
-            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir) ?>">
+        <form action="modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST">
+            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
             <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Truk siap berangkat? Formulir tidak bisa diedit setelah dieksekusi.')">
                 <i class="bi bi-send-check me-2"></i>EKSEKUSI PENGIRIMAN
             </button>

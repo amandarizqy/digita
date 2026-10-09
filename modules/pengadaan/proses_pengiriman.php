@@ -117,6 +117,14 @@ try {
                         continue;
                     }
 
+                    $no_formulir = trim($_POST['no_formulir'] ?? '');
+
+                    if (empty($no_formulir)) {
+                        $_SESSION['flash_error'] = "Nomor Formulir pengiriman tidak valid atau kosong.";
+                        header("Location: ../../index.php?page=pengadaan&menu=pengiriman&view=daftar");
+                        exit;
+                    }
+
                     $stmt_detil->execute([
                         ':no_form' => $no_formulir,
                         ':noref'   => $no_ref,

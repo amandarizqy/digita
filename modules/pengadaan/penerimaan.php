@@ -11,24 +11,20 @@ if (!in_array($kode_hak, $allowed_roles)) {
     <html lang='id'>
     <head>
         <meta charset='UTF-8'>
-        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-        <title>Akses Ditolak</title>
-        <!-- SweetAlert2 CSS & JS CDN -->
         <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
     </head>
     <body class='bg-light'>
         <script>
             Swal.fire({
                 icon: 'error',
-                title: 'Akses Ditolak',
-                text: 'Modul Penerimaan hanya untuk Team Leader (TL).',
-                confirmButtonText: 'Kembali',
-                confirmButtonColor: '#4e73df',
-                allowOutsideClick: false,
-                allowEscapeKey: false
+                title: 'Akses ditolak',
+                text: 'Anda tidak memiliki wewenang untuk membuka menu ini.',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#0d6efd',
+                allowOutsideClick: false
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = '../../index.php';
+                    window.history.back(); // atau sesuaikan tujuan redirect seperti window.location.href = '../../index.php';
                 }
             });
         </script>
