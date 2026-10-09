@@ -58,7 +58,19 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                 <tbody>
                     <?php if (!empty($units)): ?>
                         <?php $no = 1; foreach ($units as $row): ?>
-                        <?php $kode_id = $row['UnitAp'] ?? $row['UnitUp'] ?? $row['UnitUpi'] ?? ''; ?>
+                        <?php
+                            // PERBAIKAN: kode primary key harus sesuai tingkat unit yang sedang dibuka.
+                            // Sebelumnya: $row['UnitAp'] ?? $row['UnitUp'] ?? $row['UnitUpi'] -> pada ULP
+                            // yang terbaca kode UP3 (UnitAp), sehingga edit & toggle tidak mengenai baris mana pun.
+                            if ($sub === 'ulp') {
+                                $kode_id = $row['UnitUp'] ?? '';
+                            } elseif ($sub === 'up3') {
+                                $kode_id = $row['UnitAp'] ?? '';
+                            } else {
+                                $kode_id = $row['UnitUpi'] ?? '';
+                            }
+                            $unit_aktif = (($row['StatusData'] ?? '') === 'AKTIF');
+                        ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
                             <td class="fw-bold text-dark font-monospace kode-unit-cell"><?= htmlspecialchars($kode_id); ?></td>
@@ -76,17 +88,17 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                                 <?php endif; ?>
                             </td>
                             <?php endif; ?>
-                            <td>
-                                <?= ms_badge_status($row['StatusData'] ?? '') ?>
-                            </td>
+                            <td><?= ms_badge_status($row['StatusData'] ?? '') ?></td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="index.php?page=master&sub=<?= htmlspecialchars(urlencode($sub)); ?>&action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>" 
-                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
+                                    <a href="index.php?page=master&sub=<?= htmlspecialchars(urlencode($sub)); ?>&action=toggle_status&id=<?= htmlspecialchars(urlencode($kode_id)); ?>"
+                                       class="btn btn-outline-secondary py-1 px-2"
+                                       title="<?= $unit_aktif ? 'Nonaktifkan unit' : 'Aktifkan unit'; ?>"
+                                       data-confirm="<?= htmlspecialchars(($unit_aktif ? 'Nonaktifkan' : 'Aktifkan') . ' unit ' . ($row['SingkatanNama'] ?? $kode_id) . '?'); ?>">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-unit" 
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-unit"
                                             data-id="<?= htmlspecialchars($kode_id); ?>"
                                             data-nama="<?= htmlspecialchars($row['NamaUnit'] ?? ''); ?>"
                                             data-singkatan="<?= htmlspecialchars($row['SingkatanNama'] ?? ''); ?>"
@@ -275,8 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (inputCari && tabel) {
         inputCari.addEventListener('keyup', function() {
             const keyword = this.value.toLowerCase();
-            const baris = tabel.querySelectorAll('tbody tr');
-            baris.forEach(row => {
+            tabel.querySelectorAll('tbody tr').forEach(row => {
                 const kode = row.querySelector('.kode-unit-cell') ? row.querySelector('.kode-unit-cell').textContent.toLowerCase() : '';
                 const singkatan = row.querySelector('.singkatan-cell') ? row.querySelector('.singkatan-cell').textContent.toLowerCase() : '';
                 const nama = row.querySelector('.nama-unit-cell') ? row.querySelector('.nama-unit-cell').textContent.toLowerCase() : '';
@@ -285,22 +296,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const modalEditEl = document.getElementById('modalEditUnit');
-    const modalEdit = new bootstrap.Modal(modalEditEl);
+    const modalEdit = new bootstrap.Modal(document.getElementById('modalEditUnit'));
 
     document.querySelectorAll('.btn-edit-unit').forEach(btn => {
         btn.addEventListener('click', function() {
             const id = this.getAttribute('data-id');
-            const nama = this.getAttribute('data-nama');
-            const singkatan = this.getAttribute('data-singkatan');
             const upi = this.getAttribute('data-upi');
             const ap = this.getAttribute('data-ap');
             const status = this.getAttribute('data-status');
 
             document.getElementById('edit_id_primary').value = id;
             document.getElementById('edit_kode_display').value = id;
-            document.getElementById('edit_nama').value = nama;
-            document.getElementById('edit_singkatan').value = singkatan;
+            document.getElementById('edit_nama').value = this.getAttribute('data-nama');
+            document.getElementById('edit_singkatan').value = this.getAttribute('data-singkatan');
             document.getElementById('edit_status').value = (status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
             if (document.getElementById('edit_unit_upi')) {

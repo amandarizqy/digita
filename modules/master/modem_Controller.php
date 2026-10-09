@@ -26,6 +26,12 @@ if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
 $user_unit = $_SESSION['KodeUnit'] ?? ''; 
 $action    = $_GET['action'] ?? 'index';
 
+// Normalisasi status dari form: hanya 'AKTIF' atau 'TIDAK'
+function normalisasi_status_modem($nilai): string
+{
+    return (strtoupper(trim((string) $nilai)) === 'TIDAK') ? 'TIDAK' : 'AKTIF';
+}
+
 // 3. Tambah Modem (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
     $imei_modem       = trim($_POST['ImeiModem'] ?? '');
@@ -37,7 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $ip_server_engine = trim($_POST['IpServerEngine'] ?? '');
     $port_engine      = trim($_POST['PortEngine'] ?? '');
 
-    $status_data      = 'AKTIF';
+    // Status mengikuti pilihan di form
+    $status_data      = normalisasi_status_modem($_POST['StatusData'] ?? 'AKTIF');
 
     if (empty($kode_upi) || strpos($kode_ap, '56') === 0 || strpos($kode_up, '56') === 0) {
         $kode_upi = '56';
@@ -103,7 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $ip_server_engine = trim($_POST['IpServerEngine'] ?? '');
     $port_engine      = trim($_POST['PortEngine'] ?? '');
 
-    $status_data      = 'AKTIF';
+    // Status mengikuti pilihan di form (sebelumnya selalu dipaksa AKTIF)
+    $status_data      = normalisasi_status_modem($_POST['StatusData'] ?? 'AKTIF');
 
     if (empty($kode_upi) || strpos($kode_ap, '56') === 0 || strpos($kode_up, '56') === 0) {
         $kode_upi = '56';
@@ -126,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             exit;
         } catch (PDOException $e) {
             echo "<script>
-                alert('Gagal update database:\n" . addslashes($e->getMessage()) . "');
+                alert(" . json_encode("Gagal update database:\n" . $e->getMessage()) . ");
                 window.location.href='index.php?page=master&sub=modem';
             </script>";
             exit;
@@ -134,7 +142,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// 5. Hapus Modem (GET - delete)
+// 5. Aktif / Nonaktif Modem (GET - toggle_status)
+if ($action === 'toggle_status') {
+    $imei = trim($_GET['id'] ?? '');
+    if ($imei !== '') {
+        try {
+            $stmt = $conn->prepare("UPDATE master_modem 
+                SET StatusData = IF(StatusData = 'AKTIF', 'TIDAK', 'AKTIF'), WaktuData = NOW() 
+                WHERE ImeiModem = ?");
+            $stmt->execute([$imei]);
+        } catch (PDOException $e) {
+            echo "<script>
+                alert(" . json_encode("Gagal mengubah status modem:\n" . $e->getMessage()) . ");
+                window.location.href='index.php?page=master&sub=modem';
+            </script>";
+            exit;
+        }
+    }
+    header("Location: index.php?page=master&sub=modem");
+    exit;
+}
+
+// 6. Hapus Modem (GET - delete)
 if ($action === 'delete') {
     $imei = $_GET['id'] ?? null;
     if ($imei) {
@@ -150,7 +179,7 @@ if ($action === 'delete') {
     exit;
 }
 
-// 6. Query Data & Metrik
+// 7. Query Data & Metrik
 $sql = "SELECT * FROM master_modem WHERE 1=1";
 $params = [];
 

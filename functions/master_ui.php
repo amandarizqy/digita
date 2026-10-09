@@ -48,7 +48,7 @@ function ms_tone(string $tone): array
     return $map[$tone] ?? $map['primary'];
 }
 
-/** Skrip "Akses ditolak" (SweetAlert2), dimuat khusus di halaman Master. */
+/** Skrip "Akses ditolak" (SweetAlert2) + dialog konfirmasi [data-confirm]. */
 function ms_skrip_akses(): string
 {
     static $done = false;
@@ -65,6 +65,44 @@ function ms_skrip_akses(): string
         document.head.appendChild(s);
     }
 })();
+
+// Dialog konfirmasi untuk tombol aktif/nonaktif: teks diambil dari atribut data-confirm
+document.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-confirm]');
+    if (!a) {
+        return;
+    }
+    e.preventDefault();
+
+    var pesan = a.getAttribute('data-confirm') || 'Lanjutkan?';
+    var href  = a.getAttribute('href');
+    var nonaktif = /^nonaktifkan/i.test(pesan);
+
+    // Cadangan kalau SweetAlert2 belum termuat
+    if (!window.Swal) {
+        if (confirm(pesan) && href) { window.location.href = href; }
+        return;
+    }
+
+    Swal.fire({
+        icon: nonaktif ? 'warning' : 'question',
+        title: nonaktif ? 'Nonaktifkan data?' : 'Aktifkan data?',
+        text: pesan,
+        showCancelButton: true,
+        confirmButtonText: nonaktif ? 'Ya, Nonaktifkan' : 'Ya, Aktifkan',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: nonaktif ? '#dc3545' : '#198754',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true,
+        focusCancel: true,
+        customClass: { popup: 'rounded-4' }
+    }).then(function (hasil) {
+        if (hasil.isConfirmed && href) {
+            window.location.href = href;
+        }
+    });
+});
+
 function tampilkanAksesDitolak() {
     if (window.Swal) {
         Swal.fire({icon: 'error', title: 'Akses ditolak', text: 'Anda tidak memiliki wewenang untuk membuka menu ini.', confirmButtonText: 'OK', confirmButtonColor: '#0d6efd'});
@@ -181,9 +219,15 @@ function ms_badge_status($status): string
         : '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-50 px-2 py-1 font-monospace" style="font-size:.72rem;"><i class="bi bi-x-circle me-1"></i>NONAKTIF</span>';
 }
 
+/**
+ * Badge "Tabel: nama_tabel" sengaja dikosongkan supaya tidak tampil di halaman Master.
+ * Template tetap memanggil fungsi ini, jadi tidak perlu diubah.
+ * Untuk menampilkannya lagi, ganti isi fungsi dengan:
+ *   return '<span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: ' . ms_e($nama) . '</span>';
+ */
 function ms_badge_tabel(string $nama): string
 {
-    return '<span class="badge bg-light text-secondary border font-monospace py-1 px-2">Tabel: ' . ms_e($nama) . '</span>';
+    return '';
 }
 
 function ms_footer_tabel(int $total): string

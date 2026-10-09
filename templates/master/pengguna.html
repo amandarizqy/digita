@@ -7,7 +7,55 @@ $akses_provider = ($role === 'SA.KP' || $role === 'SF.UI');
 $akses_modem    = ($role === 'SA.KP' || $role === 'SF.UI');
 $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 
-$sub_filter = $_GET['filter'] ?? $_GET['sub'] ?? 'semua';
+// Filter sub entitas: semua | ui | up3 | ulp | vendor
+$sub_filter = $_GET['filter'] ?? 'semua';
+if (!in_array($sub_filter, ['semua', 'ui', 'up3', 'ulp', 'vendor'], true)) {
+    $sub_filter = 'semua';
+}
+
+// Daftar kode hak akses (sesuai tabel Otoritas). Ubah teks label di sini kalau perlu.
+$daftar_hak = [
+    'SA.KP' => 'SA.KP - Super Admin Pusat',
+    'MB.UI' => 'MB.UI - Tingkat Unit Induk',
+    'AM.UI' => 'AM.UI - Admin Messaging',
+    'AM.AP' => 'AM.AP - Tingkat UP3',
+    'ML.UP' => 'ML.UP - Tingkat ULP',
+    'TL.AP' => 'TL.AP - Tingkat UP3',
+    'TL.UP' => 'TL.UP - Tingkat ULP',
+    'SF.UI' => 'SF.UI - Staff Unit Induk',
+    'SF.AP' => 'SF.AP - Staff UP3',
+    'SF.UP' => 'SF.UP - Staff ULP',
+    'SF.VD' => 'SF.VD - Staff Vendor',
+];
+
+// Sembunyikan role SA.KP (admin) untuk semua orang.
+// Ganti menjadi ($role !== 'SA.KP') kalau SA.KP ingin tetap melihatnya.
+$sembunyikan_sa = true;
+$users = $users ?? [];
+
+if ($sembunyikan_sa) {
+    unset($daftar_hak['SA.KP']);
+    $users = array_values(array_filter($users, function ($u) {
+        return ($u['KodeHak'] ?? '') !== 'SA.KP';
+    }));
+}
+
+// Penyaringan sesuai pill Sub Entitas (berdasarkan akhiran kode hak)
+$akhiran_filter = ['ui' => '.UI', 'up3' => '.AP', 'ulp' => '.UP', 'vendor' => '.VD'];
+if ($sub_filter !== 'semua') {
+    $akhiran = $akhiran_filter[$sub_filter];
+    $users = array_values(array_filter($users, function ($u) use ($akhiran) {
+        $hak = (string) ($u['KodeHak'] ?? '');
+        return substr($hak, -strlen($akhiran)) === $akhiran;
+    }));
+}
+
+// Hitung ulang metrik dari data yang tampil
+$total_akun  = count($users);
+$total_aktif = count(array_filter($users, function ($u) {
+    return ($u['StatusData'] ?? '') === 'AKTIF';
+}));
+$persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
 ?>
 <?php require_once __DIR__ . '/../../functions/master_ui.php'; ?>
 
@@ -16,16 +64,17 @@ $sub_filter = $_GET['filter'] ?? $_GET['sub'] ?? 'semua';
     'subtitle' => 'Kelola akun pengguna sistem beserta hak akses (role) di tiap tingkat organisasi.',
     'tombol'   => ['label'=>'Tambah Pengguna','target'=>'modalTambahPengguna','icon'=>'bi-plus-lg'],
 ], ['unit'=>$akses_unit,'pengguna'=>$akses_pengguna,'provider'=>$akses_provider,'modem'=>$akses_modem,'pesan'=>$akses_pesan], 'pengguna', [
-    ['label'=>'Semua Pengguna', 'href'=>'index.php?page=master&sub=pengguna&filter=semua', 'on'=>$sub_filter === 'semua'],
-    ['label'=>'Tingkat UI',     'href'=>'index.php?page=master&sub=pengguna&filter=ui',    'on'=>$sub_filter === 'ui'],
-    ['label'=>'Tingkat UP3',    'href'=>'index.php?page=master&sub=pengguna&filter=up3',   'on'=>$sub_filter === 'up3'],
-    ['label'=>'Tingkat ULP',    'href'=>'index.php?page=master&sub=pengguna&filter=ulp',   'on'=>$sub_filter === 'ulp'],
+    ['label'=>'Semua Pengguna', 'href'=>'index.php?page=master&sub=pengguna&filter=semua',  'on'=>$sub_filter === 'semua'],
+    ['label'=>'Tingkat UI',     'href'=>'index.php?page=master&sub=pengguna&filter=ui',     'on'=>$sub_filter === 'ui'],
+    ['label'=>'Tingkat UP3',    'href'=>'index.php?page=master&sub=pengguna&filter=up3',    'on'=>$sub_filter === 'up3'],
+    ['label'=>'Tingkat ULP',    'href'=>'index.php?page=master&sub=pengguna&filter=ulp',    'on'=>$sub_filter === 'ulp'],
+    ['label'=>'Vendor',         'href'=>'index.php?page=master&sub=pengguna&filter=vendor', 'on'=>$sub_filter === 'vendor'],
 ]) ?>
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
-    <?= ms_kpi('Total Akun Pengguna', ms_kpi_nilai($total_akun ?? count($users), 'Akun'), 'Akun terdaftar di sistem', 'bi-people', 'primary') ?>
-    <?= ms_kpi('Status Akun Aktif', ms_n($total_aktif ?? 0) . ' <span class="fs-6 fw-semibold text-muted">/ ' . ms_n($total_akun ?? count($users)) . ' Aktif</span>', ($persentase_aktif ?? 0) . '% terverifikasi sistem', 'bi-person-check', 'success', true) ?>
+    <?= ms_kpi('Total Akun Pengguna', ms_kpi_nilai($total_akun, 'Akun'), 'Akun terdaftar di sistem', 'bi-people', 'primary') ?>
+    <?= ms_kpi('Status Akun Aktif', ms_n($total_aktif) . ' <span class="fs-6 fw-semibold text-muted">/ ' . ms_n($total_akun) . ' Aktif</span>', $persentase_aktif . '% terverifikasi sistem', 'bi-person-check', 'success', true) ?>
 </div>
 
 <!-- TABEL MASTER PENGGUNA -->
@@ -52,29 +101,46 @@ $sub_filter = $_GET['filter'] ?? $_GET['sub'] ?? 'semua';
                         <th>EMAIL</th>
                         <th>ROLE / HAK</th>
                         <th>STATUS</th>
-                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 130px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($users)): ?>
                         <?php $no = 1; foreach ($users as $usr): ?>
+                        <?php $aktif = (($usr['StatusData'] ?? '') === 'AKTIF'); ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
                             <td class="fw-bold text-dark font-monospace akun-cell">
                                 <i class="bi bi-person me-1 text-primary"></i>
                                 <?= htmlspecialchars($usr['NamaAkun'] ?? '-'); ?>
                             </td>
-                            <td class="fw-medium text-dark nama-cell"><?= htmlspecialchars($usr['NamaPengguna'] ?? '-'); ?></td>
+                            <td class="fw-medium text-dark nama-cell">
+                                <?= htmlspecialchars($usr['NamaPengguna'] ?? '-'); ?>
+                                <?php if (!empty($usr['NomorKontak'])): ?>
+                                    <div class="text-muted small"><i class="bi bi-telephone me-1"></i><?= htmlspecialchars($usr['NomorKontak']); ?></div>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-secondary small email-cell"><?= htmlspecialchars($usr['AlamatEmail'] ?? '-'); ?></td>
                             <td><span class="badge bg-info bg-opacity-10 text-dark border font-monospace"><?= htmlspecialchars($usr['KodeHak'] ?? '-'); ?></span></td>
-                            <td>
-                                <?= ms_badge_status($usr['StatusData'] ?? '') ?>
-                            </td>
+                            <td><?= ms_badge_status($usr['StatusData'] ?? '') ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="index.php?page=master&sub=pengguna&action=toggle_status&id=<?= urlencode($usr['NamaAkun']); ?>" class="btn btn-outline-secondary py-1 px-2" title="Toggle Status">
+                                    <a href="index.php?page=master&sub=pengguna&action=toggle_status&id=<?= urlencode($usr['NamaAkun']); ?>"
+                                       class="btn btn-outline-secondary py-1 px-2"
+                                       title="<?= $aktif ? 'Nonaktifkan akun' : 'Aktifkan akun'; ?>"
+                                       data-confirm="<?= htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' akun ' . $usr['NamaAkun'] . '?'); ?>">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-pengguna"
+                                            data-akun="<?= htmlspecialchars($usr['NamaAkun'] ?? ''); ?>"
+                                            data-email="<?= htmlspecialchars($usr['AlamatEmail'] ?? ''); ?>"
+                                            data-nama="<?= htmlspecialchars($usr['NamaPengguna'] ?? ''); ?>"
+                                            data-kontak="<?= htmlspecialchars($usr['NomorKontak'] ?? ''); ?>"
+                                            data-hak="<?= htmlspecialchars($usr['KodeHak'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($usr['StatusData'] ?? 'AKTIF'); ?>"
+                                            title="Edit Pengguna">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -87,7 +153,7 @@ $sub_filter = $_GET['filter'] ?? $_GET['sub'] ?? 'semua';
         </div>
     </div>
 
-    <?= ms_footer_tabel((int) ($total_akun ?? count($users))) ?>
+    <?= ms_footer_tabel((int) $total_akun) ?>
 </div>
 
 <!-- MODAL TAMBAH PENGGUNA -->
@@ -123,16 +189,66 @@ $sub_filter = $_GET['filter'] ?? $_GET['sub'] ?? 'semua';
                 <div class="col-md-6">
                     <label class="form-label">Kode Hak Access *</label>
                     <select name="KodeHak" class="form-select" required>
-                        <option value="SF.UI">SF.UI - Staff Unit Induk</option>
-                        <option value="SF.AP">SF.AP - Staff UP3</option>
-                        <option value="SF.UP">SF.UP - Staff ULP</option>
-                        <option value="AM.UI">AM.UI - Admin Messaging</option>
+                        <?php foreach ($daftar_hak as $kode => $label): ?>
+                            <option value="<?= htmlspecialchars($kode); ?>"><?= htmlspecialchars($label); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>
             <div class="modal-footer border-top px-4 py-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
                 <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Pengguna</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL EDIT PENGGUNA -->
+<div class="modal fade" id="modalEditPengguna" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form action="index.php?page=master&sub=pengguna" method="POST" class="modal-content border-0 shadow rounded-4">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="NamaAkun" id="edit_pg_akun">
+            <div class="modal-header border-bottom px-4 py-3">
+                <h5 class="modal-title fw-bold">Edit Akun Pengguna</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body row g-3 px-4 py-4">
+                <div class="col-md-6">
+                    <label class="form-label">Nama Akun (Locked)</label>
+                    <input type="text" id="edit_pg_akun_display" class="form-control font-monospace bg-light" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Alamat Email *</label>
+                    <input type="email" name="AlamatEmail" id="edit_pg_email" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Nama Lengkap *</label>
+                    <input type="text" name="NamaPengguna" id="edit_pg_nama" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Nomor Kontak</label>
+                    <input type="text" name="NomorKontak" id="edit_pg_kontak" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Kode Hak Access *</label>
+                    <select name="KodeHak" id="edit_pg_hak" class="form-select" required>
+                        <?php foreach ($daftar_hak as $kode => $label): ?>
+                            <option value="<?= htmlspecialchars($kode); ?>"><?= htmlspecialchars($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Status Akun</label>
+                    <select name="StatusData" id="edit_pg_status" class="form-select">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top px-4 py-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Perubahan</button>
             </div>
         </form>
     </div>
@@ -145,8 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (inputCari && tabel) {
         inputCari.addEventListener('keyup', function() {
             const keyword = this.value.toLowerCase();
-            const baris = tabel.querySelectorAll('tbody tr');
-            baris.forEach(row => {
+            tabel.querySelectorAll('tbody tr').forEach(row => {
                 const akun = row.querySelector('.akun-cell') ? row.querySelector('.akun-cell').textContent.toLowerCase() : '';
                 const nama = row.querySelector('.nama-cell') ? row.querySelector('.nama-cell').textContent.toLowerCase() : '';
                 const email = row.querySelector('.email-cell') ? row.querySelector('.email-cell').textContent.toLowerCase() : '';
@@ -154,5 +269,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    const modalEdit = new bootstrap.Modal(document.getElementById('modalEditPengguna'));
+    document.querySelectorAll('.btn-edit-pengguna').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit_pg_akun').value = this.dataset.akun;
+            document.getElementById('edit_pg_akun_display').value = this.dataset.akun;
+            document.getElementById('edit_pg_email').value = this.dataset.email;
+            document.getElementById('edit_pg_nama').value = this.dataset.nama;
+            document.getElementById('edit_pg_kontak').value = this.dataset.kontak;
+            document.getElementById('edit_pg_hak').value = this.dataset.hak;
+            document.getElementById('edit_pg_status').value = (this.dataset.status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+            modalEdit.show();
+        });
+    });
 });
 </script>

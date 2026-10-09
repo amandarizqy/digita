@@ -56,6 +56,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                 <tbody>
                     <?php if (!empty($perintah)): ?>
                         <?php foreach ($perintah as $row): ?>
+                        <?php $perintah_aktif = (($row['StatusData'] ?? '') === 'AKTIF'); ?>
                         <tr>
                             <td class="ps-4 text-muted small font-monospace"><?= htmlspecialchars($row['Id'] ?? '-'); ?></td>
                             <td>
@@ -75,7 +76,9 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
                                     <a href="index.php?page=master&sub=pesan&action=toggle_status&id=<?= htmlspecialchars(urlencode($row['Id'])); ?>"
-                                       class="btn btn-outline-secondary py-1 px-2" title="Ubah Status (Aktif/Nonaktif)">
+                                       class="btn btn-outline-secondary py-1 px-2"
+                                       title="<?= $perintah_aktif ? 'Nonaktifkan perintah' : 'Aktifkan perintah'; ?>"
+                                       data-confirm="<?= htmlspecialchars(($perintah_aktif ? 'Nonaktifkan' : 'Aktifkan') . ' perintah ' . ($row['IsiPesan'] ?? '') . '?'); ?>">
                                         <i class="bi bi-arrow-repeat"></i>
                                     </a>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-perintah"
