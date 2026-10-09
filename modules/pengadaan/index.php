@@ -186,42 +186,19 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
             $stmt_up->execute([':upi' => $unit_upi_login]);
             $list_up = $stmt_up->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
-            $no_formulir = $_GET['no_form'];
-            // Ambil 12 karakter terakhir (tanggal dan suffix, cth: 20261009-F.B) untuk pencocokan yang akurat
-            $suffix = '%' . substr($no_formulir, -12); 
+            $no_pengiriman = $_GET['no_form'];
             
-            $stmt = $conn->prepare("SELECT f.*, 
-                                    COALESCE(u.NamaUnit, '-') as NamaUP, 
-                                    COALESCE(a.NamaUnit, '-') as NamaAP 
+            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
                                     FROM formulir_pengiriman f 
                                     LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
                                     LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
-                                    WHERE f.NoFormulir = :no_form OR f.NoFormulir LIKE :suffix");
-            $stmt->execute([
-                ':no_form' => $no_formulir, 
-                ':suffix' => $suffix
-            ]);
+                                    WHERE f.NoFormulir = :no_form");
+            $stmt->execute([':no_form' => $no_pengiriman]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if (!$formulir) {
-                $formulir = [
-                    'NoFormulir' => $no_formulir,
-                    'TglFormulir' => date('Y-m-d'),
-                    'StatusData' => 'TIDAK',
-                    'StatusPengiriman' => 'DIKIRIM',
-                    'NamaAP' => '-',
-                    'NamaUP' => '-'
-                ];
-            }
-            
-            // Ambil data detail menggunakan join ke formulir utama agar sinkron
-            $stmt_items = $conn->prepare("SELECT d.* FROM formulir_pengiriman_detil d 
-                                          JOIN formulir_pengiriman f ON d.NoFormulir = f.NoFormulir
-                                          WHERE f.NoFormulir = :no_form OR f.NoFormulir LIKE :suffix");
-            $stmt_items->execute([
-                ':no_form' => $no_formulir,
-                ':suffix' => $suffix
-            ]);
+            // PASTIKAN BARIS INI MENGGUNAKAN :no_form DENGAN BENAR
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_items->execute([':no_form' => $no_pengiriman]);
             $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
         }
     }

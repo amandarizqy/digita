@@ -1,6 +1,5 @@
 <?php 
-// Ambil No Formulir yang valid langsung dari data database yang terambil
-$no_formulir_valid = $formulir['NoFormulir'] ?? ($_GET['no_form'] ?? '');
+$no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -8,8 +7,7 @@ $no_formulir_valid = $formulir['NoFormulir'] ?? ($_GET['no_form'] ?? '');
     <a href="index.php?page=pengadaan&menu=pengiriman&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
 </div>
 
-<?php 
-if (isset($_SESSION['flash_error'])): ?>
+<?php if (isset($_SESSION['flash_error'])): ?>
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <?= $_SESSION['flash_error']; unset($_SESSION['flash_error']); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -70,7 +68,7 @@ if (isset($_SESSION['flash_error'])): ?>
                 </form>
             </div>
 
-            <!-- TAB EXCEL -->
+            <!-- TAB EXCEL / CSV -->
             <div class="tab-pane fade" id="excel" role="tabpanel">
                 <form action="modules/pengadaan/proses_pengiriman.php?action=add_item" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="metode" value="excel">
@@ -92,7 +90,7 @@ if (isset($_SESSION['flash_error'])): ?>
 </div>
 <?php endif; ?>
 
-<!-- Tabel Daftar Aset yang Akan Dikirim -->
+<!-- Tabel Daftar Muatan Pengiriman -->
 <div class="card shadow mb-4 border-0">
     <div class="card-header bg-white py-3">
         <h6 class="m-0 font-weight-bold text-primary">Daftar Muatan Pengiriman</h6>
@@ -105,7 +103,8 @@ if (isset($_SESSION['flash_error'])): ?>
                         <th class="ps-4">NO URUT</th>
                         <th>NO REF PERANGKAT</th>
                         <th>STIKER QC</th>
-                        <th class="pe-4">CACAT FISIK</th>
+                        <th>CACAT FISIK</th>
+                        <th class="text-end pe-4">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -118,31 +117,47 @@ if (isset($_SESSION['flash_error'])): ?>
                             <td class="ps-4"><?= $no++ ?></td>
                             <td class="fw-bold"><?= htmlspecialchars($item['NoRef']) ?></td>
                             <td><?= htmlspecialchars($item['StikerQC']) ?></td>
-                            <td class="pe-4">
+                            <td>
                                 <?php if($item['CacatFisik'] == 'ADA'): ?>
                                     <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle"></i> ADA</span>
                                 <?php else: ?>
                                     TIDAK
                                 <?php endif; ?>
                             </td>
+                            <td class="text-end pe-4">
+                                <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang pengiriman?')">
+                                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+                                    <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                     <?php 
                         endforeach; 
                     else: 
                     ?>
-                        <tr><td colspan="4" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
+                        <tr><td colspan="5" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
     
-    <!-- Tombol Eksekusi -->
+    <!-- Tombol Reset & Eksekusi di Bagian Paling Bawah -->
     <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items)): ?>
-    <div class="card-footer bg-white p-3">
-        <form action="modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST">
+    <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
+        <form action="modules/pengadaan/proses_pengiriman.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar muatan pengiriman ini?')">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-            <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Truk siap berangkat? Formulir tidak bisa diedit setelah dieksekusi.')">
+            <button type="submit" class="btn btn-outline-danger btn-lg w-100 fw-bold">
+                <i class="bi bi-arrow-counterclockwise me-2"></i>RESET LIST
+            </button>
+        </form>
+        
+        <form action="modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST" class="w-50">
+            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+            <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Truk siap berangkat? Data tidak dapat diubah setelah dieksekusi.')">
                 <i class="bi bi-send-check me-2"></i>EKSEKUSI PENGIRIMAN
             </button>
         </form>

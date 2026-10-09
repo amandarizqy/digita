@@ -171,6 +171,29 @@ try {
         exit;
     }
 
+    else if ($action === 'delete_item') {
+        $no_formulir = trim($_POST['no_formulir'] ?? '');
+        $no_ref      = trim($_POST['no_ref'] ?? '');
+
+        if (!empty($no_formulir) && !empty($no_ref)) {
+            $stmt = $conn->prepare("DELETE FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form AND NoRef = :no_ref");
+            $stmt->execute([':no_form' => $no_formulir, ':no_ref' => $no_ref]);
+        }
+        header("Location: ../../index.php?page=pengadaan&menu=pengiriman&view=detail&no_form=" . urlencode($no_formulir));
+        exit;
+    }
+
+    else if ($action === 'reset_list') {
+        $no_formulir = trim($_POST['no_formulir'] ?? '');
+
+        if (!empty($no_formulir)) {
+            $stmt = $conn->prepare("DELETE FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt->execute([':no_form' => $no_formulir]);
+        }
+        header("Location: ../../index.php?page=pengadaan&menu=pengiriman&view=detail&no_form=" . urlencode($no_formulir));
+        exit;
+    }
+
     // AKSI 3: EKSEKUSI FINAL FORMULIR PENGIRIMAN
     if ($action === 'execute_form' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_formulir = $_POST['no_formulir'];
