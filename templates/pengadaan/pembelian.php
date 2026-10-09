@@ -1,4 +1,6 @@
 <?php 
+$no_formulir_valid = $formulir['NoFormulir'] ?? ($_GET['no_form'] ?? '');
+
 // PERBAIKAN: Hapus pemanggilan array $data[]
 $formulir = $formulir ?? false;
 $items = $items ?? [];
@@ -104,7 +106,7 @@ endif;
 </div>
 <?php endif; ?>
 
-<!-- Tabel Daftar Aset -->
+<!-- Tabel Daftar Barang Terinput -->
 <div class="card shadow mb-4 border-0">
     <div class="card-header bg-white py-3">
         <h6 class="m-0 font-weight-bold text-primary">Daftar Barang Terinput</h6>
@@ -114,51 +116,58 @@ endif;
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4 py-3">NO REF</th>
+                        <th class="ps-4">NO REF</th>
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
-                        <th class="pe-4 text-end">HARGA BELI</th>
+                        <th>HARGA BELI</th>
+                        <th class="text-end pe-4">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php 
-                    $total = 0;
                     if (!empty($items)):
                         foreach ($items as $item): 
-                            $total += $item['HargaBeli'];
                     ?>
                         <tr>
-                            <td class="fw-bold ps-4 text-primary"><?= htmlspecialchars($item['NoRef']) ?></td>
+                            <td class="ps-4 fw-bold"><?= htmlspecialchars($item['NoRef']) ?></td>
                             <td><?= htmlspecialchars($item['StikerQC']) ?></td>
                             <td><?= htmlspecialchars($item['CacatFisik']) ?></td>
-                            <td class="pe-4 text-end fw-bold">Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
+                            <td>Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
+                            <td class="text-end pe-4">
+                                <form action="modules/pengadaan/proses_pembelian.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang?')">
+                                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+                                    <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                     <?php 
                         endforeach; 
                     else: 
                     ?>
-                        <tr><td colspan="4" class="text-center py-5 text-muted"><i class="bi bi-box fs-1 d-block mb-2 text-secondary"></i>Belum ada barang di keranjang ini.</td></tr>
+                        <tr><td colspan="5" class="text-center py-4 text-muted">Belum ada barang di keranjang.</td></tr>
                     <?php endif; ?>
                 </tbody>
-                <?php if (!empty($items)): ?>
-                <tfoot class="bg-light">
-                    <tr>
-                        <td colspan="3" class="text-end fw-bold py-3">TOTAL BIAYA:</td>
-                        <td class="text-end pe-4 fw-bold text-primary fs-5 py-3">Rp <?= number_format($total, 0, ',', '.') ?></td>
-                    </tr>
-                </tfoot>
-                <?php endif; ?>
             </table>
         </div>
     </div>
     
-    <!-- Tombol Eksekusi -->
-    <?php if ($formulir['StatusData'] === 'TIDAK' && !empty($items)): ?>
-    <div class="card-footer bg-white p-3">
-        <form action="modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST">
-            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
-            <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold" onclick="return confirm('Yakin ingin eksekusi? Aset akan didaftarkan permanen ke Master Barang.')">
-                <i class="bi bi-check2-all me-2"></i>FINALISASI & EKSEKUSI PEMBELIAN
+    <!-- Tombol Reset & Eksekusi di Bagian Paling Bawah -->
+    <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items)): ?>
+    <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
+        <form action="modules/pengadaan/proses_pembelian.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar alat?')">
+            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+            <button type="submit" class="btn btn-outline-danger btn-lg w-100 fw-bold">
+                <i class="bi bi-arrow-counterclockwise me-2"></i>RESET LIST
+            </button>
+        </form>
+        
+        <form action="modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST" class="w-50">
+            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+            <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Data siap dieksekusi?')">
+                <i class="bi bi-send-check me-2"></i>FINALISASI & EKSEKUSI
             </button>
         </form>
     </div>
