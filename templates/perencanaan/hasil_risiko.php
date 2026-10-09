@@ -17,7 +17,6 @@ echo pr_header([
     'action'   => 'hasil_risiko',
     'periode'  => true,
     'buttons'  => [
-        ['label' => 'Cetak', 'icon' => 'bi-printer', 'class' => 'btn btn-outline-secondary btn-sm px-3 rounded-2', 'attrs' => 'type="button" onclick="window.print()"'],
         ['label' => 'Klasifikasi Ulang', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_risiko')],
     ],
 ]);

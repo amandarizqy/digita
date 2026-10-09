@@ -12,7 +12,6 @@ echo pr_header([
     'action'   => 'hasil_prioritas',
     'periode'  => true,
     'buttons'  => [
-        ['label' => 'Cetak', 'icon' => 'bi-printer', 'class' => 'btn btn-outline-secondary btn-sm px-3 rounded-2', 'attrs' => 'type="button" onclick="window.print()"'],
         ['label' => 'Proses Pemeringkatan', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_prioritas', ['skala' => $skala_filter ?: ''])],
     ],
 ]);
