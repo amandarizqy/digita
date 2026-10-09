@@ -3,10 +3,10 @@
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['TL.AP', 'TL.UP', 'SA.KP']; 
 if (!in_array($kode_hak, $allowed_roles)) {
-    // KODE BARU (Profesional & Modern)
+    // Redirect langsung ke halaman yang diizinkan atau tampilkan SweetAlert di dalam layout utama
     echo "
         <!DOCTYPE html>
-        <html lang='en'>
+        <html lang='id'>
         <head>
             <meta charset='UTF-8'>
             <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
@@ -15,15 +15,13 @@ if (!in_array($kode_hak, $allowed_roles)) {
             <script>
                 Swal.fire({
                     icon: 'error',
-                    title: 'Akses Ditolak',
-                    text: 'Modul ini hanya dapat diakses oleh Team Leader atau Otoritas terkait.',
-                    confirmButtonText: 'Kembali',
-                    confirmButtonColor: '#4e73df',
+                    title: 'Akses ditolak',
+                    text: 'Anda tidak memiliki wewenang untuk membuka menu ini.',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#0d6efd',
                     allowOutsideClick: false
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        window.history.back();
-                    }
+                }).then(() => {
+                    window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
                 });
             </script>
         </body>

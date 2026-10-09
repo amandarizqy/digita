@@ -156,7 +156,7 @@ function pr_menu(): array
         ],
         'monitoring' => [
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
-                'data_riwayat'      => ['Riwayat Pelunasan', 'bi-clock-history'],
+                // 'data_riwayat'      => ['Riwayat Pelunasan', 'bi-clock-history'],
                 'hasil_kepentingan' => ['Tingkat Kepentingan', 'bi-bar-chart-line'],
                 'hasil_survey'      => ['Survey SR', 'bi-clipboard-data'],
                 'hasil_risiko'      => ['Level Risiko', 'bi-shield-check'],
