@@ -14,9 +14,9 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
     'subtitle' => 'Kelola modem gateway, kartu SIM, serta IP server dan port engine telemetri relai S41.',
     'tombol'   => ['label'=>'Tambah Modem','target'=>'modalTambahModem','icon'=>'bi-plus-lg'],
 ], ['unit'=>$akses_unit,'pengguna'=>$akses_pengguna,'provider'=>$akses_provider,'modem'=>$akses_modem,'pesan'=>$akses_pesan], 'pesan', [
-    ['label'=>'Provider SIM',                 'href'=>'index.php?page=master&sub=provider', 'on'=>false, 'locked'=>!$akses_provider],
-    ['label'=>'Modem GSM',                    'href'=>'index.php?page=master&sub=modem',    'on'=>true,  'locked'=>!$akses_modem],
-    ['label'=>'Perintah Baku (AT Commands)',  'href'=>'index.php?page=master&sub=pesan',    'on'=>false, 'locked'=>!$akses_pesan],
+    ['label'=>'Provider SIM',                'href'=>'index.php?page=master&sub=provider', 'on'=>false, 'locked'=>!$akses_provider],
+    ['label'=>'Modem GSM',                   'href'=>'index.php?page=master&sub=modem',    'on'=>true,  'locked'=>!$akses_modem],
+    ['label'=>'Perintah Baku (AT Commands)', 'href'=>'index.php?page=master&sub=pesan',    'on'=>false, 'locked'=>!$akses_pesan],
 ]) ?>
 
 <!-- KARTU METRIK KPI -->
@@ -51,12 +51,13 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                         <th>PORT</th>
                         <th>STATUS DATA</th>
                         <th>WAKTU DATA</th>
-                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 130px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($modems)): ?>
                         <?php $no = 1; foreach ($modems as $row): ?>
+                        <?php $modem_aktif = (($row['StatusData'] ?? 'AKTIF') === 'AKTIF'); ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
                             <td class="fw-bold text-dark font-monospace imei-cell">
@@ -82,12 +83,16 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                                 <div><span class="text-muted">Engine:</span> <code><?= htmlspecialchars($row['IpServerEngine'] ?? '-'); ?></code></div>
                             </td>
                             <td class="port-cell"><span class="badge bg-secondary bg-opacity-10 text-dark border font-monospace"><?= htmlspecialchars($row['PortEngine'] ?? '-'); ?></span></td>
-                            <td>
-                                <?= ms_badge_status($row['StatusData'] ?? 'AKTIF') ?>
-                            </td>
+                            <td><?= ms_badge_status($row['StatusData'] ?? 'AKTIF') ?></td>
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
+                                    <a href="index.php?page=master&sub=modem&action=toggle_status&id=<?= urlencode($row['ImeiModem'] ?? ''); ?>"
+                                       class="btn btn-outline-secondary py-1 px-2"
+                                       title="<?= $modem_aktif ? 'Nonaktifkan modem' : 'Aktifkan modem'; ?>"
+                                       data-confirm="<?= htmlspecialchars(($modem_aktif ? 'Nonaktifkan' : 'Aktifkan') . ' modem ' . ($row['ImeiModem'] ?? '') . '?'); ?>">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-modem"
                                             data-imei="<?= htmlspecialchars($row['ImeiModem'] ?? ''); ?>"
                                             data-sim="<?= htmlspecialchars($row['SimId'] ?? ''); ?>"
@@ -97,6 +102,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                                             data-ipdata="<?= htmlspecialchars($row['IpServerData'] ?? ''); ?>"
                                             data-ipengine="<?= htmlspecialchars($row['IpServerEngine'] ?? ''); ?>"
                                             data-port="<?= htmlspecialchars($row['PortEngine'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($row['StatusData'] ?? 'AKTIF'); ?>"
                                             title="Edit Modem">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
@@ -186,7 +192,10 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 
                 <div class="col-md-12">
                     <label class="form-label">Status Operasional</label>
-                    <input type="text" name="StatusData" class="form-control bg-light fw-bold text-success" value="AKTIF" readonly>
+                    <select name="StatusData" class="form-select">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer border-top px-4 py-3">
@@ -265,7 +274,10 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 
                 <div class="col-md-12">
                     <label class="form-label">Status Operasional</label>
-                    <input type="text" name="StatusData" class="form-control bg-light fw-bold text-success" value="AKTIF" readonly>
+                    <select name="StatusData" id="edit_modem_status" class="form-select">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer border-top px-4 py-3">
@@ -288,42 +300,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Pencarian di sisi klien
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
         inputCari.addEventListener('keyup', function() {
             const keyword = this.value.toLowerCase();
-            const baris = tabel.querySelectorAll('tbody tr');
-            baris.forEach(function(row) {
-                const imeiCell = row.querySelector('.imei-cell');
-                const ipCell = row.querySelector('.ip-cell');
-                const portCell = row.querySelector('.port-cell');
-
-                const imeiText = imeiCell ? imeiCell.textContent.toLowerCase() : '';
-                const ipText = ipCell ? ipCell.textContent.toLowerCase() : '';
-                const portText = portCell ? portCell.textContent.toLowerCase() : '';
-
-                if (imeiText.indexOf(keyword) !== -1 || ipText.indexOf(keyword) !== -1 || portText.indexOf(keyword) !== -1) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+            tabel.querySelectorAll('tbody tr').forEach(function(row) {
+                const imei = row.querySelector('.imei-cell') ? row.querySelector('.imei-cell').textContent.toLowerCase() : '';
+                const ip   = row.querySelector('.ip-cell')   ? row.querySelector('.ip-cell').textContent.toLowerCase()   : '';
+                const port = row.querySelector('.port-cell') ? row.querySelector('.port-cell').textContent.toLowerCase() : '';
+                row.style.display = (imei.indexOf(keyword) !== -1 || ip.indexOf(keyword) !== -1 || port.indexOf(keyword) !== -1) ? '' : 'none';
             });
         });
     }
 
+    // Isi pilihan ULP sesuai UP3 yang dipilih
     function renderUlpOptions(selectElement, selectedApValue, targetUlpValue) {
         selectElement.innerHTML = '<option value="">-- Pilih ULP --</option>';
         if (!selectedApValue) {
             selectElement.disabled = true;
             return;
         }
-
-        const filteredList = masterDataULP.filter(function(item) {
+        masterDataULP.filter(function(item) {
             return item.UnitAp === selectedApValue;
-        });
-
-        filteredList.forEach(function(item) {
+        }).forEach(function(item) {
             const opt = document.createElement('option');
             opt.value = item.UnitUp;
             opt.textContent = item.UnitUp + ' - ' + item.SingkatanNama;
@@ -337,7 +338,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const addAp = document.getElementById('add_select_ap');
     const addUp = document.getElementById('add_select_up');
-
     if (addAp) {
         addAp.addEventListener('change', function() {
             renderUlpOptions(addUp, this.value, '');
@@ -346,13 +346,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const editAp = document.getElementById('edit_modem_ap');
     const editUp = document.getElementById('edit_modem_up');
-
     if (editAp) {
         editAp.addEventListener('change', function() {
             renderUlpOptions(editUp, this.value, '');
         });
     }
 
+    // Modal edit
     const modalEditEl = document.getElementById('modalEditModem');
     let modalEdit = null;
     if (modalEditEl && window.bootstrap) {
@@ -373,6 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_modem_ipdata').value = this.getAttribute('data-ipdata') || '';
             document.getElementById('edit_modem_ipengine').value = this.getAttribute('data-ipengine') || '';
             document.getElementById('edit_modem_port').value = this.getAttribute('data-port') || '';
+            document.getElementById('edit_modem_status').value = (this.getAttribute('data-status') === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
             if (modalEdit) {
                 modalEdit.show();

@@ -14,9 +14,9 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
     'subtitle' => 'Kelola daftar operator seluler penyedia kartu SIM untuk modem GSM.',
     'tombol'   => ['label'=>'Tambah Provider','target'=>'modalTambahProvider','icon'=>'bi-plus-lg'],
 ], ['unit'=>$akses_unit,'pengguna'=>$akses_pengguna,'provider'=>$akses_provider,'modem'=>$akses_modem,'pesan'=>$akses_pesan], 'pesan', [
-    ['label'=>'Provider SIM',                 'href'=>'index.php?page=master&sub=provider', 'on'=>true,  'locked'=>!$akses_provider],
-    ['label'=>'Modem GSM',                    'href'=>'index.php?page=master&sub=modem',    'on'=>false, 'locked'=>!$akses_modem],
-    ['label'=>'Perintah Baku (AT Commands)',  'href'=>'index.php?page=master&sub=pesan',    'on'=>false, 'locked'=>!$akses_pesan],
+    ['label'=>'Provider SIM',                'href'=>'index.php?page=master&sub=provider', 'on'=>true,  'locked'=>!$akses_provider],
+    ['label'=>'Modem GSM',                   'href'=>'index.php?page=master&sub=modem',    'on'=>false, 'locked'=>!$akses_modem],
+    ['label'=>'Perintah Baku (AT Commands)', 'href'=>'index.php?page=master&sub=pesan',    'on'=>false, 'locked'=>!$akses_pesan],
 ]) ?>
 
 <!-- KARTU METRIK KPI -->
@@ -40,23 +40,34 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                         <th>KODE PROVIDER</th>
                         <th>NAMA PROVIDER</th>
                         <th>STATUS DATA</th>
-                        <th class="text-end pe-4" style="width: 120px;">AKSI</th>
+                        <th class="text-end pe-4" style="width: 130px;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($providers)): ?>
                         <?php $no = 1; foreach ($providers as $prv): ?>
+                        <?php $aktif = (($prv['StatusData'] ?? '') === 'AKTIF'); ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?= $no++; ?></td>
                             <td class="fw-bold text-dark font-monospace"><?= htmlspecialchars($prv['KodeProvider'] ?? '-'); ?></td>
                             <td class="fw-medium text-dark"><?= htmlspecialchars($prv['NamaProvider'] ?? '-'); ?></td>
-                            <td>
-                                <?= ms_badge_status($prv['StatusData'] ?? '') ?>
-                            </td>
+                            <td><?= ms_badge_status($prv['StatusData'] ?? '') ?></td>
                             <td class="text-end pe-4">
-                                <a href="index.php?page=master&sub=provider&action=toggle_status&id=<?= urlencode($prv['KodeProvider']); ?>" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-arrow-repeat"></i>
-                                </a>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="index.php?page=master&sub=provider&action=toggle_status&id=<?= urlencode($prv['KodeProvider']); ?>"
+                                       class="btn btn-outline-secondary py-1 px-2"
+                                       title="<?= $aktif ? 'Nonaktifkan provider' : 'Aktifkan provider'; ?>"
+                                       data-confirm="<?= htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' provider ' . ($prv['NamaProvider'] ?? '') . '?'); ?>">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-provider"
+                                            data-kode="<?= htmlspecialchars($prv['KodeProvider'] ?? ''); ?>"
+                                            data-nama="<?= htmlspecialchars($prv['NamaProvider'] ?? ''); ?>"
+                                            data-status="<?= htmlspecialchars($prv['StatusData'] ?? 'AKTIF'); ?>"
+                                            title="Edit Provider">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -100,3 +111,53 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
         </form>
     </div>
 </div>
+
+<!-- MODAL EDIT PROVIDER -->
+<div class="modal fade" id="modalEditProvider" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="index.php?page=master&sub=provider" method="POST" class="modal-content border-0 shadow rounded-4">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="KodeProvider" id="edit_prv_kode">
+            <div class="modal-header border-bottom px-4 py-3">
+                <h5 class="modal-title fw-bold">Edit Provider</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 py-4">
+                <div class="mb-3">
+                    <label class="form-label">Kode Provider (Locked)</label>
+                    <input type="text" id="edit_prv_kode_display" class="form-control font-monospace bg-light" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Nama Provider *</label>
+                    <input type="text" name="NamaProvider" id="edit_prv_nama" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Status Operasional</label>
+                    <select name="StatusData" id="edit_prv_status" class="form-select">
+                        <option value="AKTIF">AKTIF</option>
+                        <option value="TIDAK">TIDAK AKTIF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-top px-4 py-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary btn-sm px-3">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEdit = new bootstrap.Modal(document.getElementById('modalEditProvider'));
+    document.querySelectorAll('.btn-edit-provider').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit_prv_kode').value = this.dataset.kode;
+            document.getElementById('edit_prv_kode_display').value = this.dataset.kode;
+            document.getElementById('edit_prv_nama').value = this.dataset.nama;
+            document.getElementById('edit_prv_status').value = (this.dataset.status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+            modalEdit.show();
+        });
+    });
+});
+</script>

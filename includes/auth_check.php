@@ -26,6 +26,17 @@ require_once __DIR__ . '/../config/database.php';
 $kode_hak = $_SESSION['KodeHak'];
 $is_authorized = false;
 
+// ==== TAMBAHAN: PEMBATASAN ROLE UNTUK MODUL MASTER DATA ====
+// Modul master hanya boleh dibuka oleh role di bawah ini, apa pun isi tabel pengaturan_hak_akses.
+// Role lain (misal SF.AP) langsung ditolak walaupun datanya masih tercatat di database.
+$role_boleh_master = ['SA.KP', 'SF.UI', 'AM.UI'];
+
+if ($page_request === 'master' && !in_array($kode_hak, $role_boleh_master, true)) {
+    echo "<script>alert('Akses Ditolak: Anda tidak memiliki wewenang untuk membuka modul master.'); window.location.href='" . $base_path . "/index.php';</script>";
+    exit;
+}
+// ==== AKHIR TAMBAHAN ====
+
 try {
     $query = "SELECT m.UrlRoute FROM pengaturan_menu m 
               JOIN pengaturan_hak_akses h ON m.IdMenu = h.IdMenu 
