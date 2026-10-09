@@ -1,4 +1,5 @@
 <?php 
+require_once __DIR__ . '/favicon.php';   // ikon tab untuk semua halaman
 require_once __DIR__ . '/../config/database.php';
 
 // Pengaman: kalau BASE_URL belum didefinisikan di tempat lain, pakai kosong (root server)
