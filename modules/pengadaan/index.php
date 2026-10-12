@@ -3,6 +3,8 @@ require_once __DIR__ . '/../../config/database.php';
 
 $kode_hak = $_SESSION['KodeHak'] ?? '';
 $allowed_roles = ['MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SA.KP']; 
+
+// Jika hak akses tidak terdaftar sama sekali
 if (!in_array($kode_hak, $allowed_roles)) {
     echo "
     <!DOCTYPE html>
@@ -20,10 +22,8 @@ if (!in_array($kode_hak, $allowed_roles)) {
                 confirmButtonText: 'OK',
                 confirmButtonColor: '#0d6efd',
                 allowOutsideClick: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.history.back();
-                }
+            }).then(() => {
+                window.history.back();
             });
         </script>
     </body>
@@ -37,7 +37,7 @@ if (!isset($_GET['menu'])) {
     if (in_array($kode_hak, ['TL.AP', 'TL.UP'])) {
         header("Location: index.php?page=pengadaan&menu=penerimaan&view=daftar");
         exit;
-    } elseif (in_array($kode_hak, ['AM.UI', 'SA.KP', 'MB.UI'])) {
+    } elseif (in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
         header("Location: index.php?page=pengadaan&menu=pembelian&view=daftar");
         exit;
     } else {
@@ -47,9 +47,20 @@ if (!isset($_GET['menu'])) {
 }
 
 // Tangkap parameter dari URL
-$menu = $_GET['menu'] ?? 'pembelian'; 
-$sub  = $_GET['sub'] ?? $menu;
+$menu = $_GET['menu'] ?? 'monitoring'; 
+$sub  = $_GET['sub'] ?? ($menu === 'monitoring' ? 'aset' : $menu);
 $view = $_GET['view'] ?? 'daftar'; 
+
+// PENGAMANAN UTAMA: Jika role non-otoritas memaksa akses menu Barang atau Kartu, langsung lempar ke monitoring
+if (in_array($menu, ['pembelian', 'pengiriman', 'barang']) && !in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+    header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
+    exit;
+}
+
+if ($menu === 'kartu' && !in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) {
+    header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
+    exit;
+}
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $page_title = "Pengadaan & Stok - Digita S41";
@@ -59,7 +70,7 @@ if ($menu === 'kartu') {
     $sub = $_GET['sub'] ?? 'aktivasi';
     require_once __DIR__ . '/kartu.php';
 } 
-// Jika menu Monitoring (Panggil file backend logic saja)
+// Jika menu Monitoring
 elseif ($menu === 'monitoring') {
     $sub = $_GET['sub'] ?? 'aset';
     require_once __DIR__ . '/monitoring.php';
@@ -70,33 +81,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
     
     // --- 1. PEMBELIAN ---
     if ($sub === 'pembelian') {
-        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
-            echo "
-            <!DOCTYPE html>
-            <html lang='id'>
-            <head>
-                <meta charset='UTF-8'>
-                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-            </head>
-            <body class='bg-light'>
-                <script>
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Akses ditolak',
-                        text: 'Anda tidak memiliki wewenang untuk membuka menu ini.',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#0d6efd',
-                        allowOutsideClick: false
-                    }).then(() => {
-                        window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
-                    });
-                </script>
-            </body>
-            </html>
-            ";
-            exit;
-        }
-        
         if ($view === 'daftar') {
             $keyword = '%' . trim($_GET['q'] ?? '') . '%';
             $query = "SELECT 
@@ -115,7 +99,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                 die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
             }
         } elseif ($view === 'baru') {
-            // REDIRECT LANGSUNG KE PROSES PEMBUATAN DRAFT
             header("Location: modules/pengadaan/proses_pembelian.php?action=create_draft");
             exit;
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
@@ -132,33 +115,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
 
     // --- 2. PENGIRIMAN ---
     elseif ($sub === 'pengiriman') {
-        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
-            echo "
-            <!DOCTYPE html>
-            <html lang='id'>
-            <head>
-                <meta charset='UTF-8'>
-                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-            </head>
-            <body class='bg-light'>
-                <script>
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Akses ditolak',
-                        text: 'Anda tidak memiliki wewenang untuk membuka menu ini.',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#0d6efd',
-                        allowOutsideClick: false
-                    }).then(() => {
-                        window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
-                    });
-                </script>
-            </body>
-            </html>
-            ";
-            exit;
-        }
-
         if ($view === 'daftar') {
             $keyword = '%' . trim($_GET['q'] ?? '') . '%';
             $query = "SELECT 
@@ -196,7 +152,6 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
             $stmt->execute([':no_form' => $no_pengiriman]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            // PASTIKAN BARIS INI MENGGUNAKAN :no_form DENGAN BENAR
             $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
             $stmt_items->execute([':no_form' => $no_pengiriman]);
             $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
@@ -206,29 +161,7 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
     // --- 3. PENERIMAAN ---
     elseif ($sub === 'penerimaan') {
         if (!in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) {
-            echo "
-            <!DOCTYPE html>
-            <html lang='id'>
-            <head>
-                <meta charset='UTF-8'>
-                <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-            </head>
-            <body class='bg-light'>
-                <script>
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Akses ditolak',
-                        text: 'Anda tidak memiliki wewenang untuk membuka menu ini.',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#0d6efd',
-                        allowOutsideClick: false
-                    }).then(() => {
-                        window.location.href = 'index.php?page=pengadaan&menu=penerimaan&view=daftar';
-                    });
-                </script>
-            </body>
-            </html>
-            ";
+            header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
             exit;
         }
 

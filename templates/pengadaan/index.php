@@ -15,12 +15,16 @@ if ($is_monitoring && !isset($_GET['sub'])) {
 }
 
 // Cek hak akses untuk penanda gembok visual
-$can_pembelian_pengiriman = in_array($kode_hak, ['MB.UI', 'AM.UI', 'SA.KP']);
+$can_pembelian_pengiriman = in_array($kode_hak, ['AM.UI', 'SA.KP']);
 $can_penerimaan = in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP']);
+$can_barang = ($can_pembelian_pengiriman || $can_penerimaan);
 $can_kartu = in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP']);
 
 // Daftar aksi/menu yang ditolak berdasarkan role
 $ditolak_list = [];
+if (!$can_barang) {
+    $ditolak_list[] = 'barang';
+}
 if (!$can_pembelian_pengiriman) {
     $ditolak_list[] = 'pembelian';
     $ditolak_list[] = 'pengiriman';
@@ -35,9 +39,11 @@ if (!$can_kartu) {
 
 <!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <?php 
-$barang_default_link = in_array($kode_hak, ['TL.AP', 'TL.UP']) 
-    ? 'index.php?page=pengadaan&menu=penerimaan&view=daftar' 
-    : 'index.php?page=pengadaan&menu=pembelian&view=daftar';
+$barang_default_link = $can_barang 
+    ? (in_array($kode_hak, ['TL.AP', 'TL.UP']) ? 'index.php?page=pengadaan&menu=penerimaan&view=daftar' : 'index.php?page=pengadaan&menu=pembelian&view=daftar')
+    : 'javascript:void(0);';
+$barang_class = $can_barang ? '' : 'sub-menu-link';
+$barang_attr = $can_barang ? '' : 'data-menu="barang"';
 
 $kartu_link = $can_kartu ? 'index.php?page=pengadaan&menu=kartu' : 'javascript:void(0);';
 $kartu_class = $can_kartu ? '' : 'sub-menu-link';
@@ -45,12 +51,12 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
 ?>
 <ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle" role="tablist">
     <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium <?= ($is_barang) ? 'active text-white' : 'text-secondary' ?>" <?= ($is_barang) ? 'style="background-color: #0d6efd;"' : '' ?> href="<?= $barang_default_link ?>">
-            <i class="bi bi-box me-2"></i> Barang
+        <a class="nav-link py-2 px-3 fw-medium <?= ($is_barang) ? 'active text-white' : 'text-secondary' ?> <?= $barang_class ?>" <?= $barang_attr ?> <?= ($is_barang) ? 'style="background-color: #0d6efd;"' : (!$can_barang ? 'style="opacity: 0.6;"' : '') ?> href="<?= $barang_default_link ?>">
+            <i class="bi bi-box me-2"></i> Barang <?= !$can_barang ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link py-2 px-3 fw-medium <?= ($menu == 'kartu') ? 'active text-white' : 'text-secondary' ?> <?= $kartu_class ?>" <?= $kartu_attr ?> <?= ($menu == 'kartu') ? 'style="background-color: #0d6efd;"' : '' ?> href="<?= $kartu_link ?>">
+        <a class="nav-link py-2 px-3 fw-medium <?= ($menu == 'kartu') ? 'active text-white' : 'text-secondary' ?> <?= $kartu_class ?>" <?= $kartu_attr ?> <?= ($menu == 'kartu') ? 'style="background-color: #0d6efd;"' : (!$can_kartu ? 'style="opacity: 0.6;"' : '') ?> href="<?= $kartu_link ?>">
             <i class="bi bi-sim me-2"></i> Kartu <?= !$can_kartu ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
         </a>
     </li>
@@ -67,13 +73,13 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
         <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
         <div class="d-flex flex-wrap gap-2" role="group">
             <?php if ($is_barang): ?>
-                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pembelian' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pembelian" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pembelian' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pembelian" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pembelian_pengiriman ? 'style="opacity: 0.6;"' : '') ?>>
                     <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-cart-plus me-1"></i> Pembelian (UI) <?= !$can_pembelian_pengiriman ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
-                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pengiriman' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pengiriman') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pengiriman" <?= ($sub == 'pengiriman') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pengiriman' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pengiriman') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pengiriman" <?= ($sub == 'pengiriman') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pembelian_pengiriman ? 'style="opacity: 0.6;"' : '') ?>>
                     <?= ($sub == 'pengiriman') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-truck me-1"></i> Pengiriman <?= !$can_pembelian_pengiriman ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
-                <a href="<?= $can_penerimaan ? 'index.php?page=pengadaan&menu=penerimaan' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'penerimaan') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="penerimaan" <?= ($sub == 'penerimaan') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
+                <a href="<?= $can_penerimaan ? 'index.php?page=pengadaan&menu=penerimaan' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'penerimaan') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="penerimaan" <?= ($sub == 'penerimaan') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_penerimaan ? 'style="opacity: 0.6;"' : '') ?>>
                     <?= ($sub == 'penerimaan') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-box-arrow-in-down me-1"></i> Penerimaan <?= !$can_penerimaan ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
             <?php elseif ($menu === 'kartu'): ?>
@@ -120,18 +126,20 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
 <div class="mt-2">
     <?php
     if ($is_barang) {
-        if ($sub === 'pembelian') {
-            if ($view === 'daftar') require_once __DIR__ . '/pembelian_daftar.php';
-            elseif ($view === 'detail') require_once __DIR__ . '/pembelian.php'; 
-        } 
-        elseif ($sub === 'pengiriman') {
-            if ($view === 'daftar') require_once __DIR__ . '/pengiriman_daftar.php';
-            elseif ($view === 'baru') require_once __DIR__ . '/pengiriman_baru.php'; 
-            elseif ($view === 'detail') require_once __DIR__ . '/pengiriman.php'; 
-        } 
-        elseif ($sub === 'penerimaan') {
-            if ($view === 'daftar') require_once __DIR__ . '/penerimaan_daftar.php';
-            elseif ($view === 'detail') require_once __DIR__ . '/penerimaan.php'; 
+        if ($can_barang) {
+            if ($sub === 'pembelian') {
+                if ($view === 'daftar') require_once __DIR__ . '/pembelian_daftar.php';
+                elseif ($view === 'detail') require_once __DIR__ . '/pembelian.php'; 
+            } 
+            elseif ($sub === 'pengiriman') {
+                if ($view === 'daftar') require_once __DIR__ . '/pengiriman_daftar.php';
+                elseif ($view === 'baru') require_once __DIR__ . '/pengiriman_baru.php'; 
+                elseif ($view === 'detail') require_once __DIR__ . '/pengiriman.php'; 
+            } 
+            elseif ($sub === 'penerimaan') {
+                if ($view === 'daftar') require_once __DIR__ . '/penerimaan_daftar.php';
+                elseif ($view === 'detail') require_once __DIR__ . '/penerimaan.php'; 
+            }
         }
     } 
     elseif ($menu === 'kartu') {
