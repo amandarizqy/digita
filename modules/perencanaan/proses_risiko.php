@@ -19,7 +19,16 @@ $pesan_error  = "";
 // dari 4 karakter awal ThBlRek, bukan dari tanggal server.
 $periode_filter = pr_periode();
 
-// 1. Ambil Unit Pengguna dari Session
+$pesan_info = "";   // (periode default kini ditentukan helper pr_periode(): tahun terbaru yang punya data)
+
+// ==========================================
+// 1. UNIT PENGGUNA (SESSION) + HIERARKI WILAYAH
+// Sumber: UPI = master_upi (dari session), AP = master_ap, UP = master_up.
+// ==========================================
+// Hierarki: UPI (tertinggi) -> AP -> UP (terendah).
+// - UnitUpi pengguna WAJIB ada; semua data dibatasi ke UPI ini.
+// - Pengguna memilih UnitAp dahulu, lalu UnitUp yang datanya ingin diproses.
+// - Jika akun pengguna sudah terikat ke AP / UP tertentu, pilihan dikunci ke nilai itu.
 $namaAkun = $_SESSION['NamaAkun'] ?? '';
 $unitUp   = NULL;
 $unitAp   = NULL;
@@ -41,6 +50,107 @@ if (!empty($namaAkun)) {
     }
 }
 
+if (empty($unitUpi)) {
+    $pesan_error = trim($pesan_error . " Akun Anda belum memiliki Unit UPI, sehingga data tidak dapat ditampilkan/diproses.");
+}
+
+// Pilihan wilayah dari form (POST didahulukan, lalu GET)
+$sel_ap = trim((string) ($_POST['unit_ap'] ?? $_GET['unit_ap'] ?? ''));
+$sel_up = trim((string) ($_POST['unit_up'] ?? $_GET['unit_up'] ?? ''));
+
+$ap_terkunci = !empty($unitAp);
+$up_terkunci = !empty($unitUp);
+if ($ap_terkunci) $sel_ap = $unitAp;
+if ($up_terkunci) $sel_up = $unitUp;
+
+// Daftar pilihan AP & UP (dari master_ap & master_up, dibatasi UPI pengguna).
+// Bentuk: [kode => SingkatanNama]. Kode tetap dipakai untuk filter/nilai form,
+// sedangkan SingkatanNama hanya untuk tampilan.
+$opsi_ap  = [];
+$opsi_up  = [];
+$nama_upi = $unitUpi;
+if (!empty($unitUpi)) {
+    try {
+        // Nama singkat UPI (master_upi)
+        $stmt_nu = $conn->prepare("SELECT COALESCE(NULLIF(SingkatanNama, ''), UnitUpi) FROM master_upi WHERE UnitUpi = ?");
+        $stmt_nu->execute([$unitUpi]);
+        $nama_upi = $stmt_nu->fetchColumn() ?: $unitUpi;
+
+        // AP: dari master_ap (AKTIF), hanya yang berada di bawah UPI pengguna
+        $sql_ap = "SELECT UnitAp, COALESCE(NULLIF(SingkatanNama, ''), UnitAp) AS Nama
+                   FROM master_ap WHERE UnitUpi = :upi AND StatusData = 'AKTIF'";
+        $prm_ap = [':upi' => $unitUpi];
+        if ($ap_terkunci) { $sql_ap .= " AND UnitAp = :ap"; $prm_ap[':ap'] = $unitAp; }
+        $stmt_ap = $conn->prepare($sql_ap . " ORDER BY UnitAp");
+        $stmt_ap->execute($prm_ap);
+        $opsi_ap = $stmt_ap->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // AP yang dipilih harus valid di bawah UPI ini
+        if ($sel_ap !== '' && !isset($opsi_ap[$sel_ap])) {
+            $sel_ap = '';
+            $sel_up = '';
+        }
+
+        if ($sel_ap !== '') {
+            // UP: dari master_up (AKTIF), hanya yang berada di bawah AP terpilih
+            $sql_up = "SELECT UnitUp, COALESCE(NULLIF(SingkatanNama, ''), UnitUp) AS Nama
+                       FROM master_up WHERE UnitAp = :ap AND StatusData = 'AKTIF'";
+            $prm_up = [':ap' => $sel_ap];
+            if ($up_terkunci) { $sql_up .= " AND UnitUp = :up"; $prm_up[':up'] = $unitUp; }
+            $stmt_up = $conn->prepare($sql_up . " ORDER BY UnitUp");
+            $stmt_up->execute($prm_up);
+            $opsi_up = $stmt_up->fetchAll(PDO::FETCH_KEY_PAIR);
+        }
+
+        // UP yang dipilih harus valid di bawah AP ini
+        if ($sel_up !== '' && !isset($opsi_up[$sel_up])) {
+            $sel_up = '';
+        }
+    } catch (PDOException $e) {
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+    }
+}
+
+// Label wilayah untuk pesan/konfirmasi (memakai SingkatanNama)
+$nama_ap = $sel_ap !== '' ? ($opsi_ap[$sel_ap] ?? $sel_ap) : '';
+$nama_up = $sel_up !== '' ? ($opsi_up[$sel_up] ?? $sel_up) : '';
+$scope_label = ($nama_upi ?: '-')
+             . ($nama_ap !== '' ? ' › ' . $nama_ap : '')
+             . ($nama_up !== '' ? ' › ' . $nama_up : '');
+
+// Sumber unit per pelanggan: tabel `dil` TIDAK memiliki kolom unit, maka unit tiap
+// pelanggan diambil dari pelunasan_ap2t. SENGAJA tanpa filter periode, supaya daftar
+// pelanggan tetap muncul di wilayahnya walau periode yang dipilih belum punya tagihan
+// (pemrosesan tetap hanya memakai tagihan periode terpilih).
+$unit_map = "(SELECT IdPel, MAX(UnitUp) AS UnitUp, MAX(UnitAp) AS UnitAp, MAX(UnitUpi) AS UnitUpi
+              FROM pelunasan_ap2t GROUP BY IdPel)";
+
+// Pembangun kondisi SQL wilayah (alias tabel yang memuat kolom UnitUpi/UnitAp/UnitUp
+// disesuaikan pemanggil)
+$build_scope = function (string $a) use ($unitUpi, $sel_ap, $sel_up) {
+    if (empty($unitUpi)) return ['1 = 0', []];
+    $c = ["$a.UnitUpi = :s_upi"];
+    $p = [':s_upi' => $unitUpi];
+    if ($sel_ap !== '') { $c[] = "$a.UnitAp = :s_ap"; $p[':s_ap'] = $sel_ap; }
+    if ($sel_up !== '') { $c[] = "$a.UnitUp = :s_up"; $p[':s_up'] = $sel_up; }
+    return [implode(' AND ', $c), $p];
+};
+
+// Ambil unit pelanggan jika ia berada di dalam UPI pengguna (guard aksi per-baris).
+// Pelanggan harus ada di DIL dan punya tagihan (periode mana pun).
+$ambil_dil_dalam_upi = function (string $idpel) use ($conn, $unitUpi) {
+    if (empty($unitUpi) || $idpel === '') return false;
+    $st = $conn->prepare("
+        SELECT p.IdPel AS Idpel, p.UnitUp, p.UnitAp, p.UnitUpi
+        FROM pelunasan_ap2t p
+        INNER JOIN dil d ON d.Idpel = p.IdPel
+        WHERE p.IdPel = ? AND p.UnitUpi = ?
+        LIMIT 1
+    ");
+    $st->execute([$idpel, $unitUpi]);
+    return $st->fetch(PDO::FETCH_ASSOC);
+};
+
 // ==========================================
 // LOGIKA CRUD: UPDATE POSISI SR (UPDATE)
 // ==========================================
@@ -55,6 +165,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_P
 
     if (!empty($idpel_target)) {
         try {
+            $dil_row = $ambil_dil_dalam_upi($idpel_target);
+            if (!$dil_row) {
+                throw new Exception("ID Pelanggan $idpel_target tidak ditemukan di wilayah UPI Anda.");
+            }
+
+            // Unit yang disimpan = unit pelanggan di DIL (bukan unit akun login)
             $sql_update_sr = "
                 INSERT INTO kategorisasi_risiko (IdPel, Periode, PosisiSR, UnitUp, UnitAp, UnitUpi)
                 VALUES (:idpel, :periode, :sr, :up, :ap, :upi)
@@ -65,14 +181,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_P
                 ':idpel'   => $idpel_target,
                 ':periode' => $periode_filter,
                 ':sr'      => $posisi_sr,
-                ':up'      => $unitUp,
-                ':ap'      => $unitAp,
-                ':upi'     => $unitUpi
+                ':up'      => $dil_row['UnitUp']  ?: NULL,
+                ':ap'      => $dil_row['UnitAp']  ?: NULL,
+                ':upi'     => $dil_row['UnitUpi'] ?: NULL
             ]);
 
             $status_txt   = ($posisi_sr === '1') ? 'Tergantung dengan Pelanggan Lain' : 'Tidak Tergantung (Mandiri)';
-            $pesan_sukses = "Posisi SR untuk ID Pelanggan <strong>$idpel_target</strong> (Periode $periode_filter) berhasil diperbaharui menjadi: <strong>$status_txt</strong>.";
-        } catch (PDOException $e) {
+            $pesan_sukses = "Posisi SR untuk ID Pelanggan <strong>" . htmlspecialchars($idpel_target) . "</strong> (Periode $periode_filter) berhasil diperbaharui menjadi: <strong>$status_txt</strong>.";
+        } catch (Exception $e) {
             $pesan_error = "Gagal merubah Posisi SR: " . $e->getMessage();
         }
     }
@@ -85,6 +201,10 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
     $idpel_hapus = trim($_GET['idpel'] ?? '');
     if (!empty($idpel_hapus)) {
         try {
+            if (!$ambil_dil_dalam_upi($idpel_hapus)) {
+                throw new Exception("ID Pelanggan $idpel_hapus tidak ditemukan di wilayah UPI Anda.");
+            }
+
             $conn->beginTransaction();
 
             // Hapus dari kategorisasi_risiko HANYA untuk periode yang sedang aktif diproses
@@ -97,9 +217,9 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
             $stmt_dil_reset->execute([$idpel_hapus]);
 
             $conn->commit();
-            $pesan_sukses = "Data kategorisasi risiko IDPel <strong>$idpel_hapus</strong> (Periode $periode_filter) berhasil di-reset!";
-        } catch (PDOException $e) {
-            $conn->rollBack();
+            $pesan_sukses = "Data kategorisasi risiko IDPel <strong>" . htmlspecialchars($idpel_hapus) . "</strong> (Periode $periode_filter) berhasil di-reset!";
+        } catch (Exception $e) {
+            if ($conn->inTransaction()) $conn->rollBack();
             $pesan_error = "Gagal menghapus data: " . $e->getMessage();
         }
     }
@@ -113,7 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
     $is_proses_semua = isset($_POST['proses_semua']);
     $selected_idpel  = $_POST['idpel_list'] ?? [];
 
-    if ($is_proses_semua || !empty($selected_idpel)) {
+    if (empty($unitUpi)) {
+        $pesan_error = "Akun Anda belum memiliki Unit UPI, proses dibatalkan.";
+    } elseif ($sel_ap === '') {
+        $pesan_error = "Pilih <strong>Unit AP</strong> terlebih dahulu (UP boleh dikosongkan untuk memproses semua UP di AP tersebut).";
+    } elseif ($is_proses_semua || !empty($selected_idpel)) {
         try {
             set_time_limit(300);
             ini_set('memory_limit', '512M');
@@ -121,6 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $conn->beginTransaction();
 
             // 1. Hitung threshold P10 & P70 dari populasi -- HANYA dari tagihan Periode 2025
+            //    (populasi acuan = seluruh periode, agar ambang konsisten antar unit)
             $stmt_total = $conn->prepare("SELECT COUNT(DISTINCT IdPel) FROM pelunasan_ap2t WHERE LEFT(ThBlRek, 4) = :periode");
             $stmt_total->execute([':periode' => $periode_filter]);
             $total_populasi = (int) $stmt_total->fetchColumn();
@@ -155,21 +280,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             // 2. Tentukan Scope WHERE
             //    - Wajib periode 2025 (LEFT(ThBlRek,4))
             //    - Wajib IdPel sudah ada di DIL (mencegah FK error 1452)
+            //    - Wajib berada di wilayah terpilih: UPI (session) -> AP -> UP (opsional)
             //    - Wajib PosisiSR sudah diisi (atribut interdependensi lokasi, dari input_survey.php)
             //    - Wajib LevelKepentingan sudah diisi dengan nilai valid (dari input_kepentingan.php,
             //      TIDAK diturunkan dari PosisiSR)
-            $params = [
+            [$scope_sql, $scope_params] = $build_scope('p');
+
+            $params = array_merge([
                 ':periode' => $periode_filter,
                 ':p10'     => $p10,
                 ':p70'     => $p70,
-                ':unitUp'  => $unitUp,
-                ':unitAp'  => $unitAp,
-                ':unitUpi' => $unitUpi
-            ];
+            ], $scope_params);
 
             $where_clause = "
                 WHERE LEFT(p.ThBlRek, 4) = :periode
                   AND dil_chk.Idpel IS NOT NULL
+                  AND $scope_sql
                   AND k_ext.PosisiSR IS NOT NULL AND k_ext.PosisiSR <> ''
                   AND k_ext.LevelKepentingan IS NOT NULL AND k_ext.LevelKepentingan <> ''
                   AND k_ext.LevelKepentingan IN ('RENDAH', 'MODERAT', 'TINGGI')
@@ -190,6 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             //    hanya mereferensikan kolom hasil subquery sebelumnya (bukan alias
             //    di level SELECT yang sama), dan supaya matriks Kepentingan x
             //    Keterlambatan bisa dihitung penuh 3x3 sesuai helper::hitungKemungkinan().
+            //    Unit (Up/Ap/Upi) yang disimpan = unit pada tagihan pelunasan_ap2t pelanggan.
             $sql_bulk_upsert = "
                 INSERT INTO kategorisasi_risiko (
                     Periode, IdPel, LevelKeterlambatan, LevelKepentingan, 
@@ -225,7 +352,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                         WHEN kd.kuadran IN (6,7,8,9) AND kd.total_amount > :p70 THEN 9
                         ELSE 0
                     END AS skalaPrioritas,
-                    :unitUp, :unitAp, :unitUpi
+                    kd.unit_up, kd.unit_ap, kd.unit_upi
                 FROM (
                     -- LEVEL C: Kuadran = matriks penuh 3x3 (LevelKepentingan x LevelKeterlambatan)
                     SELECT
@@ -235,6 +362,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                         ket.lvKepentingan,
                         ket.lvKeterlambatan,
                         ket.total_amount,
+                        ket.unit_up,
+                        ket.unit_ap,
+                        ket.unit_upi,
                         CASE 
                             WHEN ket.lvKepentingan = 'RENDAH'  AND ket.lvKeterlambatan = 'RENDAH'  THEN 1
                             WHEN ket.lvKepentingan = 'RENDAH'  AND ket.lvKeterlambatan = 'MODERAT' THEN 2
@@ -255,6 +385,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                             raw.posisi_sr,
                             raw.LevelKepentingan AS lvKepentingan,
                             raw.total_amount,
+                            raw.unit_up,
+                            raw.unit_ap,
+                            raw.unit_upi,
                             CASE 
                                 WHEN raw.late_count <= 1 AND raw.lewat_bulan_count = 0 THEN 'RENDAH'
                                 WHEN raw.late_count <= 1 AND raw.lewat_bulan_count > 0 THEN 'MODERAT'
@@ -270,6 +403,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                                 LEFT(MIN(p.ThBlRek), 4) AS periode_val,
                                 k_ext.PosisiSR AS posisi_sr,
                                 k_ext.LevelKepentingan AS LevelKepentingan,
+                                MAX(p.UnitUp)  AS unit_up,
+                                MAX(p.UnitAp)  AS unit_ap,
+                                MAX(p.UnitUpi) AS unit_upi,
                                 SUM(COALESCE(p.RpTag, 0) + COALESCE(p.RpBK, 0)) AS total_amount,
                                 SUM(CASE WHEN p.TglBayar IS NOT NULL AND DAY(p.TglBayar) > 20 THEN 1 ELSE 0 END) AS late_count,
                                 SUM(CASE WHEN p.TglBayar IS NULL OR DATE_FORMAT(p.TglBayar, '%Y%m') > p.ThBlRek THEN 1 ELSE 0 END) AS lewat_bulan_count
@@ -299,21 +435,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $stmt_bulk->execute($params);
             $jumlah_diproses = $stmt_bulk->rowCount();
 
-            // Sync Ke DIL -- hanya untuk periode yang sedang diproses
+            // Sync Ke DIL -- hanya untuk periode yang sedang diproses DAN wilayah terpilih
+            [$scope_dil_sql, $scope_dil_params] = $build_scope('k');
             $sql_sync_dil = "
-                INSERT INTO dil (Idpel, IndexPrioritas)
-                SELECT IdPel, SkalaPrioritas FROM kategorisasi_risiko WHERE Periode = :periode
-                ON DUPLICATE KEY UPDATE IndexPrioritas = VALUES(IndexPrioritas)
+                UPDATE dil d
+                INNER JOIN kategorisasi_risiko k ON k.IdPel = d.Idpel AND k.Periode = :periode
+                SET d.IndexPrioritas = k.SkalaPrioritas
+                WHERE $scope_dil_sql
             ";
             $stmt_sync = $conn->prepare($sql_sync_dil);
-            $stmt_sync->execute([':periode' => $periode_filter]);
+            $stmt_sync->execute(array_merge([':periode' => $periode_filter], $scope_dil_params));
 
             $conn->commit();
-            $target_label = $is_proses_semua ? "seluruh populasi" : "data terpilih";
-            $pesan_sukses = "Kalkulasi risiko Periode <strong>$periode_filter</strong> untuk <strong>$target_label</strong> berhasil diproses ($jumlah_diproses baris). "
+            $target_label = $is_proses_semua ? "seluruh pelanggan" : "data terpilih";
+            $pesan_sukses = "Kalkulasi risiko Periode <strong>$periode_filter</strong> untuk <strong>$target_label</strong> di wilayah <strong>" . htmlspecialchars($scope_label) . "</strong> berhasil diproses ($jumlah_diproses baris). "
                           . "Data yang belum memiliki <strong>Posisi SR</strong> dan/atau <strong>Level Kepentingan</strong> (dari modul Input Kepentingan) otomatis dilewati.";
         } catch (Exception $e) {
-            $conn->rollBack();
+            if ($conn->inTransaction()) $conn->rollBack();
             $pesan_error = "Gagal memproses data: " . $e->getMessage();
         }
     } else {
@@ -328,34 +466,53 @@ $keyword      = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $status_filter= isset($_GET['status_filter']) ? trim($_GET['status_filter']) : 'semua';
 
 try {
-    // Ringkasan Statistik
-    $total_dil = (int) $conn->query("SELECT COUNT(*) FROM dil")->fetchColumn();
+    // Kondisi wilayah untuk seluruh query baca (alias dil = d)
+    [$scope_view_sql, $scope_view_params] = $build_scope('u');
 
-    $stmt_sudah = $conn->prepare("SELECT COUNT(*) FROM kategorisasi_risiko WHERE Periode = :periode AND SkalaPrioritas IS NOT NULL AND SkalaPrioritas != 0");
-    $stmt_sudah->execute([':periode' => $periode_filter]);
+    // Ringkasan Statistik (seluruhnya mengikuti wilayah terpilih)
+    $stmt_dil = $conn->prepare("SELECT COUNT(*) FROM dil d INNER JOIN $unit_map u ON u.IdPel = d.Idpel WHERE $scope_view_sql");
+    $stmt_dil->execute($scope_view_params);
+    $total_dil = (int) $stmt_dil->fetchColumn();
+
+    $prm_stat = array_merge([':periode' => $periode_filter], $scope_view_params);
+
+    $stmt_sudah = $conn->prepare("
+        SELECT COUNT(*) FROM kategorisasi_risiko k
+        INNER JOIN $unit_map u ON u.IdPel = k.IdPel
+        WHERE k.Periode = :periode AND k.SkalaPrioritas IS NOT NULL AND k.SkalaPrioritas != 0
+          AND $scope_view_sql
+    ");
+    $stmt_sudah->execute($prm_stat);
     $total_sudah = (int) $stmt_sudah->fetchColumn();
     $total_belum = max(0, $total_dil - $total_sudah);
 
     // Jumlah data yang SUDAH punya Posisi SR (atribut interdependensi lokasi)
-    $stmt_siap_sr = $conn->prepare("SELECT COUNT(*) FROM kategorisasi_risiko WHERE Periode = :periode AND PosisiSR IS NOT NULL AND PosisiSR <> ''");
-    $stmt_siap_sr->execute([':periode' => $periode_filter]);
+    $stmt_siap_sr = $conn->prepare("
+        SELECT COUNT(*) FROM kategorisasi_risiko k
+        INNER JOIN $unit_map u ON u.IdPel = k.IdPel
+        WHERE k.Periode = :periode AND k.PosisiSR IS NOT NULL AND k.PosisiSR <> ''
+          AND $scope_view_sql
+    ");
+    $stmt_siap_sr->execute($prm_stat);
     $total_siap_sr  = (int) $stmt_siap_sr->fetchColumn();
     $total_belum_sr = max(0, $total_dil - $total_siap_sr);
 
     // Jumlah data yang SUDAH punya LevelKepentingan (hasil modul input_kepentingan.php)
     $stmt_siap_kepentingan = $conn->prepare("
-        SELECT COUNT(*) FROM kategorisasi_risiko 
-        WHERE Periode = :periode 
-          AND LevelKepentingan IS NOT NULL AND LevelKepentingan <> ''
-          AND LevelKepentingan IN ('RENDAH','MODERAT','TINGGI')
+        SELECT COUNT(*) FROM kategorisasi_risiko k
+        INNER JOIN $unit_map u ON u.IdPel = k.IdPel
+        WHERE k.Periode = :periode 
+          AND k.LevelKepentingan IS NOT NULL AND k.LevelKepentingan <> ''
+          AND k.LevelKepentingan IN ('RENDAH','MODERAT','TINGGI')
+          AND $scope_view_sql
     ");
-    $stmt_siap_kepentingan->execute([':periode' => $periode_filter]);
+    $stmt_siap_kepentingan->execute($prm_stat);
     $total_siap_kepentingan  = (int) $stmt_siap_kepentingan->fetchColumn();
     $total_belum_kepentingan = max(0, $total_dil - $total_siap_kepentingan);
 
     // Query Data List
-    $where_conditions = [];
-    $params_view      = [':periode' => $periode_filter];
+    $where_conditions = [$scope_view_sql];
+    $params_view      = array_merge([':periode' => $periode_filter], $scope_view_params);
 
     if (!empty($keyword)) {
         $where_conditions[] = "(d.Idpel LIKE :kw OR d.NamaPelanggan LIKE :kw)";
@@ -372,13 +529,13 @@ try {
         $where_conditions[] = "(k.LevelKepentingan IS NULL OR k.LevelKepentingan = '' OR k.LevelKepentingan NOT IN ('RENDAH','MODERAT','TINGGI'))";
     }
 
-    $where_sql = count($where_conditions) > 0 ? " WHERE " . implode(' AND ', $where_conditions) : "";
+    $where_sql = " WHERE " . implode(' AND ', $where_conditions);
 
     // Paginasi (parameter `hal`; `page` dipakai router utama untuk nama modul)
     $limit = 25;
     $hal   = max(1, (int) ($_GET['hal'] ?? 1));
 
-    $stmt_cnt = $conn->prepare("SELECT COUNT(*) FROM dil d LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode $where_sql");
+    $stmt_cnt = $conn->prepare("SELECT COUNT(*) FROM dil d INNER JOIN $unit_map u ON u.IdPel = d.Idpel LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode $where_sql");
     $stmt_cnt->execute($params_view);
     $total_rows = (int) $stmt_cnt->fetchColumn();
     $hal        = min($hal, max(1, (int) ceil($total_rows / $limit)));
@@ -397,6 +554,7 @@ try {
             k.Kuadran, 
             k.SkalaPrioritas 
         FROM dil d
+        INNER JOIN $unit_map u ON u.IdPel = d.Idpel
         LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode
         $where_sql
         ORDER BY 
@@ -419,6 +577,8 @@ try {
     $pesan_error = "Gagal mengambil data preview: " . $e->getMessage();
     $list_preview = [];
     $total_rows   = 0;
+    $total_dil = $total_sudah = $total_belum = 0;
+    $total_belum_sr = $total_belum_kepentingan = 0;
     $limit        = 25;
     $hal          = 1;
     $offset       = 0;

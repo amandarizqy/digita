@@ -60,23 +60,23 @@ function pr_scalar(PDO $conn, string $sql, array $params = [], $default = 0)
     }
 }
 
-/** Daftar tahun yang sudah ada di data (di-cache di session 2 menit). */
+/** Daftar tahun yang sudah ada di data: tagihan (pelunasan_ap2t) + hasil klasifikasi (kategorisasi_risiko). Di-cache di session 2 menit. */
 function pr_periode_data(): array
 {
-    $c = $_SESSION['pr_periode_data'] ?? null;
+    $c = $_SESSION['pr_periode_data_v2'] ?? null;
     if (is_array($c) && ($c['t'] ?? 0) > time() - 120) return $c['v'];
     $v = [];
     if (!empty($GLOBALS['conn'])) {
-        try { $v = array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT Periode FROM kategorisasi_risiko ORDER BY Periode DESC")->fetchAll(PDO::FETCH_COLUMN)); }
+        try { $v = array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT th FROM (SELECT LEFT(ThBlRek, 4) AS th FROM pelunasan_ap2t UNION SELECT CAST(Periode AS CHAR) FROM kategorisasi_risiko) x WHERE th IS NOT NULL ORDER BY th DESC")->fetchAll(PDO::FETCH_COLUMN)); }
         catch (Throwable $e) { $v = []; }
     }
-    $_SESSION['pr_periode_data'] = ['t' => time(), 'v' => $v];
+    $_SESSION['pr_periode_data_v2'] = ['t' => time(), 'v' => $v];
     return $v;
 }
 
 /**
  * Periode (tahun) yang sedang dipilih untuk seluruh modul Perencanaan.
- * Urutan: ?periode= di URL -> pilihan terakhir di session -> tahun terbaru di data -> tahun berjalan.
+ * Urutan: ?periode= di URL -> pilihan terakhir di session (jika tahunnya punya data) -> tahun terbaru di data -> tahun berjalan.
  */
 function pr_periode(): string
 {
@@ -84,9 +84,10 @@ function pr_periode(): string
     if ($p !== null) return $p;
     $sah = fn($v) => is_string($v) && preg_match('/^\d{4}$/', $v) && $v >= 1901 && $v <= 2155;
 
+    $data = pr_periode_data();
     if ($sah($_GET['periode'] ?? null))          $p = $_GET['periode'];
-    elseif ($sah($_SESSION['pr_periode'] ?? null)) $p = $_SESSION['pr_periode'];
-    else                                          $p = pr_periode_data()[0] ?? date('Y');
+    elseif ($sah($_SESSION['pr_periode'] ?? null) && (!$data || in_array($_SESSION['pr_periode'], $data, true))) $p = $_SESSION['pr_periode'];
+    else                                          $p = $data[0] ?? date('Y');
     $_SESSION['pr_periode'] = $p;
     return $p;
 }
