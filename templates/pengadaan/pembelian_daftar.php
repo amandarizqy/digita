@@ -45,6 +45,15 @@
                                     <a href="index.php?page=pengadaan&menu=pembelian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="Buka Detail">
                                         <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i> Detail
                                     </a>
+
+                                    <?php if ($row['StatusData'] === 'TIDAK'): ?>
+                                        <form action="modules/pengadaan/proses_pembelian.php?action=delete_draft" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus formulir draft ini?')">
+                                            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($row['NoFormulir']) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger px-2 py-1" title="Hapus Draft">
+                                                <i class="bi bi-trash"></i> Hapus
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
