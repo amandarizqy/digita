@@ -1,6 +1,7 @@
 <?php
 // templates/perencanaan/proses_prioritas.php  -  Skala Prioritas (pemeringkatan)
 // Variabel dari modules/perencanaan/proses_prioritas.php
+// Tambahan: $nama_upi, $nama_ap, $nama_up, $up_terkunci, $sel_up, $opsi_up (kode => SingkatanNama), $scope_label, $wilayah_valid
 
 $jml_terklasifikasi = array_sum(array_column($kartu_skala, 'jumlah'));
 $cacah_status = ['sudah' => 0, 'usang' => 0, 'belum' => 0, 'kosong' => 0];
@@ -23,6 +24,44 @@ if ($tabel_belum_ada && empty($pesan_error)) {
     echo pr_alert('warning', 'Tabel <code>hasil_prioritas</code> belum dibuat. Jalankan file <code>hasil_prioritas.sql</code> sekali di database sebelum memproses.');
 }
 ?>
+
+<!-- WILAYAH KERJA: UPI -> AP -> UP -->
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-body px-4 py-3">
+        <form method="GET" action="" id="formUnit" class="row g-3 align-items-end">
+            <?= pr_hidden('proses_prioritas', ['skala' => $skala_dipilih > 0 ? $skala_dipilih : '']) ?>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;"><i class="bi bi-diagram-3 me-1"></i> Unit UPI</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_upi ?: '-') ?>" readonly>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;"><i class="bi bi-building me-1"></i> Unit AP</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_ap ?: '-') ?>" readonly>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="selUnitUp" style="letter-spacing:.5px;"><i class="bi bi-geo-alt me-1"></i> Unit UP</label>
+                <?php if ($up_terkunci): ?>
+                    <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_up ?: '-') ?>" readonly>
+                <?php else: ?>
+                    <select name="unit_up" id="selUnitUp" class="form-select form-select-sm" <?= $wilayah_valid ? '' : 'disabled' ?>>
+                        <option value="">— Semua UP di AP ini —</option>
+                        <?php foreach ($opsi_up as $kode_up => $nama_up_opt): ?>
+                            <option value="<?= pr_e((string) $kode_up) ?>" <?= (string) $kode_up === (string) $sel_up ? 'selected' : '' ?>><?= pr_e($nama_up_opt) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
+            </div>
+        </form>
+        <div class="small mt-3 <?= $wilayah_valid ? 'text-muted' : 'text-warning-emphasis' ?>">
+            <i class="bi <?= $wilayah_valid ? 'bi-geo-alt-fill' : 'bi-exclamation-triangle' ?> me-1"></i>
+            <?php if ($wilayah_valid): ?>
+                Wilayah aktif: <strong><?= pr_e($scope_label) ?></strong>. Pemeringkatan hanya mencakup pelanggan di wilayah ini, jadi peringkat bersifat <strong>per wilayah</strong>.
+            <?php else: ?>
+                Akun Anda belum memiliki Unit AP / Unit UP.
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
@@ -70,6 +109,7 @@ if ($tabel_belum_ada && empty($pesan_error)) {
 </div>
 
 <form method="POST" action="<?= pr_e(pr_url('proses_prioritas')) ?>" id="formPrioritas">
+    <input type="hidden" name="unit_up" value="<?= pr_e($sel_up) ?>">
 
     <!-- LANGKAH 1 -->
     <div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
@@ -140,8 +180,8 @@ if ($tabel_belum_ada && empty($pesan_error)) {
             </div>
         </div>
         <div class="card-footer bg-white border-top py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i> Memproses ulang sebuah skala akan mengganti peringkat lama untuk skala tersebut.</span>
-            <button type="submit" name="proses_prioritas" value="1" class="btn btn-primary btn-sm px-4 shadow-sm rounded-2" id="btnProses">
+            <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i> Memproses ulang sebuah skala akan mengganti peringkat lama untuk skala tersebut di wilayah terpilih.</span>
+            <button type="submit" name="proses_prioritas" value="1" class="btn btn-primary btn-sm px-4 shadow-sm rounded-2" id="btnProses" <?= $wilayah_valid ? '' : 'disabled' ?>>
                 <i class="bi bi-lightning-charge-fill me-1"></i> Proses Pemeringkatan
             </button>
         </div>
@@ -213,11 +253,15 @@ document.addEventListener('DOMContentLoaded', function () {
     tampilBobot();
     hitungTotal();
 
+    // Pilih UP -> muat ulang agar kartu skala & status mengikuti wilayah
+    var selUp = document.getElementById('selUnitUp');
+    if (selUp) selUp.addEventListener('change', function () { document.getElementById('formUnit').submit(); });
+
     form.addEventListener('submit', function (e) {
         var skala = form.querySelector('input[name="skala_prioritas"]:checked');
         if (!skala) { e.preventDefault(); alert('Pilih salah satu Skala Prioritas (1-9) terlebih dahulu.'); return; }
         if (metode.value === 'gabungan' && !hitungTotal()) { e.preventDefault(); alert('Total bobot harus tepat 100%.'); return; }
-        if (!confirm('Proses pemeringkatan untuk Prioritas ' + skala.value + '? Hasil lama untuk skala ini akan diganti.')) { e.preventDefault(); }
+        if (!confirm('Proses pemeringkatan untuk Prioritas ' + skala.value + ' di wilayah ' + <?= json_encode($scope_label) ?> + '? Hasil lama untuk skala ini di wilayah tersebut akan diganti.')) { e.preventDefault(); }
     });
 });
 </script>

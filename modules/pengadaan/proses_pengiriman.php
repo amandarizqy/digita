@@ -194,6 +194,27 @@ try {
         exit;
     }
 
+    // AKSI: HAPUS FORMULIR PENGIRIMAN BERSTATUS DRAFT
+    else if ($action === 'delete_draft') {
+        $no_formulir = trim($_POST['no_formulir'] ?? '');
+
+        if (!empty($no_formulir)) {
+            $conn->beginTransaction();
+            
+            // Hapus detail pengiriman terlebih dahulu
+            $stmt_detil = $conn->prepare("DELETE FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_detil->execute([':no_form' => $no_formulir]);
+
+            // Hapus formulir utama pengiriman yang masih berstatus draft (TIDAK)
+            $stmt_main = $conn->prepare("DELETE FROM formulir_pengiriman WHERE NoFormulir = :no_form AND StatusData = 'TIDAK'");
+            $stmt_main->execute([':no_form' => $no_formulir]);
+
+            $conn->commit();
+        }
+        header("Location: ../../index.php?page=pengadaan&menu=pengiriman&view=daftar");
+        exit;
+    }
+
     // AKSI 3: EKSEKUSI FINAL FORMULIR PENGIRIMAN
     if ($action === 'execute_form' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_formulir = $_POST['no_formulir'];

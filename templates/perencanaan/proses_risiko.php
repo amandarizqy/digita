@@ -1,10 +1,22 @@
 <?php
 // templates/perencanaan/proses_risiko.php  -  Klasifikasi Level Risiko
 // Variabel dari modules/perencanaan/proses_risiko.php
+// Tambahan: $unitUpi, $nama_upi, $sel_ap, $sel_up, $opsi_ap, $opsi_up (kode => SingkatanNama), $ap_terkunci, $up_terkunci, $scope_label
 
-$url_daftar = function (array $ubah = []) use ($status_filter, $keyword) {
-    return pr_url('proses_risiko', array_merge(['status_filter' => $status_filter === 'semua' ? '' : $status_filter, 'keyword' => $keyword], $ubah));
+// Parameter wilayah ikut terbawa di semua URL (filter, paginasi, reset)
+$url_daftar = function (array $ubah = []) use ($status_filter, $keyword, $sel_ap, $sel_up) {
+    return pr_url('proses_risiko', array_merge([
+        'status_filter' => $status_filter === 'semua' ? '' : $status_filter,
+        'keyword'       => $keyword,
+        'unit_ap'       => $sel_ap,
+        'unit_up'       => $sel_up,
+    ], $ubah));
 };
+
+$siap_proses = ($sel_ap !== '' && !empty($unitUpi));
+
+$msg_semua = 'Kalkulasi ulang SELURUH data Periode ' . $periode_filter . ' di wilayah ' . $scope_label
+           . ' sekaligus? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.';
 
 echo pr_header([
     'title'    => 'Klasifikasi Level Risiko',
@@ -13,17 +25,75 @@ echo pr_header([
     'periode'  => true,
     'buttons'  => [[
         'label' => 'Proses Semua Data', 'icon' => 'bi-lightning-charge-fill',
-        'attrs' => 'type="submit" form="formRisiko" name="proses_semua" value="1" onclick="return confirm(\'Kalkulasi ulang SELURUH data Periode ' . pr_e($periode_filter) . ' sekaligus? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.\');"',
+        'attrs' => 'type="submit" form="formRisiko" name="proses_semua" value="1"'
+                 . ($siap_proses ? '' : ' disabled title="Pilih Unit AP terlebih dahulu"')
+                 . ' onclick="return confirm(' . pr_e(json_encode($msg_semua)) . ');"',
     ]],
 ]);
 
 if (!empty($pesan_sukses)) echo pr_alert('success', $pesan_sukses);
 if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
+if (!empty($pesan_info))   echo pr_alert('warning', $pesan_info);
 ?>
+
+<!-- PEMILIH WILAYAH: UPI -> AP -> UP -->
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-body px-4 py-3">
+        <form method="GET" action="" id="formUnit" class="row g-3 align-items-end">
+            <?= pr_hidden('proses_risiko', ['status_filter' => $status_filter === 'semua' ? '' : $status_filter, 'keyword' => $keyword]) ?>
+
+            <div class="col-12 col-lg-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;">
+                    <i class="bi bi-diagram-3 me-1"></i> Unit UPI
+                </label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_upi ?: '-') ?>" readonly>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="selUnitAp" style="letter-spacing:.5px;">
+                    <i class="bi bi-building me-1"></i> Unit AP
+                </label>
+                <select name="unit_ap" id="selUnitAp" class="form-select form-select-sm" <?= ($ap_terkunci || empty($opsi_ap)) ? 'disabled' : '' ?>>
+                    <option value="">— Pilih Unit AP —</option>
+                    <?php foreach ($opsi_ap as $kode_ap => $nama_ap_opt): ?>
+                        <option value="<?= pr_e((string) $kode_ap) ?>" <?= (string) $kode_ap === (string) $sel_ap ? 'selected' : '' ?>><?= pr_e($nama_ap_opt) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="selUnitUp" style="letter-spacing:.5px;">
+                    <i class="bi bi-geo-alt me-1"></i> Unit UP
+                </label>
+                <select name="unit_up" id="selUnitUp" class="form-select form-select-sm" <?= ($sel_ap === '' || $up_terkunci) ? 'disabled' : '' ?>>
+                    <option value=""><?= $sel_ap === '' ? '— Pilih AP dahulu —' : '— Semua UP di AP ini —' ?></option>
+                    <?php foreach ($opsi_up as $kode_up => $nama_up_opt): ?>
+                        <option value="<?= pr_e((string) $kode_up) ?>" <?= (string) $kode_up === (string) $sel_up ? 'selected' : '' ?>><?= pr_e($nama_up_opt) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="col-12 col-lg-3 d-flex align-items-center gap-2">
+                <a href="<?= pr_e(pr_url('proses_risiko')) ?>" class="btn btn-outline-secondary btn-sm px-3">
+                    <i class="bi bi-x-circle me-1"></i> Reset Wilayah
+                </a>
+            </div>
+        </form>
+
+        <div class="small mt-3 <?= $siap_proses ? 'text-muted' : 'text-warning-emphasis' ?>">
+            <i class="bi <?= $siap_proses ? 'bi-geo-alt-fill' : 'bi-exclamation-triangle' ?> me-1"></i>
+            <?php if ($siap_proses): ?>
+                Wilayah aktif: <strong><?= pr_e($scope_label) ?></strong>. Kalkulasi hanya memproses pelanggan di wilayah ini.
+            <?php else: ?>
+                Pilih <strong>Unit AP</strong> (lalu <strong>Unit UP</strong>) untuk mengaktifkan tombol proses. Tanpa pilihan AP, tabel menampilkan seluruh UPI Anda.
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
-    <?= pr_kpi('Pelanggan DIL', pr_n($total_dil), 'Populasi pelanggan terdaftar', 'bi-people', 'primary') ?>
+    <?= pr_kpi('Pelanggan DIL', pr_n($total_dil), 'Populasi pelanggan di wilayah terpilih', 'bi-people', 'primary') ?>
     <?= pr_kpi('Terklasifikasi', pr_n($total_sudah) . ' <span class="fs-6 fw-semibold text-muted">/ ' . pr_n($total_dil) . '</span>',
                pr_pct($total_sudah, $total_dil) . '% memiliki Skala Prioritas', 'bi-shield-check', 'success', true) ?>
     <?= pr_kpi('Belum Ada Posisi SR', pr_n($total_belum_sr), 'Isi lewat <a href="' . pr_e(pr_url('input_survey')) . '" class="text-decoration-none">Survey SR</a>', 'bi-ui-checks', 'secondary') ?>
@@ -43,10 +113,11 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
                 <div class="col-md-6 col-xl-3">
                     <div class="p-3 rounded-3 border h-100 bg-warning bg-opacity-10 border-warning-subtle">
                         <h6 class="fw-bold text-warning-emphasis mb-2"><i class="bi bi-exclamation-diamond me-1"></i> Syarat Wajib</h6>
-                        <p class="small text-muted mb-2">Data diproses hanya jika <strong>keduanya</strong> sudah terisi:</p>
+                        <p class="small text-muted mb-2">Data diproses hanya jika:</p>
                         <ul class="small mb-0 ps-3">
-                            <li><strong>Posisi SR</strong> dari Survey SR</li>
-                            <li><strong>Level Kepentingan</strong> (Rendah / Moderat / Tinggi)</li>
+                            <li><strong>Unit AP</strong> sudah dipilih (UP opsional)</li>
+                            <li><strong>Posisi SR</strong> dari Survey SR terisi</li>
+                            <li><strong>Level Kepentingan</strong> (Rendah / Moderat / Tinggi) terisi</li>
                         </ul>
                     </div>
                 </div>
@@ -100,18 +171,22 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
         </div>
         <div class="d-flex flex-wrap align-items-center gap-2">
             <form method="GET" action="" class="input-group input-group-sm" style="max-width:260px;">
-                <?= pr_hidden('proses_risiko', ['status_filter' => $status_filter === 'semua' ? '' : $status_filter]) ?>
+                <?= pr_hidden('proses_risiko', ['status_filter' => $status_filter === 'semua' ? '' : $status_filter, 'unit_ap' => $sel_ap, 'unit_up' => $sel_up]) ?>
                 <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" name="keyword" class="form-control bg-light border-start-0" value="<?= pr_e($keyword) ?>" placeholder="Cari IDPel / nama pelanggan...">
             </form>
+            <?php $msg_terpilih = 'Proses hanya data yang dicentang di wilayah ' . $scope_label . '? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.'; ?>
             <button type="submit" form="formRisiko" name="proses_risiko" value="1" class="btn btn-outline-primary btn-sm px-3"
-                    onclick="return confirm('Proses hanya data yang dicentang? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.');">
+                    <?= $siap_proses ? '' : 'disabled title="Pilih Unit AP terlebih dahulu"' ?>
+                    onclick="return confirm(<?= pr_e(json_encode($msg_terpilih)) ?>);">
                 <i class="bi bi-check2-square me-1"></i> Proses Terpilih
             </button>
         </div>
     </div>
 
     <form method="POST" action="<?= pr_e(pr_url('proses_risiko')) ?>" id="formRisiko">
+        <input type="hidden" name="unit_ap" value="<?= pr_e($sel_ap) ?>">
+        <input type="hidden" name="unit_up" value="<?= pr_e($sel_up) ?>">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -187,6 +262,8 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
             <form method="POST" action="<?= pr_e(pr_url('proses_risiko')) ?>">
                 <input type="hidden" name="action_type" value="update_sr">
                 <input type="hidden" name="idpel_target" id="modal_idpel_target">
+                <input type="hidden" name="unit_ap" value="<?= pr_e($sel_ap) ?>">
+                <input type="hidden" name="unit_up" value="<?= pr_e($sel_up) ?>">
                 <div class="modal-header border-bottom px-4 py-3">
                     <h5 class="modal-title fw-bold" id="judulModalSR"><i class="bi bi-pencil-square text-primary me-2"></i>Ubah Posisi SR</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
@@ -214,12 +291,29 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Pilih semua di halaman ini
     var semua = document.getElementById('checkAll');
     if (semua) {
         semua.addEventListener('change', function () {
             document.querySelectorAll('.check-item').forEach(function (cb) { cb.checked = semua.checked; });
         });
     }
+
+    // Pemilih wilayah: ganti AP -> reset UP lalu muat ulang; ganti UP -> muat ulang
+    var formUnit = document.getElementById('formUnit');
+    var selAp = document.getElementById('selUnitAp');
+    var selUp = document.getElementById('selUnitUp');
+    if (formUnit && selAp && !selAp.disabled) {
+        selAp.addEventListener('change', function () {
+            if (selUp) selUp.value = '';
+            formUnit.submit();
+        });
+    }
+    if (formUnit && selUp && !selUp.disabled) {
+        selUp.addEventListener('change', function () { formUnit.submit(); });
+    }
+
+    // Modal ubah Posisi SR
     var modalEl = document.getElementById('modalEditSR');
     document.querySelectorAll('.btn-edit-sr').forEach(function (btn) {
         btn.addEventListener('click', function () {

@@ -6,7 +6,7 @@ if (!function_exists('pa_matriks')) {
     /** KodeHak yang melewati pengecekan submenu (administrator sistem). Kosongkan array jika tidak diinginkan. */
     function pa_penuh(): array
     {
-        return ['ADM', 'SA.KP'];
+        return ['SA.KP'];
     }
 
     /** action => daftar KodeHak yang berhak. Action yang tidak tercantum = tidak ada yang berhak. */

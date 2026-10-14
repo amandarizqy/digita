@@ -1,6 +1,8 @@
 <?php
 // templates/perencanaan/hasil_prioritas.php  -  Monitoring: Hasil Skala Prioritas
 // Variabel dari modules/perencanaan/hasil_prioritas.php
+// Tambahan: $tingkat_akses ('UPI'|'AP'|'UP'|null), $nama_upi, $nama_ap, $nama_up, $sel_ap, $sel_up,
+//           $opsi_ap, $opsi_up (kode => SingkatanNama), $scope_label, $unit_params
 
 $skala_usang_n = count(array_filter($ringkasan, fn($r) => $r['usang']));
 $skala_ada     = count(array_filter($ringkasan, fn($r) => $r['jumlah_hasil'] > 0));
@@ -11,8 +13,8 @@ echo pr_header([
     'subtitle' => 'Peringkat pelanggan di dalam tiap Skala Prioritas. Peringkat 1 adalah yang paling perlu ditangani.',
     'action'   => 'hasil_prioritas',
     'periode'  => true,
-    'buttons'  => [
-        ['label' => 'Proses Pemeringkatan', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_prioritas', ['skala' => $skala_filter ?: ''])],
+    'buttons'  => $tingkat_akses === 'UPI' ? [] : [
+        ['label' => 'Proses Pemeringkatan', 'icon' => 'bi-lightning-charge-fill', 'href' => pr_url('proses_prioritas', ['skala' => $skala_filter ?: '', 'unit_up' => $tingkat_akses === 'AP' ? $sel_up : ''])],
     ],
 ]);
 
@@ -21,6 +23,56 @@ if ($tabel_belum_ada) {
     echo pr_alert('warning', 'Tabel <code>hasil_prioritas</code> belum dibuat. Jalankan <code>hasil_prioritas.sql</code> sekali di database, lalu proses lewat <a href="' . pr_e(pr_url('proses_prioritas')) . '" class="alert-link">Skala Prioritas</a>.');
 }
 ?>
+
+<!-- WILAYAH DATA: sesuai tingkat akses (UPI: filter AP+UP | AP: filter UP | UP: tanpa filter) -->
+<?php if ($tingkat_akses !== null): ?>
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-body px-4 py-3">
+        <?php if ($tingkat_akses !== 'UP'): ?>
+        <form method="GET" action="" id="formUnit" class="row g-3 align-items-end">
+            <?= pr_hidden('hasil_prioritas', ['skala' => $skala_filter ?: '', 'keyword' => $keyword]) ?>
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;"><i class="bi bi-diagram-3 me-1"></i> Unit UPI</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_upi ?: '-') ?>" readonly>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="selUnitAp" style="letter-spacing:.5px;"><i class="bi bi-building me-1"></i> Unit AP</label>
+                <?php if ($tingkat_akses === 'UPI'): ?>
+                    <select name="unit_ap" id="selUnitAp" class="form-select form-select-sm">
+                        <option value="">— Semua AP —</option>
+                        <?php foreach ($opsi_ap as $kode_ap => $nama_ap_opt): ?>
+                            <option value="<?= pr_e((string) $kode_ap) ?>" <?= (string) $kode_ap === (string) $sel_ap ? 'selected' : '' ?>><?= pr_e($nama_ap_opt) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php else: ?>
+                    <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($nama_ap ?: '-') ?>" readonly>
+                <?php endif; ?>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="selUnitUp" style="letter-spacing:.5px;"><i class="bi bi-geo-alt me-1"></i> Unit UP</label>
+                <select name="unit_up" id="selUnitUp" class="form-select form-select-sm" <?= ($tingkat_akses === 'UPI' && $sel_ap === '') ? 'disabled' : '' ?>>
+                    <option value=""><?= ($tingkat_akses === 'UPI' && $sel_ap === '') ? '— Pilih AP dahulu —' : '— Semua UP —' ?></option>
+                    <?php foreach ($opsi_up as $kode_up => $nama_up_opt): ?>
+                        <option value="<?= pr_e((string) $kode_up) ?>" <?= (string) $kode_up === (string) $sel_up ? 'selected' : '' ?>><?= pr_e($nama_up_opt) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <a href="<?= pr_e(pr_url('hasil_prioritas', ['skala' => $skala_filter ?: ''])) ?>" class="btn btn-outline-secondary btn-sm px-3"><i class="bi bi-x-circle me-1"></i> Reset Wilayah</a>
+            </div>
+        </form>
+        <?php endif; ?>
+        <div class="small text-muted <?= $tingkat_akses !== 'UP' ? 'mt-3' : '' ?>">
+            <i class="bi bi-geo-alt-fill me-1"></i>
+            <?php if ($tingkat_akses === 'UP'): ?>
+                Menampilkan data unit Anda: <strong><?= pr_e($scope_label) ?></strong>.
+            <?php else: ?>
+                Wilayah data: <strong><?= pr_e($scope_label) ?></strong>. Peringkat dihitung per wilayah saat diproses.
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
@@ -81,7 +133,11 @@ if ($tabel_belum_ada) {
             <div class="alert alert-warning border-0 rounded-3 mt-3 mb-0 py-2 small">
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>
                 Klasifikasi mencatat <?= pr_n($rg['jumlah_kategori']) ?> pelanggan pada skala ini, sedangkan peringkat baru memuat <?= pr_n($rg['jumlah_hasil']) ?>.
-                <a href="<?= pr_e(pr_url('proses_prioritas', ['skala' => $skala_filter])) ?>" class="alert-link">Proses ulang skala ini</a> agar sinkron.
+                <?php if ($tingkat_akses !== 'UPI'): ?>
+                    <a href="<?= pr_e(pr_url('proses_prioritas', ['skala' => $skala_filter, 'unit_up' => $tingkat_akses === 'AP' ? $sel_up : ''])) ?>" class="alert-link">Proses ulang skala ini</a> agar sinkron.
+                <?php else: ?>
+                    Minta pengguna tingkat AP/UP terkait memproses ulang skala ini agar sinkron.
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -95,7 +151,7 @@ if ($tabel_belum_ada) {
             <span class="fw-bold text-primary fs-6">Daftar Peringkat</span>
         </div>
         <form method="GET" action="" class="input-group input-group-sm" style="max-width:280px;">
-            <?= pr_hidden('hasil_prioritas', ['skala' => $skala_filter ?: '']) ?>
+            <?= pr_hidden('hasil_prioritas', array_merge(['skala' => $skala_filter ?: ''], $unit_params)) ?>
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="text" name="keyword" class="form-control bg-light border-start-0" value="<?= pr_e($keyword) ?>" placeholder="Cari IDPel / nama pelanggan...">
         </form>
@@ -109,6 +165,7 @@ if ($tabel_belum_ada) {
                         <?php if ($skala_filter === 0): ?><th>Prioritas</th><?php endif; ?>
                         <th>ID Pelanggan</th>
                         <th>Nama Pelanggan</th>
+                        <th>Unit</th>
                         <th class="text-end">Total Tagihan</th>
                         <th class="text-center">Telat</th>
                         <th class="text-center">Lewat Bulan</th>
@@ -128,6 +185,7 @@ if ($tabel_belum_ada) {
                         <?php if ($skala_filter === 0): ?><td><?= pr_badge_prioritas($r['SkalaPrioritas'], false) ?></td><?php endif; ?>
                         <td class="fw-bold text-dark font-monospace"><?= pr_e($r['IdPel']) ?></td>
                         <td class="fw-semibold text-dark text-uppercase small"><?= pr_e($r['NamaPelanggan'] ?? '-') ?></td>
+                        <td><span class="badge bg-light text-dark border"><?= pr_e($r['NamaUnitUp'] ?? '-') ?></span></td>
                         <td class="text-end font-monospace small text-nowrap"><?= pr_rp($r['TotalTagihan']) ?></td>
                         <td class="text-center"><?= (int) $r['JumlahTelat'] ?></td>
                         <td class="text-center"><?= (int) $r['JumlahLewatBulan'] ?></td>
@@ -141,7 +199,7 @@ if ($tabel_belum_ada) {
                         <td class="pe-4"><?= pr_badge_sr($r['PosisiSR']) ?></td>
                     </tr>
                 <?php endforeach; else:
-                    echo pr_empty_row($skala_filter === 0 ? 10 : 9, ($tabel_belum_ada || $total_hasil_semua === 0)
+                    echo pr_empty_row($skala_filter === 0 ? 11 : 10, ($tabel_belum_ada || $total_hasil_semua === 0)
                         ? 'Belum ada hasil pemeringkatan. Proses dulu lewat <a href="' . pr_e(pr_url('proses_prioritas')) . '">Skala Prioritas</a>.'
                         : 'Data tidak ditemukan untuk filter ini.', 'bi-list-ol');
                 endif; ?>
@@ -151,3 +209,13 @@ if ($tabel_belum_ada) {
     </div>
     <?= pr_footer_tabel($page, $per_page, $total_rows, fn($h) => $buat_url(['hal' => $h])) ?>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var f = document.getElementById('formUnit');
+    if (!f) return;
+    var ap = document.getElementById('selUnitAp'), up = document.getElementById('selUnitUp');
+    if (ap) ap.addEventListener('change', function () { if (up) up.value = ''; f.submit(); });
+    if (up) up.addEventListener('change', function () { f.submit(); });
+});
+</script>
