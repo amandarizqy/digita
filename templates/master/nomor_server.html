@@ -46,7 +46,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                         <th style="width: 40px;" class="ps-4">#</th>
                         <th>IMEI MODEM</th>
                         <th>KODE UNIT (UPI / AP / UP)</th>
-                        <th>SIM ID</th>
+                        <th>SIM ID / NO. AKUN</th>
                         <th>IP SERVER (DATA / ENGINE)</th>
                         <th>PORT</th>
                         <th>STATUS DATA</th>
@@ -71,11 +71,22 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                                     <span class="badge bg-light text-dark border">UP: <?= htmlspecialchars($row['KodeUp'] ?? '-'); ?></span>
                                 </div>
                             </td>
-                            <td class="font-monospace text-secondary small">
+                            <!-- SIM ID & NOMOR AKUN -->
+                            <td class="text-nowrap">
                                 <?php if (!empty($row['SimId'])): ?>
-                                    <span class="badge bg-info bg-opacity-10 text-dark border border-info font-monospace"><?= htmlspecialchars($row['SimId']); ?></span>
+                                    <div>
+                                        <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle rounded-3 px-2 py-1 font-monospace">
+                                            <?= htmlspecialchars($row['SimId']); ?>
+                                        </span>
+                                    </div>
+                                    <?php if (!empty($row['NomorAkun'])): ?>
+                                        <div class="small text-muted mt-1 font-monospace" style="font-size: 0.8rem;">
+                                            <i class="bi bi-telephone-fill me-1 text-secondary"></i>
+                                            <code class="text-dark bg-light px-1 rounded"><?= htmlspecialchars($row['NomorAkun']); ?></code>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php else: ?>
-                                    <span class="text-muted font-monospace fst-italic">Tanpa SIM</span>
+                                    <span class="text-muted font-monospace fst-italic small">Tanpa SIM</span>
                                 <?php endif; ?>
                             </td>
                             <td class="small ip-cell">
@@ -145,7 +156,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                         <?php if (!empty($list_sim)): ?>
                             <?php foreach ($list_sim as $s): ?>
                                 <option value="<?= htmlspecialchars($s['SimId']); ?>">
-                                    <?= htmlspecialchars($s['SimId']); ?><?= isset($s['MsisdnNomor']) ? ' (' . htmlspecialchars($s['MsisdnNomor']) . ')' : ''; ?>
+                                    <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
                                 </option>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -227,7 +238,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                         <?php if (!empty($list_sim)): ?>
                             <?php foreach ($list_sim as $s): ?>
                                 <option value="<?= htmlspecialchars($s['SimId']); ?>">
-                                    <?= htmlspecialchars($s['SimId']); ?><?= isset($s['MsisdnNomor']) ? ' (' . htmlspecialchars($s['MsisdnNomor']) . ')' : ''; ?>
+                                    <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
                                 </option>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -300,7 +311,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Pencarian di sisi klien
     const inputCari = document.getElementById('cariModem');
     const tabel = document.getElementById('tabelModem');
     if (inputCari && tabel) {
@@ -315,7 +325,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Isi pilihan ULP sesuai UP3 yang dipilih
     function renderUlpOptions(selectElement, selectedApValue, targetUlpValue) {
         selectElement.innerHTML = '<option value="">-- Pilih ULP --</option>';
         if (!selectedApValue) {
@@ -352,7 +361,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Modal edit
     const modalEditEl = document.getElementById('modalEditModem');
     let modalEdit = null;
     if (modalEditEl && window.bootstrap) {
@@ -361,13 +369,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.btn-edit-modem').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            const selectedAp = this.getAttribute('data-ap') || '';
-            const selectedUp = this.getAttribute('data-up') || '';
+            const selectedAp  = this.getAttribute('data-ap') || '';
+            const selectedUp  = this.getAttribute('data-up') || '';
+            const selectedSim = this.getAttribute('data-sim') || '';
 
             document.getElementById('edit_modem_imei').value = this.getAttribute('data-imei') || '';
-            document.getElementById('edit_modem_sim').value = this.getAttribute('data-sim') || '';
-            document.getElementById('edit_modem_ap').value = selectedAp;
+            
+            const selectSim = document.getElementById('edit_modem_sim');
+            if (selectedSim) {
+                let exists = Array.from(selectSim.options).some(opt => opt.value === selectedSim);
+                if (!exists) {
+                    const opt = document.createElement('option');
+                    opt.value = selectedSim;
+                    opt.textContent = selectedSim + ' (Terpasang)';
+                    selectSim.appendChild(opt);
+                }
+            }
+            selectSim.value = selectedSim;
 
+            document.getElementById('edit_modem_ap').value = selectedAp;
             renderUlpOptions(editUp, selectedAp, selectedUp);
 
             document.getElementById('edit_modem_ipdata').value = this.getAttribute('data-ipdata') || '';

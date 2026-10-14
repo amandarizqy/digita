@@ -43,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $ip_server_engine = trim($_POST['IpServerEngine'] ?? '');
     $port_engine      = trim($_POST['PortEngine'] ?? '');
 
-    // Status mengikuti pilihan di form
     $status_data      = normalisasi_status_modem($_POST['StatusData'] ?? 'AKTIF');
 
     if (empty($kode_upi) || strpos($kode_ap, '56') === 0 || strpos($kode_up, '56') === 0) {
@@ -110,7 +109,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $ip_server_engine = trim($_POST['IpServerEngine'] ?? '');
     $port_engine      = trim($_POST['PortEngine'] ?? '');
 
-    // Status mengikuti pilihan di form (sebelumnya selalu dipaksa AKTIF)
     $status_data      = normalisasi_status_modem($_POST['StatusData'] ?? 'AKTIF');
 
     if (empty($kode_upi) || strpos($kode_ap, '56') === 0 || strpos($kode_up, '56') === 0) {
@@ -179,22 +177,25 @@ if ($action === 'delete') {
     exit;
 }
 
-// 7. Query Data & Metrik
-$sql = "SELECT * FROM master_modem WHERE 1=1";
+// 7. Query Data Modem dengan LEFT JOIN ke master_nomor untuk Mengambil NomorAkun
+$sql = "SELECT m.*, n.NomorAkun 
+        FROM master_modem m 
+        LEFT JOIN master_nomor n ON m.SimId = n.SimId 
+        WHERE 1=1";
 $params = [];
 
 if ($user_role === 'ULP') {
-    $sql .= " AND KodeUp = ?";
+    $sql .= " AND m.KodeUp = ?";
     $params[] = $user_unit;
 } elseif ($user_role === 'UP3') {
-    $sql .= " AND KodeAp = ?";
+    $sql .= " AND m.KodeAp = ?";
     $params[] = $user_unit;
 } elseif ($user_role === 'UID') {
-    $sql .= " AND KodeUpi = ?";
+    $sql .= " AND m.KodeUpi = ?";
     $params[] = $user_unit;
 }
 
-$sql .= " ORDER BY WaktuData DESC";
+$sql .= " ORDER BY m.WaktuData DESC";
 
 $stmt = $conn->prepare($sql);
 $stmt->execute($params);
@@ -204,9 +205,19 @@ $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE St
 $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama, UnitUpi FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
 $list_up  = $conn->query("SELECT UnitUp, SingkatanNama, UnitAp FROM master_up WHERE StatusData = 'AKTIF' ORDER BY UnitUp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
+// 8. Query Filter SIM ID: Hanya SIM Card Status 'AKTIF' yang belum dipakai di master_modem Status 'AKTIF'
 $list_sim = [];
 try {
-    $stmt_sim = $conn->query("SELECT SimId FROM master_nomor ORDER BY SimId ASC");
+    $sql_sim = "SELECT SimId, NomorAkun 
+                FROM master_nomor 
+                WHERE StatusData = 'AKTIF' 
+                  AND SimId NOT IN (
+                      SELECT SimId 
+                      FROM master_modem 
+                      WHERE StatusData = 'AKTIF' AND SimId IS NOT NULL AND SimId != ''
+                  ) 
+                ORDER BY SimId ASC";
+    $stmt_sim = $conn->query($sql_sim);
     $list_sim = $stmt_sim->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $list_sim = [];
