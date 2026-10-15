@@ -1,6 +1,7 @@
 <?php
 // templates/perencanaan/upload_riwayat.php  -  Input: Unggah Riwayat Pelunasan (XLSX)
 // Variabel dari modules/perencanaan/upload_riwayat.php
+// Tambahan: $nama_upi, $opsi_ap (kode => SingkatanNama), $peta_unit (AP -> daftar UP, untuk JS), $sel_ap, $sel_up
 
 echo pr_header([
     'title'    => 'Unggah Riwayat Pelunasan',
@@ -11,7 +12,7 @@ echo pr_header([
 
 if ($pesan_sukses) echo pr_alert('success', pr_e($pesan_sukses) . ' <a href="' . pr_e(pr_url('data_riwayat')) . '" class="alert-link">Lihat datanya &rarr;</a>');
 if ($pesan_error)  echo pr_alert('danger', pr_e($pesan_error));
-if (!$unit_siap)   echo pr_alert('warning', 'Unit akun Anda belum lengkap, unggah dinonaktifkan. Lengkapi UnitUp / UnitAp / UnitUpi di Master Pengguna.');
+if (!$unit_siap)   echo pr_alert('warning', 'Unit UPI akun Anda belum tersedia, unggah dinonaktifkan. Lengkapi UnitUpi di Master Pengguna.');
 
 if ($hasil): ?>
 <div class="row g-3 mb-4">
@@ -31,6 +32,31 @@ if ($hasil): ?>
             </div>
             <form method="POST" action="<?= pr_e(pr_url('upload_riwayat')) ?>" enctype="multipart/form-data" id="formUnggah">
                 <div class="card-body px-4 py-4">
+                    <!-- WILAYAH TUJUAN: UPI (akun) -> AP -> UP -->
+                    <div class="fw-bold small text-uppercase text-secondary mb-2" style="letter-spacing:.5px;"><i class="bi bi-geo-alt me-1"></i> Wilayah Tujuan Data</div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small text-muted mb-1">Unit UPI</label>
+                            <input type="text" class="form-control bg-light" value="<?= pr_e($nama_upi ?: '-') ?>" readonly>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="unit_ap" class="form-label small text-muted mb-1">Unit AP <span class="text-danger">*</span></label>
+                            <select name="unit_ap" id="unit_ap" class="form-select" required <?= $unit_siap ? '' : 'disabled' ?>>
+                                <option value="">— Pilih Unit AP —</option>
+                                <?php foreach ($opsi_ap as $kode_ap => $nama_ap_opt): ?>
+                                    <option value="<?= pr_e((string) $kode_ap) ?>" <?= (string) $kode_ap === (string) $sel_ap ? 'selected' : '' ?>><?= pr_e($nama_ap_opt) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="unit_up" class="form-label small text-muted mb-1">Unit UP <span class="text-danger">*</span></label>
+                            <select name="unit_up" id="unit_up" class="form-select" required disabled>
+                                <option value="">— Pilih AP dahulu —</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-text mb-4 mt-n2"><i class="bi bi-info-circle me-1"></i>Seluruh baris pada file akan disimpan dengan unit AP &amp; UP yang dipilih di atas.</div>
+
                     <label for="file_xlsx" class="form-label fw-bold small text-uppercase text-secondary" style="letter-spacing:.5px;">File .xlsx</label>
                     <input type="file" name="file_xlsx" id="file_xlsx" class="form-control form-control-lg" accept=".xlsx" required <?= $unit_siap ? '' : 'disabled' ?>>
                     <div class="form-text">Sheet pertama dibaca. Batas server: <?= pr_e(ini_get('upload_max_filesize')) ?> per file.</div>
@@ -120,7 +146,7 @@ $contoh_baris = [
                 <ul class="mb-0 ps-3 text-muted">
                     <li>Kolom lain (No, TglBuku, Trf, Daya, dst.) boleh ada, akan diabaikan.</li>
                     <li>Huruf besar/kecil pada judul kolom tidak berpengaruh.</li>
-                    <li>UnitUp, UnitAp, dan UnitUpi otomatis dari akun yang login.</li>
+                    <li>UnitUpi otomatis dari akun yang login; UnitAp dan UnitUp sesuai pilihan Wilayah Tujuan.</li>
                 </ul>
             </div>
         </div>
@@ -128,9 +154,33 @@ $contoh_baris = [
 </div>
 
 <script>
-document.getElementById('formUnggah').addEventListener('submit', function () {
-    var b = document.getElementById('btnUnggah');
-    b.disabled = true;
-    b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...';
-});
+(function () {
+    var peta  = <?= json_encode($peta_unit, JSON_UNESCAPED_UNICODE) ?>;   // [{kode, nama, ups:[{kode, nama}]}]
+    var upAwal = <?= json_encode((string) $sel_up) ?>;
+    var ap = document.getElementById('unit_ap'), up = document.getElementById('unit_up');
+
+    function isiUp(pilih) {
+        up.innerHTML = '';
+        var o = document.createElement('option');
+        o.value = '';
+        o.textContent = ap.value ? '— Pilih Unit UP —' : '— Pilih AP dahulu —';
+        up.appendChild(o);
+        var item = peta.filter(function (x) { return x.kode === ap.value; })[0];
+        (item ? item.ups : []).forEach(function (u) {
+            var op = document.createElement('option');
+            op.value = u.kode; op.textContent = u.nama;
+            if (pilih && pilih === u.kode) op.selected = true;
+            up.appendChild(op);
+        });
+        up.disabled = !ap.value || !item || item.ups.length === 0;
+    }
+    ap.addEventListener('change', function () { isiUp(''); });
+    isiUp(upAwal);   // pertahankan pilihan setelah submit yang gagal validasi
+
+    document.getElementById('formUnggah').addEventListener('submit', function () {
+        var b = document.getElementById('btnUnggah');
+        b.disabled = true;
+        b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...';
+    });
+})();
 </script>

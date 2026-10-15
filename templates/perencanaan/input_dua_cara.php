@@ -1,6 +1,7 @@
 <?php
 // templates/perencanaan/input_dua_cara.php  -  Template bersama Input Kepentingan & Input Survey SR
 // Variabel: $cfg (konfigurasi halaman), $state (hasil pi_proses)
+// $state tambahan: tingkat ('UP'|'AP'|null), nama_upi, nama_ap, nama_up, opsi_up (kode => SingkatanNama), sel_up, scope_label
 
 $mode = $state['mode'];
 $h    = $state['hasil'];
@@ -15,7 +16,7 @@ echo pr_header([
 if ($state['sukses'])     echo pr_alert('success', pr_e($state['sukses']) . ' <a href="' . pr_e(pr_url($cfg['link_hasil'])) . '" class="alert-link">Lihat hasilnya &rarr;</a>');
 if ($state['peringatan']) echo pr_alert('warning', pr_e($state['peringatan']), 'bi-exclamation-triangle-fill');
 if ($state['error'])      echo pr_alert('danger', pr_e($state['error']));
-if (!$state['unit_siap']) echo pr_alert('warning', 'Unit akun Anda belum lengkap, penyimpanan dinonaktifkan. Lengkapi UnitUp / UnitAp / UnitUpi di Master Pengguna.');
+if (!$state['unit_siap']) echo pr_alert('warning', 'Akun Anda harus memiliki Unit AP (dan Unit UPI), atau Unit UP, agar dapat menyimpan data. Lengkapi di Master Pengguna.');
 
 if ($h): ?>
 <div class="row g-3 mb-4">
@@ -23,6 +24,46 @@ if ($h): ?>
     <?= pr_kpi('Data Baru', pr_n($h['baru']), 'Periode ' . $h['periode'], 'bi-plus-circle', 'success', true) ?>
     <?= pr_kpi('Diperbarui', pr_n($h['diperbarui']), $h['duplikat'] > 0 ? pr_n($h['duplikat']) . ' duplikat di file, dipakai baris terakhir' : 'Sudah ada, nilai diganti', 'bi-arrow-repeat', 'warning', $h['diperbarui'] > 0) ?>
     <?= pr_kpi('Ditolak', pr_n($h['ditolak']), 'Format data tidak valid', 'bi-x-octagon', 'danger', $h['ditolak'] > 0) ?>
+</div>
+<?php endif; ?>
+
+<!-- WILAYAH TUJUAN: UP terkunci | AP memilih UP -->
+<?php if ($state['tingkat'] !== null): ?>
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-body px-4 py-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;"><i class="bi bi-diagram-3 me-1"></i> Unit UPI</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($state['nama_upi'] ?: '-') ?>" readonly>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" style="letter-spacing:.5px;"><i class="bi bi-building me-1"></i> Unit AP</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($state['nama_ap'] ?: '-') ?>" readonly>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-bold small text-uppercase text-secondary mb-1" for="sel_up_tujuan" style="letter-spacing:.5px;"><i class="bi bi-geo-alt me-1"></i> Unit UP <?= $state['tingkat'] === 'AP' ? '<span class="text-danger">*</span>' : '' ?></label>
+                <?php if ($state['tingkat'] === 'UP'): ?>
+                    <input type="text" class="form-control form-control-sm bg-light" value="<?= pr_e($state['nama_up'] ?: '-') ?>" readonly>
+                <?php else: ?>
+                    <select id="sel_up_tujuan" class="form-select form-select-sm">
+                        <option value="">— Pilih Unit UP —</option>
+                        <?php foreach ($state['opsi_up'] as $kode_up => $nama_up_opt): ?>
+                            <option value="<?= pr_e((string) $kode_up) ?>" <?= (string) $kode_up === (string) $state['sel_up'] ? 'selected' : '' ?>><?= pr_e($nama_up_opt) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="small text-muted mt-3">
+            <i class="bi bi-geo-alt-fill me-1"></i>
+            <?php if ($state['tingkat'] === 'UP'): ?>
+                Data disimpan untuk unit Anda: <strong><?= pr_e($state['scope_label']) ?></strong>.
+            <?php else: ?>
+                Pilih UP tujuan di bawah AP Anda. Data disimpan untuk wilayah <strong><?= pr_e($state['scope_label']) ?><?= $state['sel_up'] === '' ? ' › (belum dipilih)' : '' ?></strong>.
+            <?php endif; ?>
+            Pelanggan yang sudah tercatat di unit lain akan dilewati.
+        </div>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -43,6 +84,7 @@ if ($h): ?>
         <div class="tab-pane fade <?= $mode === 'upload' ? 'show active' : '' ?>" id="tabUpload" role="tabpanel">
             <form method="POST" action="<?= pr_e(pr_url($cfg['action'])) ?>" enctype="multipart/form-data" class="form-proses">
                 <input type="hidden" name="mode" value="upload">
+                <input type="hidden" name="unit_up" class="unit-up-hidden" value="<?= pr_e($state['sel_up']) ?>">
                 <div class="card-body px-4 py-4">
                     <div class="row g-3">
                         <div class="col-md-3">
@@ -69,6 +111,7 @@ if ($h): ?>
         <div class="tab-pane fade <?= $mode === 'manual' ? 'show active' : '' ?>" id="tabManual" role="tabpanel">
             <form method="POST" action="<?= pr_e(pr_url($cfg['action'])) ?>" class="form-proses">
                 <input type="hidden" name="mode" value="manual">
+                <input type="hidden" name="unit_up" class="unit-up-hidden" value="<?= pr_e($state['sel_up']) ?>">
                 <div class="card-body px-4 py-4">
                     <div class="row g-3">
                         <div class="col-md-3">
@@ -91,7 +134,7 @@ if ($h): ?>
                     </div>
                 </div>
                 <div class="card-footer bg-white border-top py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <span class="text-muted small"><i class="bi bi-person-badge me-1"></i> Unit: <span class="font-monospace"><?= pr_e(implode(' / ', array_map(fn($u) => $u ?: '-', $state['unit']))) ?></span> (dari akun login)</span>
+                    <span class="text-muted small"><i class="bi bi-person-badge me-1"></i> Wilayah: <strong><?= pr_e($state['scope_label']) ?></strong></span>
                     <button type="submit" class="btn btn-primary btn-sm px-4 shadow-sm rounded-2" <?= $state['unit_siap'] ? '' : 'disabled' ?>><i class="bi bi-check2 me-1"></i> Simpan</button>
                 </div>
             </form>
@@ -123,10 +166,27 @@ if ($h): ?>
 <?php endif; ?>
 
 <script>
-document.querySelectorAll('.form-proses').forEach(function (f) {
-    f.addEventListener('submit', function () {
-        var b = f.querySelector('button[type=submit]');
-        setTimeout(function () { b.disabled = true; b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...'; }, 0);
+(function () {
+    // Pilihan UP (hanya akun tingkat AP) disalin ke kedua form (Upload & Satu-satu)
+    var selUp = document.getElementById('sel_up_tujuan');
+    function sinkron() {
+        document.querySelectorAll('.unit-up-hidden').forEach(function (h) { if (selUp) h.value = selUp.value; });
+    }
+    if (selUp) selUp.addEventListener('change', sinkron);
+    sinkron();
+
+    document.querySelectorAll('.form-proses').forEach(function (f) {
+        f.addEventListener('submit', function (e) {
+            if (selUp && !selUp.value) {
+                e.preventDefault();
+                alert('Pilih Unit UP tujuan terlebih dahulu.');
+                selUp.focus();
+                return;
+            }
+            sinkron();
+            var b = f.querySelector('button[type=submit]');
+            setTimeout(function () { b.disabled = true; b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...'; }, 0);
+        });
     });
-});
+})();
 </script>

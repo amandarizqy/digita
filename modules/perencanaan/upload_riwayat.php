@@ -3,6 +3,10 @@
 // Unggah XLSX riwayat pelunasan -> tabel pelunasan_ap2t.
 // Cepat: file dibaca streaming, disimpan per 500 baris (1 query) dalam 1 transaksi.
 // Kunci unik (IdPel, ThBlRek): data yang sudah ada otomatis DIPERBARUI, bukan dobel.
+//
+// WILAYAH TUJUAN: pengguna halaman ini memiliki Unit UPI. Sebelum mengunggah ia memilih
+// Unit AP (di bawah UPI-nya) lalu Unit UP (di bawah AP itu). Ketiga unit tersebut yang
+// disimpan pada setiap baris pelunasan_ap2t dan kategorisasi_risiko.
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
 
 $riwayat_chunk = 500;
@@ -56,33 +60,80 @@ function rw_angka($v): ?float
 }
 }
 
-// ---- 1. Unit dari akun yang login ------------------------------------------------
+// ---- 1. Unit akun yang login (UPI) + pilihan wilayah tujuan (AP -> UP) ------------------
 $pesan_sukses = $pesan_error = '';
 $hasil   = null;     // ringkasan setelah unggah
 $ditolak = [];       // contoh baris ditolak (maks 50)
 
-$unitUp  = $_SESSION['UnitUp']  ?? '';
-$unitAp  = $_SESSION['UnitAp']  ?? '';
 $unitUpi = $_SESSION['UnitUpi'] ?? '';
-if (($unitUp === '' || $unitAp === '' || $unitUpi === '') && !empty($_SESSION['NamaAkun'])) {
+$unitAp  = $_SESSION['UnitAp']  ?? '';   // bila akun ternyata terikat ke AP/UP, pilihan dibatasi
+$unitUp  = $_SESSION['UnitUp']  ?? '';
+if (($unitUpi === '' || $unitAp === '' || $unitUp === '') && !empty($_SESSION['NamaAkun'])) {
     try {
         $st = $conn->prepare("SELECT UnitUp, UnitAp, UnitUpi FROM master_pengguna WHERE NamaAkun = ?");
         $st->execute([$_SESSION['NamaAkun']]);
         if ($u = $st->fetch(PDO::FETCH_ASSOC)) {
-            $unitUp  = $unitUp  ?: (string) $u['UnitUp'];
-            $unitAp  = $unitAp  ?: (string) $u['UnitAp'];
             $unitUpi = $unitUpi ?: (string) $u['UnitUpi'];
+            $unitAp  = $unitAp  ?: (string) $u['UnitAp'];
+            $unitUp  = $unitUp  ?: (string) $u['UnitUp'];
         }
     } catch (PDOException $e) { /* ditangani di bawah */ }
 }
-$unit_siap = $unitUp !== '' && $unitAp !== '' && $unitUpi !== '';
+$unit_siap = $unitUpi !== '';
+
+$nama_upi     = $unitUpi;
+$opsi_ap      = [];    // [kode => SingkatanNama]
+$peta_unit    = [];    // untuk JS: [ {kode, nama, ups: [ {kode, nama} ]} ]
+$opsi_up_ap   = [];    // [kodeAp => [kodeUp => nama]] untuk validasi server
+$sel_ap = trim((string) ($_POST['unit_ap'] ?? ''));
+$sel_up = trim((string) ($_POST['unit_up'] ?? ''));
+
+if ($unit_siap) {
+    try {
+        $st = $conn->prepare("SELECT COALESCE(NULLIF(SingkatanNama, ''), UnitUpi) FROM master_upi WHERE UnitUpi = ?");
+        $st->execute([$unitUpi]);
+        $nama_upi = $st->fetchColumn() ?: $unitUpi;
+
+        // AP di bawah UPI (jika akun terikat AP: hanya AP itu)
+        $sql = "SELECT UnitAp, COALESCE(NULLIF(SingkatanNama, ''), UnitAp) AS Nama FROM master_ap WHERE UnitUpi = :upi AND StatusData = 'AKTIF'";
+        $prm = [':upi' => $unitUpi];
+        if ($unitAp !== '') { $sql .= " AND UnitAp = :ap"; $prm[':ap'] = $unitAp; }
+        $st = $conn->prepare($sql . " ORDER BY UnitAp");
+        $st->execute($prm);
+        $opsi_ap = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        // UP di bawah tiap AP tersebut (jika akun terikat UP: hanya UP itu)
+        if ($opsi_ap) {
+            $kode_ap = array_map('strval', array_keys($opsi_ap));
+            $ph = implode(',', array_fill(0, count($kode_ap), '?'));
+            $sql = "SELECT UnitAp, UnitUp, COALESCE(NULLIF(SingkatanNama, ''), UnitUp) AS Nama FROM master_up WHERE UnitAp IN ($ph) AND StatusData = 'AKTIF'";
+            $prm = $kode_ap;
+            if ($unitUp !== '') { $sql .= " AND UnitUp = ?"; $prm[] = $unitUp; }
+            $st = $conn->prepare($sql . " ORDER BY UnitUp");
+            $st->execute($prm);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $opsi_up_ap[(string) $r['UnitAp']][(string) $r['UnitUp']] = $r['Nama'];
+            }
+        }
+        foreach ($opsi_ap as $kode => $nama) {
+            $ups = [];
+            foreach ($opsi_up_ap[(string) $kode] ?? [] as $k_up => $n_up) $ups[] = ['kode' => (string) $k_up, 'nama' => $n_up];
+            $peta_unit[] = ['kode' => (string) $kode, 'nama' => $nama, 'ups' => $ups];
+        }
+    } catch (PDOException $e) {
+        $pesan_error = 'Gagal memuat daftar unit: ' . $e->getMessage();
+        $unit_siap = false;
+    }
+}
 
 // ---- 2. Proses unggah -----------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f = $_FILES['file_xlsx'] ?? null;
 
     if (!$unit_siap) {
-        $pesan_error = 'Akun Anda belum memiliki UnitUp / UnitAp / UnitUpi di master pengguna.';
+        $pesan_error = $pesan_error ?: 'Akun Anda belum memiliki Unit UPI di master pengguna.';
+    } elseif (!isset($opsi_ap[$sel_ap]) || !isset($opsi_up_ap[$sel_ap][$sel_up])) {
+        $pesan_error = 'Pilih Unit AP dan Unit UP tujuan terlebih dahulu (UP harus berada di bawah AP yang dipilih).';
     } elseif ($f === null || in_array($f['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
         $pesan_error = 'File melebihi batas server (upload_max_filesize ' . ini_get('upload_max_filesize') . ', post_max_size ' . ini_get('post_max_size') . ').';
     } elseif ($f['error'] !== UPLOAD_ERR_OK) {
@@ -90,6 +141,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) !== 'xlsx' || file_get_contents($f['tmp_name'], false, null, 0, 2) !== 'PK') {
         $pesan_error = 'Format file harus .xlsx (Excel).';
     } else {
+        // Unit yang disimpan pada setiap baris: UPI akun + AP & UP pilihan (sudah divalidasi di atas)
+        $tujuanUpi = $unitUpi;
+        $tujuanAp  = (string) $sel_ap;
+        $tujuanUp  = (string) $sel_up;
+        $label_tujuan = $nama_upi . ' › ' . $opsi_ap[$sel_ap] . ' › ' . $opsi_up_ap[$sel_ap][$sel_up];
+
         set_time_limit(300);
         $t0 = microtime(true);
         $baris = [];            // dedup per IdPel|ThBlRek
@@ -156,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 foreach (array_chunk(array_values($baris), $riwayat_chunk) as $paket) {
                     $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?)')) . $tail);
                     $param = [];
-                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $unitUp, $unitAp, $unitUpi);
+                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $tujuanUp, $tujuanAp, $tujuanUpi);
                     $stmt->execute($param);
                 }
 
@@ -166,18 +223,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt  = $conn->prepare("INSERT IGNORE INTO kategorisasi_risiko (IdPel, Periode, UnitUp, UnitAp, UnitUpi) VALUES "
                            . implode(',', array_fill(0, count($paket), '(?,?,?,?,?)')));
                     $param = [];
-                    foreach ($paket as $k) array_push($param, $k[0], $k[1], $unitUp, $unitAp, $unitUpi);
+                    foreach ($paket as $k) array_push($param, $k[0], $k[1], $tujuanUp, $tujuanAp, $tujuanUpi);
                     $stmt->execute($param);
                     $katBaru += $stmt->rowCount();
                 }
                 $conn->commit();
-                unset($_SESSION['pr_periode_data']);
+                // daftar tahun periode ikut diperbarui (cache lama & baru)
+                unset($_SESSION['pr_periode_data'], $_SESSION['pr_periode_data_v2']);
             }
 
             $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak,
-                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'kat_total' => count($kat)];
+                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'kat_total' => count($kat),
+                      'wilayah' => $label_tujuan];
             $pesan_sukses = count($baris) > 0
-                ? 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris riwayat pelunasan; '
+                ? 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris riwayat pelunasan untuk wilayah ' . $label_tujuan . '; '
                   . number_format($katBaru, 0, ',', '.') . ' pelanggan-periode baru ditambahkan ke kategorisasi_risiko.'
                 : '';
             if (!$baris) $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
