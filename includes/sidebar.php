@@ -37,7 +37,7 @@ if (!empty($kode_hak)) {
     <span class="bg-white rounded-3 d-inline-flex align-items-center justify-content-center p-2 me-2 shadow-sm">
         <img src="<?= BASE_URL ?>/assets/img/logo1.png" alt="Logo DIGITA" height="48">
     </span>
-    <span class="fs-4 fw-bold">DIGITA</span>
+    <span class="fs-4 fw-bold">DIGITAS</span>
     </a>
     <hr class="text-secondary">
     <div class="small text-uppercase text-muted fw-bold ps-2 mb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">Menu Utama</div>

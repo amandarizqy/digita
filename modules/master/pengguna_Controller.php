@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $email       = trim($_POST['AlamatEmail'] ?? '');
     $nama_user   = trim($_POST['NamaPengguna'] ?? '');
     $kontak      = trim($_POST['NomorKontak'] ?? '');
-    $kata_kunci  = trim($_POST['KataKunci'] ?? '');
+    $kata_kunci  = trim($_POST['KataKunci'] ?? '');   // trim sama seperti login.php agar hash cocok saat login
     $kode_hak    = $_POST['KodeHak'] ?? 'SF.AP';
     $unit_upi    = '56';
     $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : null;
@@ -45,8 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
     if (!empty($nama_akun) && !empty($kata_kunci)) {
+        // Sandi disimpan sebagai hash (bcrypt), bukan teks biasa
+        $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
+
         $stmt = $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
-        $stmt->execute([$nama_akun, $email, $nama_user, $kontak, $kata_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data]);
+        $stmt->execute([$nama_akun, $email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data]);
     }
     header("Location: index.php?page=master&sub=pengguna");
     exit;
@@ -58,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $email       = trim($_POST['AlamatEmail'] ?? '');
     $nama_user   = trim($_POST['NamaPengguna'] ?? '');
     $kontak      = trim($_POST['NomorKontak'] ?? '');
-    $kata_kunci  = trim($_POST['KataKunci'] ?? '');
+    $kata_kunci  = trim($_POST['KataKunci'] ?? '');   // kosong = sandi tidak diubah
     $kode_hak    = $_POST['KodeHak'] ?? 'SF.AP';
     $unit_upi    = '56';
     $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : null;
@@ -66,8 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
     if (!empty($kata_kunci)) {
+        // Sandi baru diisi -> di-hash sebelum disimpan
+        $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
+
         $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KataKunci = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
-        $stmt->execute([$email, $nama_user, $kontak, $kata_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
+        $stmt->execute([$email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
     } else {
         $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
         $stmt->execute([$email, $nama_user, $kontak, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);

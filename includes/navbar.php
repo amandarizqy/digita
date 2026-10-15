@@ -1,7 +1,7 @@
 <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom px-4 py-2 shadow-sm">
     <div class="container-fluid">
         <span class="navbar-brand mb-0 h6 text-secondary">
-            <i class="bi bi-shield-lock-fill text-primary"></i> Manajemen Mutu & Siklus Aset S41
+            <i class="bi bi-shield-lock-fill text-primary"></i> Digitalisasi Aset Shuntrip
         </span>
         <div class="d-flex align-items-center">
             <span class="badge bg-info text-dark me-3 px-3 py-2">

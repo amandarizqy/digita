@@ -1,4 +1,11 @@
 <?php
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'httponly' => true,        // JS tidak bisa membaca cookie session
+    'samesite' => 'Lax',       // menahan sebagian besar CSRF
+    'secure'   => !empty($_SERVER['HTTPS']),
+]);
 // Deteksi protokol HTTP atau HTTPS
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
 // Deteksi domain/IP
