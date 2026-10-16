@@ -18,7 +18,8 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
 <div class="alert alert-info shadow-sm mb-4">
     <strong>No. Form:</strong> <?= htmlspecialchars($no_formulir_valid) ?> &bull; 
     <strong>Tanggal:</strong> <?= htmlspecialchars($formulir['TglFormulir'] ?? '-') ?> &bull;
-    <strong>Tujuan:</strong> <?= htmlspecialchars($formulir['NamaAP'] ?? '-') ?><?= !empty($formulir['NamaUP']) && $formulir['NamaUP'] !== '-' ? ' - ' . htmlspecialchars($formulir['NamaUP']) : '' ?>
+    <strong>Tujuan:</strong> <?= htmlspecialchars($formulir['NamaAP'] ?? '-') ?><?= !empty($formulir['NamaUP']) && $formulir['NamaUP'] !== '-' ? ' - ' . htmlspecialchars($formulir['NamaUP']) : '' ?> &bull;
+    <strong>Status:</strong> <span class="badge bg-<?= (($formulir['StatusData'] ?? 'TIDAK') === 'AKTIF') ? 'success' : 'warning text-dark' ?>"><?= (($formulir['StatusData'] ?? 'TIDAK') === 'AKTIF') ? 'Final (Aktif)' : 'Draft' ?></span>
 </div>
 
 <!-- Form Input (Hanya tampil jika status masih Draft/TIDAK) -->
@@ -104,7 +105,9 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                         <th>NO REF PERANGKAT</th>
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
-                        <th class="text-end pe-4">AKSI</th>
+                        <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
+                            <th class="text-end pe-4">AKSI</th>
+                        <?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -124,21 +127,23 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                                     TIDAK
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end pe-4">
-                                <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang pengiriman?')">
-                                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-                                    <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
+                            <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
+                                <td class="text-end pe-4">
+                                    <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang pengiriman?')">
+                                        <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+                                        <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            <?php endif; ?>
                         </tr>
                     <?php 
                         endforeach; 
                     else: 
                     ?>
-                        <tr><td colspan="5" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
+                        <tr><td colspan="<?= (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK') ? 5 : 4 ?>" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

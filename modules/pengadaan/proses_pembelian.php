@@ -73,15 +73,22 @@ try {
         exit;
     }
 
-    // AKSI 2: TAMBAH ITEM KE KERANJANG
+    // AKSI 2: TAMBAH ITEM KE KERANJANG PEMBELIAN
     if ($action === 'add_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $no_formulir = $_POST['no_formulir'];
+        $no_formulir = trim($_POST['no_formulir'] ?? '');
         $metode = $_POST['metode'] ?? 'manual';
         
+        $stmt_check_master = $conn->prepare("SELECT NoRef FROM master_barang WHERE NoRef = :noref");
+        $stmt_check_cart = $conn->prepare("SELECT NoRef FROM formulir_pembelian_detil WHERE NoRef = :noref");
+
         $conn->beginTransaction();
+        
+        // Kueri SQL bersih hanya menggunakan kolom yang ada (NoFormulir, NoRef, StikerQC, CacatFisik, HargaBeli)
         $query_detil = "INSERT INTO formulir_pembelian_detil (NoFormulir, NoRef, StikerQC, CacatFisik, HargaBeli) 
                         VALUES (:no_form, :noref, :qc, :cacat, :harga)";
         $stmt_detil = $conn->prepare($query_detil);
+
+        $error_msgs = [];
 
         if ($metode === 'excel' && isset($_FILES['file_excel']['tmp_name'])) {
             $file = $_FILES['file_excel']['tmp_name'];
@@ -89,12 +96,25 @@ try {
                 fgetcsv($handle, 1000, ";"); 
                 while (($row = fgetcsv($handle, 1000, ";")) !== FALSE) {
                     $no_ref = trim($row[0] ?? '');
-                    $harga  = (int) preg_replace('/[^0-9]/', '', $row[1] ?? '0');
-                    $qc     = strtoupper(trim($row[2] ?? 'TIDAK'));
-                    $cacat  = strtoupper(trim($row[3] ?? 'TIDAK'));
+                    $qc     = strtoupper(trim($row[1] ?? 'ADA'));
+                    $cacat  = strtoupper(trim($row[2] ?? 'TIDAK'));
+                    $harga  = (float) trim($row[3] ?? 0);
 
                     if (empty($no_ref)) continue;
 
+                    $stmt_check_master->execute([':noref' => $no_ref]);
+                    if ($stmt_check_master->rowCount() > 0) {
+                        $error_msgs[] = "$no_ref (Sudah terdaftar di Master Barang)";
+                        continue;
+                    }
+                    
+                    $stmt_check_cart->execute([':noref' => $no_ref]);
+                    if ($stmt_check_cart->rowCount() > 0) {
+                        $error_msgs[] = "$no_ref (Sudah diinput di formulir pembelian lain)";
+                        continue;
+                    }
+
+                    // Pastikan parameter yang dikirim tepat berjumlah 5 sesuai token kueri
                     $stmt_detil->execute([
                         ':no_form' => $no_formulir,
                         ':noref'   => $no_ref,
@@ -106,58 +126,99 @@ try {
                 fclose($handle);
             }
         } elseif ($metode === 'manual') {
-            $stmt_detil->execute([
-                ':no_form' => $no_formulir,
-                ':noref'   => trim($_POST['no_ref'] ?? ''),
-                ':qc'      => strtoupper(trim($_POST['stiker_qc'] ?? 'TIDAK')),
-                ':cacat'   => strtoupper(trim($_POST['cacat_fisik'] ?? 'TIDAK')),
-                ':harga'   => (int) preg_replace('/[^0-9]/', '', $_POST['harga'] ?? '0')
-            ]);
+            $no_ref = trim($_POST['no_ref'] ?? '');
+            $qc     = strtoupper(trim($_POST['stiker_qc'] ?? 'ADA'));
+            $cacat  = strtoupper(trim($_POST['cacat_fisik'] ?? 'TIDAK'));
+            $harga = (float) preg_replace('/[^\d]/', '', $_POST['harga_beli'] ?? '0');
+
+            if (!empty($no_ref)) {
+                $stmt_check_master->execute([':noref' => $no_ref]);
+                if ($stmt_check_master->rowCount() > 0) {
+                    throw new Exception("Nomor Ref Alat $no_ref sudah terdaftar di sistem (Master Barang). Tidak dapat diinput ulang.");
+                }
+                
+                $stmt_check_cart->execute([':noref' => $no_ref]);
+                if ($stmt_check_cart->rowCount() > 0) {
+                    throw new Exception("Nomor Ref Alat $no_ref sedang diinput dalam keranjang/formulir pembelian lain.");
+                }
+
+                // Pastikan parameter yang dikirim tepat berjumlah 5 sesuai token kueri
+                $stmt_detil->execute([
+                    ':no_form' => $no_formulir,
+                    ':noref'   => $no_ref,
+                    ':qc'      => $qc,
+                    ':cacat'   => $cacat,
+                    ':harga'   => $harga
+                ]);
+            }
         }
+        
         $conn->commit();
+        
+        if (!empty($error_msgs)) {
+            $_SESSION['flash_error'] = "Beberapa item gagal ditambahkan: " . implode(", ", $error_msgs);
+        }
+        
         header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
+    // HAPUS SATU ITEM SPESIFIK (Hanya jika status masih Draft)
     else if ($action === 'delete_item') {
         $no_formulir = trim($_POST['no_formulir'] ?? '');
         $no_ref      = trim($_POST['no_ref'] ?? '');
 
         if (!empty($no_formulir) && !empty($no_ref)) {
-            $stmt = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form AND NoRef = :no_ref");
-            $stmt->execute([':no_form' => $no_formulir, ':no_ref' => $no_ref]);
+            // Cek status formulir terlebih dahulu
+            $stmt_check = $conn->prepare("SELECT StatusData FROM formulir_pembelian WHERE NoFormulir = :no_form");
+            $stmt_check->execute([':no_form' => $no_formulir]);
+            $status = $stmt_check->fetchColumn();
+
+            if ($status === 'TIDAK') {
+                $stmt = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form AND NoRef = :no_ref");
+                $stmt->execute([':no_form' => $no_formulir, ':no_ref' => $no_ref]);
+            }
         }
         header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
+    // RESET SEMUA LIST (Hanya jika status masih Draft)
     else if ($action === 'reset_list') {
         $no_formulir = trim($_POST['no_formulir'] ?? '');
 
         if (!empty($no_formulir)) {
-            $stmt = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
-            $stmt->execute([':no_form' => $no_formulir]);
+            $stmt_check = $conn->prepare("SELECT StatusData FROM formulir_pembelian WHERE NoFormulir = :no_form");
+            $stmt_check->execute([':no_form' => $no_formulir]);
+            $status = $stmt_check->fetchColumn();
+
+            if ($status === 'TIDAK') {
+                $stmt = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
+                $stmt->execute([':no_form' => $no_formulir]);
+            }
         }
         header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=detail&no_form=" . urlencode($no_formulir));
         exit;
     }
 
-    // AKSI: HAPUS FORMULIR BERSTATUS DRAFT
+    // HAPUS DRAFT UTAMA (Hanya jika status masih Draft)
     else if ($action === 'delete_draft') {
         $no_formulir = trim($_POST['no_formulir'] ?? '');
 
         if (!empty($no_formulir)) {
-            $conn->beginTransaction();
-            
-            // Hapus detail terlebih dahulu untuk menjaga integritas relasi (jika tidak ada cascade)
-            $stmt_detil = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
-            $stmt_detil->execute([':no_form' => $no_formulir]);
+            $stmt_check = $conn->prepare("SELECT StatusData FROM formulir_pembelian WHERE NoFormulir = :no_form");
+            $stmt_check->execute([':no_form' => $no_formulir]);
+            $status = $stmt_check->fetchColumn();
 
-            // Hapus formulir utama
-            $stmt_main = $conn->prepare("DELETE FROM formulir_pembelian WHERE NoFormulir = :no_form AND StatusData = 'TIDAK'");
-            $stmt_main->execute([':no_form' => $no_formulir]);
+            if ($status === 'TIDAK') {
+                $conn->beginTransaction();
+                $stmt_detil = $conn->prepare("DELETE FROM formulir_pembelian_detil WHERE NoFormulir = :no_form");
+                $stmt_detil->execute([':no_form' => $no_formulir]);
 
-            $conn->commit();
+                $stmt_main = $conn->prepare("DELETE FROM formulir_pembelian WHERE NoFormulir = :no_form AND StatusData = 'TIDAK'");
+                $stmt_main->execute([':no_form' => $no_formulir]);
+                $conn->commit();
+            }
         }
         header("Location: ../../index.php?page=pengadaan&menu=pembelian&view=daftar");
         exit;

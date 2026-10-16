@@ -44,7 +44,17 @@ if ($sub === 'aktivasi') {
     if ($view === 'daftar') {
         $filter_query = ($kode_hak === 'TL.UP') ? "n.KodeUp = :lokasi" : "n.KodeAp = :lokasi AND (n.KodeUp IS NULL OR n.KodeUp = '')";
         $lokasi = ($kode_hak === 'TL.UP') ? $unit_up : $unit_ap;
-        if ($kode_hak === 'SA.KP') { $filter_query = "1=1"; $lokasi = 1;} 
+        if ($kode_hak === 'SA.KP') {
+            $filter_query = "1=1";
+            $lokasi = 1;
+        } elseif ($kode_hak === 'TL.UP') {
+            $filter_query = "n.KodeUp = :lokasi";
+            $lokasi = $unit_up;
+        } else {
+            // Untuk TL.AP
+            $filter_query = "n.KodeAp = :lokasi";
+            $lokasi = $unit_ap;
+        } 
 
         $query = "SELECT n.*, p.NamaProvider, pp.NamaProduk 
                   FROM master_nomor n

@@ -27,6 +27,7 @@
                     <?php if ($sub === 'aset'): ?>
                         <tr>
                             <th class="ps-4 py-3">NO REF (BARCODE)</th>
+                            <th>UNIT UPI</th>
                             <th>UNIT AP</th>
                             <th>UNIT UP</th>
                             <th class="pe-4">WAKTU DATA</th>
@@ -59,8 +60,9 @@
                         <tr>
                             <?php if ($sub === 'aset'): ?>
                                 <td class="fw-bold text-primary ps-4"><?= htmlspecialchars($row['NoRef']) ?></td>
-                                <td><?= htmlspecialchars($row['UnitAp'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($row['UnitUp'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($row['NamaUpi'] ?? $row['UnitUpi'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($row['NamaAp'] ?? $row['UnitAp'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($row['NamaUp'] ?? $row['UnitUp'] ?? '-') ?></td>
                                 <td class="pe-4"><?= htmlspecialchars($row['WaktuData']) ?></td>
                             <?php elseif ($sub === 'pembelian'): ?>
                                 <td class="fw-bold text-primary ps-4"><?= htmlspecialchars($row['NoFormulir']) ?></td>
