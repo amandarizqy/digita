@@ -15,37 +15,72 @@ $nama_akun = !empty($_SESSION['NamaAkun']) ? $_SESSION['NamaAkun'] : NULL;
 $unit_upi  = !empty($_SESSION['UnitUpi']) ? $_SESSION['UnitUpi'] : '56';
 
 try {
-    // AKSI 1: BUAT DRAFT PENGIRIMAN
+    // AKSI 1: BUAT DRAFT PENGIRIMAN (DINAMIS SEPENUHNYA)
     if ($action === 'create_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $tgl_form = $_POST['tgl_form'] ?? date('Y-m-d');
+        // Tanggal dikunci menggunakan tanggal hari ini
+        $tgl_form = date('Y-m-d');
         $tgl_format = date('Ymd', strtotime($tgl_form));
         
-        $raw_ap = trim($_POST['kode_ap'] ?? '');
-        $raw_up = trim($_POST['kode_up'] ?? '');
+        // Membaca input tujuan secara otomatis
+        $raw_ap_tujuan = trim($_POST['kode_ap'] ?? '');
+        $raw_up_tujuan = trim($_POST['kode_up'] ?? '');
 
-        $ap_tujuan = !empty($raw_ap) ? $raw_ap : null;
-        $up_tujuan = !empty($raw_up) ? $raw_up : null;
+        $ap_tujuan = !empty($raw_ap_tujuan) ? $raw_ap_tujuan : null;
+        $up_tujuan = !empty($raw_up_tujuan) ? $raw_up_tujuan : null;
 
         if (empty($ap_tujuan) && empty($up_tujuan)) {
             throw new Exception("Pilih salah satu tujuan unit pengiriman (AP atau UP).");
         }
 
-        $kode_unit = !empty($unit_upi) ? $unit_upi : '56'; 
-        $no_formulir = (string) ($kode_unit . date('His') . $tgl_format . '-F.B');
+        // AMBIL KODE UPI SECARA DINAMIS DARI SESSION AKUN YANG AKTIF
+        // Pastikan nama session sesuai dengan sistem login Anda (misal: UnitUpi atau KodeUpi)
+        $pembuat_upi = $_SESSION['UnitUpi'] ?? $_SESSION['KodeUpi'] ?? null;
+        
+        if (empty($pembuat_upi)) {
+            throw new Exception("Sesi Unit UPI tidak ditemukan. Silakan login ulang.");
+        }
 
-        // Kueri dengan fungsi SQL langsung untuk mencegah database mengosongkan NoFormulir
-        $query_form = "INSERT INTO formulir_pengiriman (NoFormulir, TglFormulir, NamaAkun, KodeUp, KodeAp, KodeUpi, StatusPengiriman, StatusData) 
-                       VALUES (COALESCE(NULLIF(:no_form, ''), CONCAT(:upi, '001', :tgl_format, '-F.B')), :tgl, :akun, :up, :ap, :upi, 'DIKIRIM', 'TIDAK')";
+        $pembuat_up  = $_SESSION['KodeUp'] ?? null; 
+        $pembuat_ap  = $_SESSION['KodeAp'] ?? null; 
+
+        // Prefiks nomor formulir dibuat dinamis murni berdasarkan unit pembuat atau UPI aktif
+        $prefiks_no = !empty($pembuat_up) ? $pembuat_up : (!empty($pembuat_ap) ? $pembuat_ap : $pembuat_upi);
+        
+        // Hitung nomor urut berdasarkan jumlah hari ini yang murni milik UPI tersebut
+        $stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_pengiriman WHERE TglFormulir = ? AND KodeUpi = ?");
+        $stmt_count->execute([$tgl_form, $pembuat_upi]);
+        $jumlah_hari_ini = (int) $stmt_count->fetchColumn();
+        $urutan_baru = $jumlah_hari_ini + 1;
+        $urutan_str = str_pad($urutan_baru, 3, '0', STR_PAD_LEFT);
+        
+        $no_formulir = $prefiks_no . $urutan_str . $tgl_format . '-F.B';
+
+        // INSERT DATA KE TABEL DENGAN PEMISAHAN UNIT PEMBUAT DAN TUJUAN YANG SEPENUHNYA DINAMIS
+        $query_form = "INSERT INTO formulir_pengiriman (
+                            NoFormulir, TglFormulir, NamaAkun, 
+                            KodeUp, KodeAp, KodeUpi, 
+                            KodeUp_Tujuan, KodeAp_Tujuan, KodeUpi_Tujuan, 
+                            StatusPengiriman, StatusData
+                       ) VALUES (
+                            :no_form, :tgl, :akun, 
+                            :p_up, :p_ap, :p_upi, 
+                            :t_up, :t_ap, :t_upi, 
+                            'DIKIRIM', 'TIDAK'
+                       )";
         
         $stmt_form = $conn->prepare($query_form);
         $stmt_form->execute([
-            ':no_form'    => $no_formulir,
-            ':tgl_format' => $tgl_format,
-            ':tgl'        => $tgl_form,
-            ':akun'       => $nama_akun,
-            ':up'         => $up_tujuan,
-            ':ap'         => $ap_tujuan,
-            ':upi'        => $unit_upi
+            ':no_form' => $no_formulir,
+            ':tgl'     => $tgl_form,
+            ':akun'    => $nama_akun,
+            // Unit Pembuat Form (Dinamis dari Akun Login)
+            ':p_up'    => $pembuat_up,
+            ':p_ap'    => $pembuat_ap,
+            ':p_upi'   => $pembuat_upi,
+            // Unit Tujuan Pengiriman (Salah satu terisi, yang lain NULL)
+            ':t_up'    => $up_tujuan,
+            ':t_ap'    => $ap_tujuan,
+            ':t_upi'   => $pembuat_upi // Atau sesuaikan jika UPI tujuan lintas wilayah
         ]);
         
         header("Location: ../../index.php?page=pengadaan&menu=pengiriman&view=daftar");

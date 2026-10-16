@@ -28,11 +28,35 @@ try {
             throw new Exception("Tidak ada item barang yang dipilih.");
         }
 
-        $tgl_terima = date('Y-m-d'); 
+        // --- PERBAIKAN: Ambil Tujuan Sebenarnya dari Formulir Pengiriman ---
+        $stmt_cek_kirim = $conn->prepare("SELECT KodeAp_Tujuan, KodeUp_Tujuan, KodeUpi_Tujuan FROM formulir_pengiriman WHERE NoFormulir = ?");
+        $stmt_cek_kirim->execute([$no_pengiriman]);
+        $data_tujuan = $stmt_cek_kirim->fetch(PDO::FETCH_ASSOC);
         
-        // Buat nomor penerimaan yang selaras dan bersih
-        $kode_unit = !empty($unit_up) ? $unit_up : (!empty($unit_ap) ? $unit_ap : '56610');
-        $no_penerimaan = trim($kode_unit . date('Ymd') . '-F.C');
+        if (!$data_tujuan) {
+            throw new Exception("Data pengiriman tidak ditemukan di database.");
+        }
+        
+        // Kita gunakan variabel target ini sebagai acuan mutlak lokasi barang
+        $target_ap = !empty($data_tujuan['KodeAp_Tujuan']) ? $data_tujuan['KodeAp_Tujuan'] : NULL;
+        $target_up = !empty($data_tujuan['KodeUp_Tujuan']) ? $data_tujuan['KodeUp_Tujuan'] : NULL;
+        $target_upi = !empty($data_tujuan['KodeUpi_Tujuan']) ? $data_tujuan['KodeUpi_Tujuan'] : $unit_upi;
+        // -------------------------------------------------------------------
+
+        $tgl_terima = date('Y-m-d'); 
+        $tgl_format = date('Ymd'); 
+        
+        // 1. Tentukan Unit Kode Prefix (UP / AP / UPI)
+        $kode_unit = !empty($target_up) ? $target_up : (!empty($target_ap) ? $target_ap : $target_upi);
+        
+        // 2. Hitung jumlah form penerimaan hari ini untuk generate urutan (001, 002, dst)
+        $stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_penerimaan WHERE TglFormulir = ?");
+        $stmt_count->execute([$tgl_terima]);
+        $jumlah_hari_ini = (int) $stmt_count->fetchColumn();
+        $urutan_str = str_pad($jumlah_hari_ini + 1, 3, '0', STR_PAD_LEFT);
+        
+        // 3. Format Final: KODEUNIT + URUTAN + YYYYMMDD + -F.C (Contoh: 5661000120261016-F.C)
+        $no_penerimaan = trim($kode_unit . $urutan_str . $tgl_format . '-F.C');
 
         $conn->beginTransaction();
 
@@ -43,15 +67,15 @@ try {
         $conn->prepare("DELETE FROM formulir_penerimaan_detil WHERE NoFormulir = ?")->execute([$no_penerimaan]);
         $conn->prepare("DELETE FROM formulir_penerimaan WHERE NoFormulir = ?")->execute([$no_penerimaan]);
 
-        // 2. Insert Header Formulir Penerimaan
+        // 2. Insert Header Formulir Penerimaan menggunakan variabel TARGET
         $stmt_form = $conn->prepare("INSERT INTO formulir_penerimaan (NoFormulir, TglFormulir, NamaAkun, KodeUp, KodeAp, KodeUpi, StatusData) VALUES (?, ?, ?, ?, ?, ?, 'AKTIF')");
         $stmt_form->execute([
             $no_penerimaan,
             $tgl_terima,
             $nama_akun,
-            empty($unit_up) ? NULL : $unit_up,
-            empty($unit_ap) ? NULL : $unit_ap,
-            empty($unit_upi) ? NULL : $unit_upi
+            $target_up,
+            $target_ap,
+            $target_upi
         ]);
 
         // 3. Insert Detil Penerimaan & Update Master Barang
@@ -59,7 +83,9 @@ try {
         $cacat_states = $_POST['cacat'] ?? [];
 
         $stmt_detil = $conn->prepare("INSERT INTO formulir_penerimaan_detil (NoFormulir, NoRef, NomorRef, StikerQC, CacatFisik) VALUES (?, ?, ?, ?, ?)");
-        $stmt_update_barang = $conn->prepare("UPDATE master_barang SET UnitAp = ?, UnitUp = ? WHERE NoRef = ?");
+        
+        // UPDATE BARANG JUGA MENGGUNAKAN VARIABEL TARGET
+        $stmt_update_barang = $conn->prepare("UPDATE master_barang SET UnitAp = ?, UnitUp = ?, UnitUpi = ? WHERE NoRef = ?");
 
         foreach ($item_refs as $no_ref) {
             $no_ref = trim($no_ref);
@@ -76,9 +102,11 @@ try {
                 $cacat_final
             ]);
 
+            // Eksekusi pemindahan stok dengan akurat
             $stmt_update_barang->execute([
-                empty($unit_ap) ? NULL : $unit_ap,
-                empty($unit_up) ? NULL : $unit_up,
+                $target_ap,
+                $target_up,
+                $target_upi,
                 $no_ref
             ]);
         }
@@ -101,7 +129,6 @@ try {
 
 } catch (Exception $e) {
     if (isset($conn)) {
-        // Pastikan foreign key diaktifkan kembali jika terjadi rollback
         try { $conn->exec("SET foreign_key_checks = 1"); } catch (Exception $ex) {}
         if ($conn->inTransaction()) { $conn->rollBack(); }
     }

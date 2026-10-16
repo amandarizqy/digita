@@ -51,23 +51,56 @@ if ($sub === 'aktivasi') {
             $filter_query = "n.KodeUp = :lokasi";
             $lokasi = $unit_up;
         } else {
-            // Untuk TL.AP
             $filter_query = "n.KodeAp = :lokasi";
             $lokasi = $unit_ap;
         } 
 
+        // --- PENGATURAN PAGING / PAGINASI ---
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+        if (!in_array($limit, [5, 10, 20, 30])) { $limit = 10; } // Validasi pilihan limit
+        
+        $page = isset($_GET['p']) ? (int)$_GET['p'] : 1;
+        if ($page < 1) { $page = 1; }
+        $offset = ($page - 1) * $limit;
+
+        // 1. Hitung Total Data untuk Paging
+        $query_count = "SELECT COUNT(*) as total 
+                        FROM master_nomor n
+                        WHERE $filter_query AND (n.SimId LIKE :keyword OR n.NomorAkun LIKE :keyword)";
+        $stmt_count = $conn->prepare($query_count);
+        if ($kode_hak !== 'SA.KP') { $stmt_count->bindParam(':lokasi', $lokasi); }
+        $stmt_count->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+        $stmt_count->execute();
+        $total_data = $stmt_count->fetch(PDO::FETCH_ASSOC)['total'];
+        $total_pages = ceil($total_data / $limit);
+        if ($total_pages < 1) { $total_pages = 1; }
+        if ($page > $total_pages) { $page = $total_pages; $offset = ($page - 1) * $limit; }
+
+        // 2. Ambil Data Sesuai Limit dan Offset
         $query = "SELECT n.*, p.NamaProvider, pp.NamaProduk 
                   FROM master_nomor n
                   LEFT JOIN master_provider p ON n.KodeProvider = p.KodeProvider
                   LEFT JOIN master_provider_produk pp ON n.KodeProduk = pp.KodeProduk
                   WHERE $filter_query AND (n.SimId LIKE :keyword OR n.NomorAkun LIKE :keyword)
-                  ORDER BY n.WaktuData DESC";
+                  ORDER BY n.WaktuData DESC
+                  LIMIT :limit OFFSET :offset";
                   
         $stmt = $conn->prepare($query);
         if ($kode_hak !== 'SA.KP') { $stmt->bindParam(':lokasi', $lokasi); }
         $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
+        
         $data['list_kartu'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Simpan variabel paging untuk dikirim ke view
+        $data['paging'] = [
+            'total_data'  => $total_data,
+            'total_pages' => $total_pages,
+            'current_page'=> $page,
+            'limit'       => $limit
+        ];
         
     } elseif ($view === 'baru') {
         $stmt_prov = $conn->query("SELECT * FROM master_provider WHERE StatusData = 'AKTIF'");
@@ -83,19 +116,52 @@ if ($sub === 'aktivasi') {
         $lokasi = ($kode_hak === 'TL.UP') ? $unit_up : $unit_ap;
         if ($kode_hak === 'SA.KP') { $filter_query = "1=1"; $lokasi = 1;}
         
-        // Kalkulasi otomatis: Masa Aktif = TglPulsaTerakhir + 30 Hari
+        // --- PENGATURAN PAGING / PAGINASI ---
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+        if (!in_array($limit, [5, 10, 20, 30])) { $limit = 10; }
+        
+        $page = isset($_GET['p']) ? (int)$_GET['p'] : 1;
+        if ($page < 1) { $page = 1; }
+        $offset = ($page - 1) * $limit;
+
+        // 1. Hitung Total Data Pulsa
+        $query_count = "SELECT COUNT(*) as total 
+                        FROM master_nomor 
+                        WHERE JumlahKredit IS NOT NULL AND $filter_query AND (SimId LIKE :keyword OR NomorAkun LIKE :keyword)";
+        $stmt_count = $conn->prepare($query_count);
+        if ($kode_hak !== 'SA.KP') { $stmt_count->bindParam(':lokasi', $lokasi); }
+        $stmt_count->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+        $stmt_count->execute();
+        $total_data = $stmt_count->fetch(PDO::FETCH_ASSOC)['total'];
+        $total_pages = ceil($total_data / $limit);
+        if ($total_pages < 1) { $total_pages = 1; }
+        if ($page > $total_pages) { $page = $total_pages; $offset = ($page - 1) * $limit; }
+
+        // 2. Ambil Data Sesuai Limit & Offset
         $query = "SELECT SimId, NomorAkun, JumlahKredit, TglPulsaTerakhir, 
                          DATE_ADD(TglPulsaTerakhir, INTERVAL 30 DAY) AS MasaAktif,
                          DATEDIFF(DATE_ADD(TglPulsaTerakhir, INTERVAL 30 DAY), CURDATE()) AS SisaHari
                   FROM master_nomor 
                   WHERE JumlahKredit IS NOT NULL AND $filter_query AND (SimId LIKE :keyword OR NomorAkun LIKE :keyword)
-                  ORDER BY TglPulsaTerakhir DESC";
+                  ORDER BY TglPulsaTerakhir DESC
+                  LIMIT :limit OFFSET :offset";
                   
         $stmt = $conn->prepare($query);
         if ($kode_hak !== 'SA.KP') { $stmt->bindParam(':lokasi', $lokasi); }
         $stmt->bindValue(':keyword', $keyword, PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
+        
         $data['list_pulsa'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Simpan data paging
+        $data['paging'] = [
+            'total_data'  => $total_data,
+            'total_pages' => $total_pages,
+            'current_page'=> $page,
+            'limit'       => $limit
+        ];
     }
 }
 ?>
