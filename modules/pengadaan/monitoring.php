@@ -1,6 +1,7 @@
 <?php
-$unit_ap = $_SESSION['UnitAp'] ?? '';
-$unit_up = $_SESSION['UnitUp'] ?? '';
+$unit_upi = $_SESSION['UnitUpi'] ?? '';
+$unit_ap  = $_SESSION['UnitAp'] ?? '';
+$unit_up  = $_SESSION['UnitUp'] ?? '';
 
 // PENERAPAN HIERARKI ORGANISASI:
 $filter_sql = "1=1";
@@ -20,24 +21,36 @@ $keyword = '%' . trim($_GET['q'] ?? '') . '%';
 
 try {
     if ($sub === 'aset') {
-        $filter_barang = "1=1";
+        $filter_barang = "b.StatusData = 'AKTIF'";
         $params_barang = [];
         if (in_array($kode_hak, ['ML.UP', 'TL.UP', 'SF.UP'])) {
-            $filter_barang = "UnitUp = ?";
+            $filter_barang .= " AND b.UnitUp = ?";
             $params_barang[] = $unit_up;
         } elseif (in_array($kode_hak, ['AM.AP', 'TL.AP', 'SF.AP'])) {
-            $filter_barang = "UnitAp = ?";
+            $filter_barang .= " AND b.UnitAp = ?";
             $params_barang[] = $unit_ap;
         }
         
         // Filter Smart Search untuk Aset
-        $filter_barang .= " AND (NoRef LIKE ? OR SimId LIKE ? OR ImeiModem LIKE ? OR IdPel LIKE ?)";
+        $filter_barang .= " AND (b.NoRef LIKE ? OR b.SimId LIKE ? OR b.ImeiModem LIKE ? OR b.IdPel LIKE ?)";
         $params_barang[] = $keyword;
         $params_barang[] = $keyword;
         $params_barang[] = $keyword;
         $params_barang[] = $keyword;
 
-        $stmt = $conn->prepare("SELECT * FROM master_barang WHERE StatusData = 'AKTIF' AND $filter_barang ORDER BY WaktuData DESC");
+        // Ambil data dengan menyertakan informasi unit UPI, AP, dan UP
+        $query_aset = "SELECT b.*, 
+                              COALESCE(u.NamaUnit, b.UnitUpi, '-') as NamaUpi,
+                              COALESCE(ap.NamaUnit, b.UnitAp, '-') as NamaAp,
+                              COALESCE(up.NamaUnit, b.UnitUp, '-') as NamaUp
+                       FROM master_barang b
+                       LEFT JOIN master_upi u ON b.UnitUpi = u.UnitUpi
+                       LEFT JOIN master_ap ap ON b.UnitAp = ap.UnitAp
+                       LEFT JOIN master_up up ON b.UnitUp = up.UnitUp
+                       WHERE $filter_barang 
+                       ORDER BY b.WaktuData DESC";
+
+        $stmt = $conn->prepare($query_aset);
         $stmt->execute($params_barang);
         $list_monitoring = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

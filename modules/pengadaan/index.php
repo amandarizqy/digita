@@ -144,13 +144,27 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
             $no_pengiriman = $_GET['no_form'];
             
-            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+            // Perbaiki kueri dengan COALESCE dan pengecekan data ganda yang aman
+            $stmt = $conn->prepare("SELECT f.*, 
+                                    COALESCE(u.NamaUnit, f.KodeUp, '-') as NamaUP, 
+                                    COALESCE(a.NamaUnit, f.KodeAp, '-') as NamaAP 
                                     FROM formulir_pengiriman f 
                                     LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
                                     LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
                                     WHERE f.NoFormulir = :no_form");
             $stmt->execute([':no_form' => $no_pengiriman]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$formulir) {
+                $formulir = [
+                    'NoFormulir' => $no_pengiriman,
+                    'TglFormulir' => date('Y-m-d'),
+                    'StatusData' => 'TIDAK',
+                    'StatusPengiriman' => 'DIKIRIM',
+                    'NamaAP' => '-',
+                    'NamaUP' => '-'
+                ];
+            }
             
             $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
             $stmt_items->execute([':no_form' => $no_pengiriman]);
