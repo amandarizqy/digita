@@ -13,7 +13,7 @@ if (!in_array($sub_filter, ['semua', 'ui', 'up3', 'ulp', 'vendor'], true)) {
     $sub_filter = 'semua';
 }
 
-// Daftar kode hak akses (sesuai tabel Otoritas). Ubah teks label di sini kalau perlu.
+// Daftar kode hak akses
 $daftar_hak = [
     'SA.KP' => 'SA.KP - Super Admin Pusat',
     'MB.UI' => 'MB.UI - Tingkat Unit Induk',
@@ -28,8 +28,7 @@ $daftar_hak = [
     'SF.VD' => 'SF.VD - Staff Vendor',
 ];
 
-// Sembunyikan role SA.KP (admin) untuk semua orang.
-// Ganti menjadi ($role !== 'SA.KP') kalau SA.KP ingin tetap melihatnya.
+// Sembunyikan role SA.KP
 $sembunyikan_sa = true;
 $users = $users ?? [];
 
@@ -40,7 +39,7 @@ if ($sembunyikan_sa) {
     }));
 }
 
-// Penyaringan sesuai pill Sub Entitas (berdasarkan akhiran kode hak)
+// Penyaringan sesuai pill Sub Entitas
 $akhiran_filter = ['ui' => '.UI', 'up3' => '.AP', 'ulp' => '.UP', 'vendor' => '.VD'];
 if ($sub_filter !== 'semua') {
     $akhiran = $akhiran_filter[$sub_filter];
@@ -50,12 +49,23 @@ if ($sub_filter !== 'semua') {
     }));
 }
 
-// Hitung ulang metrik dari data yang tampil
+// Hitung metrik KPI
 $total_akun  = count($users);
 $total_aktif = count(array_filter($users, function ($u) {
     return ($u['StatusData'] ?? '') === 'AKTIF';
 }));
 $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
+
+// LOGIKA PAGINASI (SLIDE HALAMAN)
+$per_hal = 10;
+$hal_aktif = isset($_GET['p']) ? (int)$_GET['p'] : 1;
+if ($hal_aktif < 1) $hal_aktif = 1;
+
+$total_hal = ($total_akun > 0) ? ceil($total_akun / $per_hal) : 1;
+if ($hal_aktif > $total_hal) $hal_aktif = $total_hal;
+
+$offset = ($hal_aktif - 1) * $per_hal;
+$users_tampil = array_slice($users, $offset, $per_hal);
 ?>
 <?php require_once __DIR__ . '/../../functions/master_ui.php'; ?>
 
@@ -105,11 +115,14 @@ $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($users)): ?>
-                        <?php $no = 1; foreach ($users as $usr): ?>
-                        <?php $aktif = (($usr['StatusData'] ?? '') === 'AKTIF'); ?>
+                    <?php if (!empty($users_tampil)): ?>
+                        <?php foreach ($users_tampil as $idx => $usr): ?>
+                        <?php 
+                            $no_urut = $offset + $idx + 1;
+                            $aktif   = (($usr['StatusData'] ?? '') === 'AKTIF'); 
+                        ?>
                         <tr>
-                            <td class="ps-4 text-muted small"><?= $no++; ?></td>
+                            <td class="ps-4 text-muted small"><?= $no_urut; ?></td>
                             <td class="fw-bold text-dark font-monospace akun-cell">
                                 <i class="bi bi-person me-1 text-primary"></i>
                                 <?= htmlspecialchars($usr['NamaAkun'] ?? '-'); ?>
@@ -125,7 +138,7 @@ $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100
                             <td><?= ms_badge_status($usr['StatusData'] ?? '') ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="index.php?page=master&sub=pengguna&action=toggle_status&id=<?= urlencode($usr['NamaAkun']); ?>"
+                                    <a href="index.php?page=master&sub=pengguna&filter=<?= $sub_filter ?>&p=<?= $hal_aktif ?>&action=toggle_status&id=<?= urlencode($usr['NamaAkun']); ?>"
                                        class="btn btn-outline-secondary py-1 px-2"
                                        title="<?= $aktif ? 'Nonaktifkan akun' : 'Aktifkan akun'; ?>"
                                        data-confirm="<?= htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' akun ' . $usr['NamaAkun'] . '?'); ?>">
@@ -153,7 +166,41 @@ $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100
         </div>
     </div>
 
-    <?= ms_footer_tabel((int) $total_akun) ?>
+    <!-- FOOTER TABEL + NAVIGASI SLIDE PAGINASI -->
+    <div class="card-footer bg-white py-3 px-4 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+        <div class="small text-muted">
+            Menampilkan <b><?= $total_akun > 0 ? $offset + 1 : 0 ?></b> - <b><?= min($offset + $per_hal, $total_akun) ?></b> dari <b><?= $total_akun ?></b> total data
+        </div>
+        
+        <?php if ($total_hal > 1): ?>
+            <nav>
+                <ul class="pagination pagination-sm mb-0 gap-1">
+                    <!-- Tombol Prev -->
+                    <li class="page-item <?= ($hal_aktif <= 1) ? 'disabled' : '' ?>">
+                        <a class="page-link rounded-3" href="index.php?page=master&sub=pengguna&filter=<?= $sub_filter ?>&p=<?= $hal_aktif - 1 ?>">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+
+                    <!-- Angka Slide -->
+                    <?php for ($p = 1; $p <= $total_hal; $p++): ?>
+                        <li class="page-item <?= ($p === $hal_aktif) ? 'active' : '' ?>">
+                            <a class="page-link rounded-3 fw-semibold" href="index.php?page=master&sub=pengguna&filter=<?= $sub_filter ?>&p=<?= $p ?>">
+                                <?= $p ?>
+                            </a>
+                        </li>
+                    <?php endfor; ?>
+
+                    <!-- Tombol Next -->
+                    <li class="page-item <?= ($hal_aktif >= $total_hal) ? 'disabled' : '' ?>">
+                        <a class="page-link rounded-3" href="index.php?page=master&sub=pengguna&filter=<?= $sub_filter ?>&p=<?= $hal_aktif + 1 ?>">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- MODAL TAMBAH PENGGUNA -->
