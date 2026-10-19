@@ -14,19 +14,19 @@ if (!function_exists('pga_matriks')) {
     {
         $semua    = ['MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'];
         $tanpa_vd = array_values(array_diff($semua, ['SF.VD']));
-        $input    = ['TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP'];
+        $input    = ['TL.UP', 'SF.UI', 'SF.UP'];   // TL.AP & SF.AP dihapus dari menu Input
 
         return [
             // INPUT
             'input_dil'         => $input,      // DIL
-            'input_saldo'       => $input,      // Saldo
+            'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
             'input_perintah'    => $input,      // Perintah
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL
             'monitor_pelunasan' => $tanpa_vd,   // Pelunasan
             'monitor_perintah'  => $tanpa_vd,   // Perintah
-            'monitor_status'    => $semua,      // Status Eksekusi (SF.VD boleh)
+            'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
         ];
     }
 

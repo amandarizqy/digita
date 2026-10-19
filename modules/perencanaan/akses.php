@@ -18,8 +18,8 @@ if (!function_exists('pa_matriks')) {
         return [
             // INPUT
             'upload_riwayat'    => ['SF.UI'],                       // Riwayat Pelunasan
-            'input_kepentingan' => ['SF.AP', 'SF.UP', 'SF.VD'],     // Tingkat Kepentingan
-            'input_survey'      => ['SF.AP', 'SF.UP', 'SF.VD'],     // Survey Sambungan Rumah
+            'input_kepentingan' => ['SF.UP', 'SF.VD'],     // Tingkat Kepentingan
+            'input_survey'      => ['SF.UP', 'SF.VD'],     // Survey Sambungan Rumah
             // PROSES
             'proses_risiko'     => ['AM.UI'],                       // Klasifikasi Level Risiko
             'proses_prioritas'  => ['TL.AP', 'TL.UP'],              // Skala Prioritas

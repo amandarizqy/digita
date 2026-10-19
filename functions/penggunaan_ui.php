@@ -39,7 +39,7 @@ function pg_menu(): array
         'input' => [
             'label' => 'Input', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'input_dil'       => ['DIL', 'bi-journal-text'],
-                'input_saldo'     => ['Saldo', 'bi-wallet2'],
+                'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'input_perintah'  => ['Perintah', 'bi-terminal'],
             ],
@@ -49,7 +49,7 @@ function pg_menu(): array
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_perintah'  => ['Perintah', 'bi-terminal'],
-                'monitor_status'    => ['Status Eksekusi', 'bi-activity'],
+                'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],
     ];
@@ -123,4 +123,77 @@ function pg_header(array $o, bool $tampil_pill = true): string
         $h .= '<div class="mb-4"></div>';
     }
     return $h;
+}
+
+/** Format angka bulat gaya Indonesia (4.800). */
+function pg_n($v): string
+{
+    return number_format((float) $v, 0, ',', '.');
+}
+
+/** Footer kartu tabel: info jumlah + paginasi. $url_fn: fn(int $hal): string */
+function pg_footer_tabel(int $hal, int $limit, int $total, callable $url_fn): string
+{
+    $dari    = $total > 0 ? ($hal - 1) * $limit + 1 : 0;
+    $sampai  = min($hal * $limit, $total);
+    $halaman = max(1, (int) ceil($total / max(1, $limit)));
+
+    $h  = '<div class="card-footer bg-white border-top-0 py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">';
+    $h .= '<span class="text-muted small">Menampilkan ' . pg_n($dari) . ' - ' . pg_n($sampai) . ' dari ' . pg_n($total) . ' total data</span>';
+    if ($halaman > 1) {
+        $btn = function ($label, $target, $disabled = false, $active = false) use ($url_fn) {
+            return '<li class="page-item' . ($disabled ? ' disabled' : '') . ($active ? ' active' : '') . '">'
+                . '<a class="page-link" href="' . ($disabled ? '#' : pg_e($url_fn($target))) . '">' . $label . '</a></li>';
+        };
+        $h .= '<nav aria-label="Navigasi halaman"><ul class="pagination pagination-sm mb-0">';
+        $h .= $btn('Sebelumnya', $hal - 1, $hal <= 1);
+        $awal = max(1, $hal - 2);
+        $akhir = min($halaman, $hal + 2);
+        if ($awal > 1) {
+            $h .= $btn('1', 1);
+            if ($awal > 2) $h .= '<li class="page-item disabled"><span class="page-link">…</span></li>';
+        }
+        for ($i = $awal; $i <= $akhir; $i++) $h .= $btn((string) $i, $i, false, $i === $hal);
+        if ($akhir < $halaman) {
+            if ($akhir < $halaman - 1) $h .= '<li class="page-item disabled"><span class="page-link">…</span></li>';
+            $h .= $btn((string) $halaman, $halaman);
+        }
+        $h .= $btn('Berikutnya', $hal + 1, $hal >= $halaman);
+        $h .= '</ul></nav>';
+    }
+    return $h . '</div>';
+}
+
+// ------------------------------------------------------------------
+// UNIT AKUN YANG LOGIN
+// ------------------------------------------------------------------
+/** Unit akun dari session (cadangan: master_pengguna) + label "UPI › AP › UP". */
+function pg_unit_akun(PDO $conn): array
+{
+    $u = ['upi' => (string) ($_SESSION['UnitUpi'] ?? ''), 'ap' => (string) ($_SESSION['UnitAp'] ?? ''), 'up' => (string) ($_SESSION['UnitUp'] ?? ''), 'label' => ''];
+    try {
+        if ($u['upi'] === '' && !empty($_SESSION['NamaAkun'])) {
+            $st = $conn->prepare("SELECT UnitUp, UnitAp, UnitUpi FROM master_pengguna WHERE NamaAkun = ?");
+            $st->execute([$_SESSION['NamaAkun']]);
+            if ($r = $st->fetch(PDO::FETCH_ASSOC)) { $u['upi'] = (string) $r['UnitUpi']; $u['ap'] = (string) $r['UnitAp']; $u['up'] = (string) $r['UnitUp']; }
+        }
+        $nama = function (string $sql, string $kode) use ($conn) { $st = $conn->prepare($sql); $st->execute([$kode]); return $st->fetchColumn() ?: $kode; };
+        if ($u['upi'] !== '') $u['label'] = $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitUpi) FROM master_upi WHERE UnitUpi = ?", $u['upi']);
+        if ($u['ap']  !== '') $u['label'] .= ' › ' . $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitAp) FROM master_ap WHERE UnitAp = ?", $u['ap']);
+        if ($u['up']  !== '') $u['label'] .= ' › ' . $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitUp) FROM master_up WHERE UnitUp = ?", $u['up']);
+    } catch (PDOException $e) { /* label tetap kode */ }
+    if ($u['label'] === '') $u['label'] = $u['upi'];
+    return $u;
+}
+
+/**
+ * Kondisi SQL wilayah akun: UPI, + AP / UP bila akun terikat. $awalan = 'Kode' (dpp) atau 'Unit' (pelunasan_ap2t).
+ * Parameter ditambahkan ke $p (:s_upi, :s_ap, :s_up).
+ */
+function pg_scope(array $u, string $alias, string $awalan, array &$p): string
+{
+    $w = ["$alias.{$awalan}Upi = :s_upi"]; $p[':s_upi'] = $u['upi'];
+    if ($u['ap'] !== '') { $w[] = "$alias.{$awalan}Ap = :s_ap"; $p[':s_ap'] = $u['ap']; }
+    if ($u['up'] !== '') { $w[] = "$alias.{$awalan}Up = :s_up"; $p[':s_up'] = $u['up']; }
+    return implode(' AND ', $w);
 }

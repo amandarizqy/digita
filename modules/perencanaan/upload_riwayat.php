@@ -152,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $baris = [];            // dedup per IdPel|ThBlRek
         $kat   = [];            // unik per IdPel|Periode (tahun) -> kategorisasi_risiko
         $katBaru = 0;
+        $dilBaru = 0;           // pelanggan baru yang otomatis masuk DIL
         $dibaca = $tolak = $duplikat = 0;
         $peta = null;
 
@@ -217,6 +218,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute($param);
                 }
 
+                // d0. DIL: daftarkan setiap IdPel di file (StatusData otomatis 'AKTIF'). Dilakukan SEBELUM
+                //     kategorisasi_risiko agar aman bila ada foreign key ke dil. INSERT IGNORE: pelanggan yang sudah
+                //     ada di DIL tidak diubah (status AKTIF/TIDAK dan nama yang sudah ada dipertahankan).
+                //     NamaPelanggan tidak ada di file riwayat -> kosong; lengkapi lewat Penggunaan > Input DIL.
+                $idpel_unik = array_values(array_unique(array_column($baris, 0)));
+                foreach (array_chunk($idpel_unik, $riwayat_chunk) as $paket) {
+                    $stmt = $conn->prepare("INSERT IGNORE INTO dil (IdPel, NamaPelanggan, StatusData, WaktuData) VALUES "
+                          . implode(',', array_fill(0, count($paket), "(?, '', 'AKTIF', NOW())")));
+                    $stmt->execute($paket);
+                    $dilBaru += $stmt->rowCount();
+                }
+
                 // d. kategorisasi_risiko: tambah (IdPel, Periode) yang belum ada. Yang sudah ada TIDAK diubah
                 //    (Posisi SR, Kepentingan, dan hasil klasifikasinya aman). INSERT IGNORE: kunci ganda dilewati tanpa error.
                 foreach (array_chunk(array_values($kat), $riwayat_chunk) as $paket) {
@@ -233,11 +246,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak,
-                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'kat_total' => count($kat),
+                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'dil_baru' => $dilBaru, 'kat_total' => count($kat),
                       'wilayah' => $label_tujuan];
             $pesan_sukses = count($baris) > 0
                 ? 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris riwayat pelunasan untuk wilayah ' . $label_tujuan . '; '
-                  . number_format($katBaru, 0, ',', '.') . ' pelanggan-periode baru ditambahkan ke kategorisasi_risiko.'
+                  . number_format($katBaru, 0, ',', '.') . ' pelanggan-periode baru ditambahkan ke kategorisasi_risiko, '
+                  . number_format($dilBaru, 0, ',', '.') . ' pelanggan baru ditambahkan ke DIL (status AKTIF).'
                 : '';
             if (!$baris) $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
         } catch (Throwable $e) {
