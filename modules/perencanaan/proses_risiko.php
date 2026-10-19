@@ -137,13 +137,13 @@ $build_scope = function (string $a) use ($unitUpi, $sel_ap, $sel_up) {
 };
 
 // Ambil unit pelanggan jika ia berada di dalam UPI pengguna (guard aksi per-baris).
-// Pelanggan harus ada di DIL dan punya tagihan (periode mana pun).
-$ambil_dil_dalam_upi = function (string $idpel) use ($conn, $unitUpi) {
+// Sumber murni pelunasan_ap2t: pelanggan cukup punya tagihan (periode mana pun) di UPI ini.
+// TIDAK lagi mensyaratkan pelanggan sudah ada di DIL (DIL diisi otomatis saat proses risiko).
+$ambil_pelanggan_dalam_upi = function (string $idpel) use ($conn, $unitUpi) {
     if (empty($unitUpi) || $idpel === '') return false;
     $st = $conn->prepare("
         SELECT p.IdPel AS Idpel, p.UnitUp, p.UnitAp, p.UnitUpi
         FROM pelunasan_ap2t p
-        INNER JOIN dil d ON d.Idpel = p.IdPel
         WHERE p.IdPel = ? AND p.UnitUpi = ?
         LIMIT 1
     ");
@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_P
 
     if (!empty($idpel_target)) {
         try {
-            $dil_row = $ambil_dil_dalam_upi($idpel_target);
+            $dil_row = $ambil_pelanggan_dalam_upi($idpel_target);
             if (!$dil_row) {
                 throw new Exception("ID Pelanggan $idpel_target tidak ditemukan di wilayah UPI Anda.");
             }
@@ -201,7 +201,7 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
     $idpel_hapus = trim($_GET['idpel'] ?? '');
     if (!empty($idpel_hapus)) {
         try {
-            if (!$ambil_dil_dalam_upi($idpel_hapus)) {
+            if (!$ambil_pelanggan_dalam_upi($idpel_hapus)) {
                 throw new Exception("ID Pelanggan $idpel_hapus tidak ditemukan di wilayah UPI Anda.");
             }
 
@@ -279,7 +279,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
 
             // 2. Tentukan Scope WHERE
             //    - Wajib periode 2025 (LEFT(ThBlRek,4))
-            //    - Wajib IdPel sudah ada di DIL (mencegah FK error 1452)
+            //    - TIDAK ada pengecekan DIL: sumber data langsung pelunasan_ap2t. Pelanggan yang belum
+            //      ada di DIL didaftarkan otomatis (langkah 3a) sebelum hasil risiko disimpan.
             //    - Wajib berada di wilayah terpilih: UPI (session) -> AP -> UP (opsional)
             //    - Wajib PosisiSR sudah diisi (atribut interdependensi lokasi, dari input_survey.php)
             //    - Wajib LevelKepentingan sudah diisi dengan nilai valid (dari input_kepentingan.php,
@@ -294,7 +295,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
 
             $where_clause = "
                 WHERE LEFT(p.ThBlRek, 4) = :periode
-                  AND dil_chk.Idpel IS NOT NULL
                   AND $scope_sql
                   AND k_ext.PosisiSR IS NOT NULL AND k_ext.PosisiSR <> ''
                   AND k_ext.LevelKepentingan IS NOT NULL AND k_ext.LevelKepentingan <> ''
@@ -311,7 +311,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                 $where_clause .= " AND p.IdPel IN (" . implode(',', $in_placeholders) . ")";
             }
 
-            // 3. Exec Set-Based Bulk UPSERT
+            // 3a. Daftarkan pelanggan yang akan diproses ke DIL: IdPel + StatusData 'AKTIF' otomatis.
+            //     Dilakukan SEBELUM kategorisasi_risiko agar aman bila ada foreign key ke dil.
+            //     Pelanggan yang sudah ada di DIL tidak diubah (status AKTIF/TIDAK yang sudah dipilih dipertahankan).
+            //     NamaPelanggan tidak ada di pelunasan_ap2t -> diisi kosong; lengkapi lewat Penggunaan > Input DIL.
+            $params_dil = $params;
+            unset($params_dil[':p10'], $params_dil[':p70']);
+            $stmt_dil_baru = $conn->prepare("
+                INSERT INTO dil (IdPel, NamaPelanggan, StatusData, WaktuData)
+                SELECT DISTINCT p.IdPel, '', 'AKTIF', NOW()
+                FROM pelunasan_ap2t p
+                INNER JOIN kategorisasi_risiko k_ext ON p.IdPel = k_ext.IdPel AND k_ext.Periode = :periode
+                $where_clause
+                ON DUPLICATE KEY UPDATE StatusData = StatusData
+            ");
+            $stmt_dil_baru->execute($params_dil);
+            $dil_baru = $stmt_dil_baru->rowCount();
+
+            // 3b. Exec Set-Based Bulk UPSERT
             //    Struktur berlapis (raw -> ket -> kd -> final) supaya setiap tahap
             //    hanya mereferensikan kolom hasil subquery sebelumnya (bukan alias
             //    di level SELECT yang sama), dan supaya matriks Kepentingan x
@@ -410,7 +427,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                                 SUM(CASE WHEN p.TglBayar IS NOT NULL AND DAY(p.TglBayar) > 20 THEN 1 ELSE 0 END) AS late_count,
                                 SUM(CASE WHEN p.TglBayar IS NULL OR DATE_FORMAT(p.TglBayar, '%Y%m') > p.ThBlRek THEN 1 ELSE 0 END) AS lewat_bulan_count
                             FROM pelunasan_ap2t p
-                            INNER JOIN dil dil_chk ON dil_chk.Idpel = p.IdPel
                             INNER JOIN kategorisasi_risiko k_ext ON p.IdPel = k_ext.IdPel AND k_ext.Periode = :periode
                             $where_clause
                             GROUP BY p.IdPel, k_ext.PosisiSR, k_ext.LevelKepentingan
@@ -435,7 +451,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $stmt_bulk->execute($params);
             $jumlah_diproses = $stmt_bulk->rowCount();
 
-            // Sync Ke DIL -- hanya untuk periode yang sedang diproses DAN wilayah terpilih
+            // 3c. Sync IndexPrioritas ke DIL -- hanya untuk periode yang sedang diproses DAN wilayah terpilih
             [$scope_dil_sql, $scope_dil_params] = $build_scope('k');
             $sql_sync_dil = "
                 UPDATE dil d
@@ -449,6 +465,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $conn->commit();
             $target_label = $is_proses_semua ? "seluruh pelanggan" : "data terpilih";
             $pesan_sukses = "Kalkulasi risiko Periode <strong>$periode_filter</strong> untuk <strong>$target_label</strong> di wilayah <strong>" . htmlspecialchars($scope_label) . "</strong> berhasil diproses ($jumlah_diproses baris). "
+                          . ($dil_baru > 0 ? "<strong>$dil_baru</strong> pelanggan baru otomatis ditambahkan ke DIL (status AKTIF). " : "")
                           . "Data yang belum memiliki <strong>Posisi SR</strong> dan/atau <strong>Level Kepentingan</strong> (dari modul Input Kepentingan) otomatis dilewati.";
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
@@ -466,11 +483,12 @@ $keyword      = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $status_filter= isset($_GET['status_filter']) ? trim($_GET['status_filter']) : 'semua';
 
 try {
-    // Kondisi wilayah untuk seluruh query baca (alias dil = d)
+    // Kondisi wilayah untuk seluruh query baca (alias unit pelanggan = u; dil = d hanya untuk nama)
     [$scope_view_sql, $scope_view_params] = $build_scope('u');
 
     // Ringkasan Statistik (seluruhnya mengikuti wilayah terpilih)
-    $stmt_dil = $conn->prepare("SELECT COUNT(*) FROM dil d INNER JOIN $unit_map u ON u.IdPel = d.Idpel WHERE $scope_view_sql");
+    // Populasi = pelanggan di pelunasan_ap2t pada wilayah terpilih (bukan tabel dil)
+    $stmt_dil = $conn->prepare("SELECT COUNT(*) FROM $unit_map u WHERE $scope_view_sql");
     $stmt_dil->execute($scope_view_params);
     $total_dil = (int) $stmt_dil->fetchColumn();
 
@@ -515,7 +533,7 @@ try {
     $params_view      = array_merge([':periode' => $periode_filter], $scope_view_params);
 
     if (!empty($keyword)) {
-        $where_conditions[] = "(d.Idpel LIKE :kw OR d.NamaPelanggan LIKE :kw)";
+        $where_conditions[] = "(u.IdPel LIKE :kw OR d.NamaPelanggan LIKE :kw)";
         $params_view[':kw'] = '%' . $keyword . '%';
     }
 
@@ -535,7 +553,7 @@ try {
     $limit = 25;
     $hal   = max(1, (int) ($_GET['hal'] ?? 1));
 
-    $stmt_cnt = $conn->prepare("SELECT COUNT(*) FROM dil d INNER JOIN $unit_map u ON u.IdPel = d.Idpel LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode $where_sql");
+    $stmt_cnt = $conn->prepare("SELECT COUNT(*) FROM $unit_map u LEFT JOIN dil d ON d.IdPel = u.IdPel LEFT JOIN kategorisasi_risiko k ON u.IdPel = k.IdPel AND k.Periode = :periode $where_sql");
     $stmt_cnt->execute($params_view);
     $total_rows = (int) $stmt_cnt->fetchColumn();
     $hal        = min($hal, max(1, (int) ceil($total_rows / $limit)));
@@ -544,8 +562,8 @@ try {
     // LEFT JOIN dibatasi ke Periode aktif via kondisi ON
     $sql_list = "
         SELECT 
-            d.Idpel, 
-            d.NamaPelanggan, 
+            u.IdPel AS Idpel, 
+            NULLIF(d.NamaPelanggan, '') AS NamaPelanggan, 
             k.PosisiSR, 
             k.LevelKeterlambatan, 
             k.LevelKepentingan,
@@ -553,14 +571,14 @@ try {
             k.LevelDampak, 
             k.Kuadran, 
             k.SkalaPrioritas 
-        FROM dil d
-        INNER JOIN $unit_map u ON u.IdPel = d.Idpel
-        LEFT JOIN kategorisasi_risiko k ON d.Idpel = k.Idpel AND k.Periode = :periode
+        FROM $unit_map u
+        LEFT JOIN dil d ON d.IdPel = u.IdPel
+        LEFT JOIN kategorisasi_risiko k ON u.IdPel = k.IdPel AND k.Periode = :periode
         $where_sql
         ORDER BY 
             CASE WHEN k.SkalaPrioritas IS NULL OR k.SkalaPrioritas = 0 THEN 0 ELSE 1 END ASC,
             k.SkalaPrioritas DESC, 
-            d.Idpel ASC 
+            u.IdPel ASC 
         LIMIT :lim OFFSET :off
     ";
 

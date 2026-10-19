@@ -124,3 +124,42 @@ function pg_header(array $o, bool $tampil_pill = true): string
     }
     return $h;
 }
+
+/** Format angka bulat gaya Indonesia (4.800). */
+function pg_n($v): string
+{
+    return number_format((float) $v, 0, ',', '.');
+}
+
+/** Footer kartu tabel: info jumlah + paginasi. $url_fn: fn(int $hal): string */
+function pg_footer_tabel(int $hal, int $limit, int $total, callable $url_fn): string
+{
+    $dari    = $total > 0 ? ($hal - 1) * $limit + 1 : 0;
+    $sampai  = min($hal * $limit, $total);
+    $halaman = max(1, (int) ceil($total / max(1, $limit)));
+
+    $h  = '<div class="card-footer bg-white border-top-0 py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">';
+    $h .= '<span class="text-muted small">Menampilkan ' . pg_n($dari) . ' - ' . pg_n($sampai) . ' dari ' . pg_n($total) . ' total data</span>';
+    if ($halaman > 1) {
+        $btn = function ($label, $target, $disabled = false, $active = false) use ($url_fn) {
+            return '<li class="page-item' . ($disabled ? ' disabled' : '') . ($active ? ' active' : '') . '">'
+                . '<a class="page-link" href="' . ($disabled ? '#' : pg_e($url_fn($target))) . '">' . $label . '</a></li>';
+        };
+        $h .= '<nav aria-label="Navigasi halaman"><ul class="pagination pagination-sm mb-0">';
+        $h .= $btn('Sebelumnya', $hal - 1, $hal <= 1);
+        $awal = max(1, $hal - 2);
+        $akhir = min($halaman, $hal + 2);
+        if ($awal > 1) {
+            $h .= $btn('1', 1);
+            if ($awal > 2) $h .= '<li class="page-item disabled"><span class="page-link">…</span></li>';
+        }
+        for ($i = $awal; $i <= $akhir; $i++) $h .= $btn((string) $i, $i, false, $i === $hal);
+        if ($akhir < $halaman) {
+            if ($akhir < $halaman - 1) $h .= '<li class="page-item disabled"><span class="page-link">…</span></li>';
+            $h .= $btn((string) $halaman, $halaman);
+        }
+        $h .= $btn('Berikutnya', $hal + 1, $hal >= $halaman);
+        $h .= '</ul></nav>';
+    }
+    return $h . '</div>';
+}
