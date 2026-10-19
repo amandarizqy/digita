@@ -47,9 +47,9 @@ function pg_menu(): array
         'monitoring' => [
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
+                'monitor_saldo'     => ['Saldo', 'bi-wallet2'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_perintah'  => ['Perintah', 'bi-terminal'],
-                'monitor_status'    => ['Status Eksekusi', 'bi-activity'],
             ],
         ],
     ];
@@ -162,4 +162,38 @@ function pg_footer_tabel(int $hal, int $limit, int $total, callable $url_fn): st
         $h .= '</ul></nav>';
     }
     return $h . '</div>';
+}
+
+// ------------------------------------------------------------------
+// UNIT AKUN YANG LOGIN
+// ------------------------------------------------------------------
+/** Unit akun dari session (cadangan: master_pengguna) + label "UPI › AP › UP". */
+function pg_unit_akun(PDO $conn): array
+{
+    $u = ['upi' => (string) ($_SESSION['UnitUpi'] ?? ''), 'ap' => (string) ($_SESSION['UnitAp'] ?? ''), 'up' => (string) ($_SESSION['UnitUp'] ?? ''), 'label' => ''];
+    try {
+        if ($u['upi'] === '' && !empty($_SESSION['NamaAkun'])) {
+            $st = $conn->prepare("SELECT UnitUp, UnitAp, UnitUpi FROM master_pengguna WHERE NamaAkun = ?");
+            $st->execute([$_SESSION['NamaAkun']]);
+            if ($r = $st->fetch(PDO::FETCH_ASSOC)) { $u['upi'] = (string) $r['UnitUpi']; $u['ap'] = (string) $r['UnitAp']; $u['up'] = (string) $r['UnitUp']; }
+        }
+        $nama = function (string $sql, string $kode) use ($conn) { $st = $conn->prepare($sql); $st->execute([$kode]); return $st->fetchColumn() ?: $kode; };
+        if ($u['upi'] !== '') $u['label'] = $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitUpi) FROM master_upi WHERE UnitUpi = ?", $u['upi']);
+        if ($u['ap']  !== '') $u['label'] .= ' › ' . $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitAp) FROM master_ap WHERE UnitAp = ?", $u['ap']);
+        if ($u['up']  !== '') $u['label'] .= ' › ' . $nama("SELECT COALESCE(NULLIF(SingkatanNama,''), UnitUp) FROM master_up WHERE UnitUp = ?", $u['up']);
+    } catch (PDOException $e) { /* label tetap kode */ }
+    if ($u['label'] === '') $u['label'] = $u['upi'];
+    return $u;
+}
+
+/**
+ * Kondisi SQL wilayah akun: UPI, + AP / UP bila akun terikat. $awalan = 'Kode' (dpp) atau 'Unit' (pelunasan_ap2t).
+ * Parameter ditambahkan ke $p (:s_upi, :s_ap, :s_up).
+ */
+function pg_scope(array $u, string $alias, string $awalan, array &$p): string
+{
+    $w = ["$alias.{$awalan}Upi = :s_upi"]; $p[':s_upi'] = $u['upi'];
+    if ($u['ap'] !== '') { $w[] = "$alias.{$awalan}Ap = :s_ap"; $p[':s_ap'] = $u['ap']; }
+    if ($u['up'] !== '') { $w[] = "$alias.{$awalan}Up = :s_up"; $p[':s_up'] = $u['up']; }
+    return implode(' AND ', $w);
 }

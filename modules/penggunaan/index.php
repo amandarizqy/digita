@@ -36,11 +36,11 @@ switch ($action) {
     case 'input_perintah':     include __DIR__ . '/input_perintah.php'; break;
     // MONITORING
     case 'monitor_dil':        include __DIR__ . '/monitor_dil.php'; break;
+    case 'monitor_saldo':      include __DIR__ . '/monitor_saldo.php'; break;
     case 'monitor_pelunasan':  include __DIR__ . '/monitor_pelunasan.php'; break;
     case 'monitor_perintah':   include __DIR__ . '/monitor_perintah.php'; break;
-    case 'monitor_status':     include __DIR__ . '/monitor_status.php'; break;
     default:
-        include __DIR__ . '/' . ($menu_pertama ?: 'monitor_status') . '.php';
+        include __DIR__ . '/' . ($menu_pertama ?: 'monitor_dil') . '.php';
 }
 
 // Cegat klik menu yang tidak diizinkan (SweetAlert2 "Akses ditolak")
