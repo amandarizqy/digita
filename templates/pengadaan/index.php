@@ -94,7 +94,7 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
                     <?= ($sub == 'aset') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-box-seam me-1"></i> Aset
                 </a>
                 <a href="index.php?page=pengadaan&menu=monitoring&sub=pembelian" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
-                    <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-cart-check me-1"></i> Pembelian Perdana
+                    <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-sim me-1"></i> Aktivasi Perdana
                 </a>
                 <a href="index.php?page=pengadaan&menu=monitoring&sub=pengiriman" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub == 'pengiriman') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub == 'pengiriman') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
                     <?= ($sub == 'pengiriman') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-truck me-1"></i> Pengiriman

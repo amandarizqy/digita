@@ -9,10 +9,20 @@
 
   <!-- Untuk Gambar (seperti logo di sidebar/navbar) -->
   <img src="<?= BASE_URL ?>/assets/img/logo.png" alt="Logo"> 
+
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Pastikan jQuery diload lebih dulu -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> 
   
-  <!-- TAMBAHAN: SweetAlert2 CSS -->
+  <!-- Load Select2 CSS & JS -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <!-- TAMBAHKAN BARIS INI: Tema Select2 untuk Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  
+  <!-- SweetAlert2 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
   <style>

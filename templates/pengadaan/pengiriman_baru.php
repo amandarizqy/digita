@@ -1,87 +1,98 @@
-<div class="p-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-file-earmark-plus me-2"></i>Buat Draft Pengiriman</h1>
-        <a href="index.php?page=pengadaan&menu=pengiriman&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
+<?php
+// Ambil unit UPI user yang sedang login (misal: '56')
+$user_upi = $_SESSION['UnitUpi'] ?? '56';
+$tgl_hari_ini = date('Y-m-d');
+$tgl_format = date('Ymd');
+
+// Generate nomor formulir otomatis langsung di halaman ini agar pasti terkirim
+$stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_pengiriman WHERE TglFormulir = ?");
+$stmt_count->execute([$tgl_hari_ini]);
+$jumlah_hari_ini = (int) $stmt_count->fetchColumn();
+$urutan_baru = $jumlah_hari_ini + 1;
+$urutan_str = str_pad($urutan_baru, 3, '0', STR_PAD_LEFT);
+$no_formulir_otomatis = $user_upi . $urutan_str . $tgl_format . '-F.B';
+
+// Ambil daftar Unit AP yang berada di bawah UPI tersebut
+$stmt_ap = $conn->prepare("SELECT * FROM master_ap WHERE UnitUpi = ? ORDER BY NamaUnit ASC");
+$stmt_ap->execute([$user_upi]);
+$list_ap = $stmt_ap->fetchAll(PDO::FETCH_ASSOC);
+
+// Ambil daftar Unit UP yang berada di bawah UPI tersebut
+$stmt_up = $conn->prepare("SELECT * FROM master_up WHERE UnitUpi = ? ORDER BY NamaUnit ASC");
+$stmt_up->execute([$user_upi]);
+$list_up = $stmt_up->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<div class="card shadow mb-4 border-0">
+    <div class="card-header bg-white py-3">
+        <h6 class="m-0 font-weight-bold text-primary"><i class="bi bi-truck me-2"></i>Buat Formulir Pengiriman Baru</h6>
     </div>
+    <div class="card-body">
+        <form action="modules/pengadaan/proses_pengiriman.php?action=create_draft" method="POST">
+            
+            <div class="row mb-3">
+                <!-- Tanggal Pengiriman (Dikunci / Readonly sesuai permintaan) -->
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Tanggal Pengiriman</label>
+                    <input type="date" class="form-control" name="tgl_form" value="<?= $tgl_hari_ini ?>" readonly>
+                </div>
+            </div>
 
-    <div class="card shadow border-0">
-        <div class="card-body">
-            <form action="modules/pengadaan/proses_pengiriman.php?action=create_draft" method="POST" id="formPengiriman">
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <h6 class="fw-bold text-dark mb-3">Informasi Utama</h6>
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Tanggal Pengiriman</label>
-                            <input type="text" class="form-control bg-light" value="<?= date('d-m-Y') ?>" readonly>
-                            <input type="hidden" name="tgl_form" value="<?= date('Y-m-d') ?>">
-                            <small class="text-secondary">Tanggal otomatis diset ke hari ini. Nomor Formulir (F.B) akan digenerate otomatis.</small>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h6 class="fw-bold text-dark mb-3">Pilih Tujuan Pengiriman (Pilih Salah Satu Saja)</h6>
-                        
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Unit Pelaksana (AP)</label>
-                            <select class="form-select" name="kode_ap_tujuan" id="selectAP">
-                                <option value="">-- Pilih Area Tujuan (AP) --</option>
-                                <?php foreach ($list_ap as $ap): ?>
-                                    <option value="<?= htmlspecialchars($ap['UnitAp']) ?>"><?= htmlspecialchars($ap['NamaUnit']) ?> (<?= htmlspecialchars($ap['UnitAp']) ?>)</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="text-center text-muted small my-2 fw-bold">- ATAU -</div>
-
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">Unit Layanan (UP)</label>
-                            <select class="form-select" name="kode_up_tujuan" id="selectUP">
-                                <option value="">-- Pilih Layanan Tujuan (UP) --</option>
-                                <?php foreach ($list_up as $up): ?>
-                                    <option value="<?= htmlspecialchars($up['UnitUp']) ?>"><?= htmlspecialchars($up['NamaUnit']) ?> (<?= htmlspecialchars($up['UnitUp']) ?>)</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <small class="text-danger" id="warningTujuan" style="display:none;">Harap pilih salah satu tujuan (AP saja atau UP saja).</small>
-                    </div>
+            <div class="row mb-3">
+                <!-- Dropdown Unit AP Tujuan -->
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Tujuan Unit Area Pelayanan (AP)</label>
+                    <select class="form-select" name="kode_ap" id="select_ap">
+                        <option value="">-- Pilih Unit AP (Opsional) --</option>
+                        <?php foreach ($list_ap as $ap): ?>
+                            <option value="<?= $ap['UnitAp'] ?>"><?= htmlspecialchars($ap['NamaUnit']) ?> (Kode: <?= $ap['UnitAp'] ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
-                <hr class="text-secondary mb-4">
-                
-                <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary px-4" id="btnSubmit"><i class="bi bi-save me-2"></i>Simpan Draft & Mulai Pilih Barang</button>
+                <!-- Dropdown Unit UP Tujuan -->
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Tujuan Unit Pelayanan (UP)</label>
+                    <select class="form-select" name="kode_up" id="select_up">
+                        <option value="">-- Pilih Unit UP (Opsional) --</option>
+                        <?php foreach ($list_up as $up): ?>
+                            <option value="<?= $up['UnitUp'] ?>"><?= htmlspecialchars($up['NamaUnit']) ?> (Kode: <?= $up['UnitUp'] ?>)</option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-            </form>
-        </div>
+            </div>
+            <div class="form-text text-muted mb-3">*Catatan: Anda hanya dapat memilih salah satu tujuan (AP atau UP). Jika salah satu dipilih, pilihan lainnya akan otomatis terkunci.</div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="index.php?page=pengadaan&menu=pengiriman&view=daftar" class="btn btn-secondary">Batal</a>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Simpan & Buat Draft</button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const selectAP = document.getElementById('selectAP');
-    const selectUP = document.getElementById('selectUP');
-    const form = document.getElementById('formPengiriman');
-    const warning = document.getElementById('warningTujuan');
+    const selectAp = document.getElementById('select_ap');
+    const selectUp = document.getElementById('select_up');
 
-    selectAP.addEventListener('change', function() {
-        if (this.value !== "") {
-            selectUP.value = "";
-        }
-    });
-
-    selectUP.addEventListener('change', function() {
-        if (this.value !== "") {
-            selectAP.value = "";
-        }
-    });
-
-    form.addEventListener('submit', function(e) {
-        if (selectAP.value === "" && selectUP.value === "") {
-            e.preventDefault();
-            warning.style.display = 'block';
+    function handleExclusiveSelection() {
+        if (selectAp.value !== "") {
+            selectUp.value = "";
+            selectUp.disabled = true;
         } else {
-            warning.style.display = 'none';
+            selectUp.disabled = false;
         }
-    });
+
+        if (selectUp.value !== "") {
+            selectAp.value = "";
+            selectAp.disabled = true;
+        } else {
+            selectAp.disabled = false;
+        }
+    }
+
+    selectAp.addEventListener('change', handleExclusiveSelection);
+    selectUp.addEventListener('change', handleExclusiveSelection);
 });
 </script>

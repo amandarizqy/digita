@@ -50,31 +50,32 @@ endif;
         <div class="tab-content">
             <!-- TAB MANUAL -->
             <div class="tab-pane fade show active" id="manual" role="tabpanel">
+                <!-- Form Input Manual Pembelian -->
                 <form action="modules/pengadaan/proses_pembelian.php?action=add_item" method="POST">
                     <input type="hidden" name="metode" value="manual">
-                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
+                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
                     
                     <div class="row align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Nomor Ref (NoRef)</label>
-                            <input type="text" class="form-control" name="no_ref" placeholder="Contoh: S41-001" required>
+                            <label class="form-label fw-bold">Nomor Ref (NoRef)</label>
+                            <input type="text" class="form-control" name="no_ref" placeholder="Contoh: S41-001" required autofocus>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Harga Beli (Rp)</label>
-                            <input type="number" class="form-control" name="harga" required>
+                            <label class="form-label fw-bold">Harga Beli (Rp)</label>
+                            <input type="text" class="form-control" name="harga_beli" placeholder="Contoh: 345000" required>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label fw-bold small text-muted">Stiker QC</label>
+                            <label class="form-label fw-bold">Stiker QC</label>
                             <select class="form-select" name="stiker_qc" required>
                                 <option value="ADA">ADA</option>
                                 <option value="TIDAK">TIDAK</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label fw-bold small text-muted">Cacat Fisik</label>
+                            <label class="form-label fw-bold">Cacat Fisik</label>
                             <select class="form-select" name="cacat_fisik" required>
                                 <option value="TIDAK">TIDAK</option>
-                                <option value="YA">YA</option>
+                                <option value="ADA">ADA</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -106,7 +107,12 @@ endif;
 </div>
 <?php endif; ?>
 
-<!-- Tabel Daftar Barang Terinput -->
+<!-- Form Input (Hanya tampil jika status masih Draft/TIDAK) -->
+<?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
+<!-- (Bagian form input manual & csv Anda di sini) -->
+<?php endif; ?>
+
+<!-- Tabel Daftar Barang -->
 <div class="card shadow mb-4 border-0">
     <div class="card-header bg-white py-3">
         <h6 class="m-0 font-weight-bold text-primary">Daftar Barang Terinput</h6>
@@ -120,7 +126,10 @@ endif;
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
                         <th>HARGA BELI</th>
-                        <th class="text-end pe-4">AKSI</th>
+                        <!-- Kolom AKSI hanya muncul jika status masih DRAFT -->
+                        <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
+                            <th class="text-end pe-4">AKSI</th>
+                        <?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -133,15 +142,19 @@ endif;
                             <td><?= htmlspecialchars($item['StikerQC']) ?></td>
                             <td><?= htmlspecialchars($item['CacatFisik']) ?></td>
                             <td>Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
-                            <td class="text-end pe-4">
-                                <form action="modules/pengadaan/proses_pembelian.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang?')">
-                                    <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-                                    <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
+                            
+                            <!-- Tombol Hapus per Item Hanya Tampil jika Status Draft -->
+                            <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
+                                <td class="text-end pe-4">
+                                    <form action="modules/pengadaan/proses_pembelian.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang?')">
+                                        <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
+                                        <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            <?php endif; ?>
                         </tr>
                     <?php 
                         endforeach; 
@@ -154,7 +167,7 @@ endif;
         </div>
     </div>
     
-    <!-- Tombol Reset & Eksekusi di Bagian Paling Bawah -->
+    <!-- Tombol Reset & Eksekusi (Hanya Tampil jika Status Draft & Ada Item) -->
     <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items)): ?>
     <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
         <form action="modules/pengadaan/proses_pembelian.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar alat?')">
