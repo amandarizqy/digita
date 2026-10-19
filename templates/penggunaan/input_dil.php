@@ -65,13 +65,6 @@ if (!empty($detail_import)) {
     </div>
 </div>
 
-<?php if ($boleh_monitor): ?>
-<div class="text-center text-muted small mb-4">
-    Ingin melihat, mencari, atau mengubah data? Buka
-    <a href="<?= pg_e(pg_url('monitor_dil')) ?>" class="fw-semibold text-decoration-none"><i class="bi bi-display me-1"></i>Monitoring DIL</a>.
-</div>
-<?php endif; ?>
-
 <!-- MODAL IMPORT EXCEL -->
 <div class="modal fade" id="modalImportDil" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

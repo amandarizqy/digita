@@ -16,14 +16,26 @@ $csrf = $_SESSION['pg_csrf'];
 
 // ---- normalisasi nilai ----
 if (!function_exists('sd_idpel')) {
+    /** IdPel dinormalkan jadi string angka (angka ilmiah/".0" dari Excel dibereskan). TIDAK ada pelengkap nol: wajib persis 12 digit. */
     function sd_idpel($v): ?string
     {
         $v = trim((string) $v);
-        if (preg_match('/^\d+(\.0+)?$/', $v))                    $v = preg_replace('/\.0+$/', '', $v);
-        elseif (preg_match('/^\d+(\.\d+)?[eE]\+?\d+$/', $v))     $v = sprintf('%.0f', (float) $v);   // angka ilmiah dari Excel
-        else return null;
-        if (strlen($v) < 12) $v = str_pad($v, 12, '0', STR_PAD_LEFT);                               // nol di depan hilang oleh Excel
-        return preg_match('/^\d{12}$/', $v) ? $v : null;
+        if (preg_match('/^\d+(\.0+)?$/', $v))                    return preg_replace('/\.0+$/', '', $v);
+        if (preg_match('/^\d+(\.\d+)?[eE]\+?\d+$/', $v))       return sprintf('%.0f', (float) $v);   // angka ilmiah dari Excel
+        return null;
+    }
+    /** Alasan penolakan IdPel (null bila valid: persis 12 digit). */
+    function sd_idpel_alasan(?string $v): ?string
+    {
+        if ($v === null)        return 'IdPel harus berupa angka';
+        if (strlen($v) < 12)    return 'IdPel kurang dari 12 karakter, tidak disimpan';
+        if (strlen($v) > 12)    return 'IdPel lebih dari 12 karakter, tidak disimpan';
+        return null;
+    }
+    /** Periode dari <input type="month"> (YYYY-MM) -> YYYYMM. */
+    function sd_bulan_kalender($v): ?string
+    {
+        return preg_match('/^((?:19|20)\d{2})-(0[1-9]|1[0-2])$/', trim((string) $v), $m) ? $m[1] . $m[2] : null;
     }
     /** ThBlRek: YYYYMM atau YYYYMMDD. */
     function sd_bulan($v): ?string
@@ -119,15 +131,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } elseif ($aksi === 'tambah') {
         $idpel = sd_idpel($_POST['idpel'] ?? '');
-        $bulan = sd_bulan($_POST['thblrek'] ?? '');
+        $bulan = sd_bulan_kalender($_POST['thblrek'] ?? '');
         $rp    = sd_rp($_POST['rptag'] ?? '');
-        if ($idpel === null)      $pesan_error = 'IdPel harus 12 digit angka.';
-        elseif ($bulan === null)  $pesan_error = 'ThBlRek harus format YYYYMM atau YYYYMMDD.';
-        elseif ($rp === null)     $pesan_error = 'Saldo (RpTag) harus angka, tidak boleh negatif.';
+        if ($e_id = sd_idpel_alasan($idpel))  $pesan_error = $e_id . '.';
+        elseif ($bulan === null)              $pesan_error = 'Pilih periode (ThBlRek) dari kalender.';
+        elseif ($rp === null)                 $pesan_error = 'Saldo (RpTag) harus angka, tidak boleh negatif.';
         else {
             try {
-                $conn->prepare($sql_simpan(1))->execute([$idpel, $bulan, $rp, $tuj[2], $tuj[1], $tuj[0]]);
-                $pesan_sukses = 'Saldo IdPel <strong>' . pg_e($idpel) . '</strong> periode <strong>' . pg_e($bulan) . '</strong> sebesar <strong>Rp ' . pg_n($rp) . '</strong> berhasil disimpan.';
+                // IdPel WAJIB sudah terdaftar di DIL; halaman ini tidak pernah menambah data ke DIL
+                $st = $conn->prepare("SELECT NamaPelanggan FROM dil WHERE IdPel = ?");
+                $st->execute([$idpel]);
+                $dil = $st->fetch(PDO::FETCH_ASSOC);
+                if (!$dil) {
+                    $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak terdaftar di DIL, saldo tidak disimpan. Tambahkan dulu lewat Input DIL.';
+                } else {
+                    $conn->prepare($sql_simpan(1))->execute([$idpel, $bulan, $rp, $tuj[2], $tuj[1], $tuj[0]]);
+                    $nm = trim((string) $dil['NamaPelanggan']);
+                    $pesan_sukses = 'Saldo IdPel <strong>' . pg_e($idpel) . '</strong>' . ($nm !== '' ? ' (' . pg_e($nm) . ')' : '')
+                                  . ' periode <strong>' . pg_e($bulan) . '</strong> sebesar <strong>Rp ' . pg_n($rp) . '</strong> berhasil disimpan.';
+                }
             } catch (PDOException $e) { $pesan_error = 'Gagal menyimpan: ' . pg_e($e->getMessage()); }
         }
 
@@ -145,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @set_time_limit(300);
             $alias = ['idpel' => ['idpel'], 'bulan' => ['thblrek', 'bulan'], 'rp' => ['rptag', 'rptagihan', 'saldo']];
             $nama_kol = ['idpel' => 'IdPel', 'bulan' => 'ThBlRek', 'rp' => 'RpTag'];
-            $peta = null; $baris = []; $dibaca = $salah = $dobel = 0;
+            $peta = null; $baris = []; $dibaca = $salah = $dobel = $tidak_dil = 0;
             try {
                 foreach (xlsx_baris($f['tmp_name']) as $no => $sel) {
                     if ($peta === null) {                                   // cari baris judul (20 baris pertama)
@@ -162,16 +184,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (trim(implode('', $sel)) === '') continue;
                     $dibaca++;
                     $id = sd_idpel($sel[$peta['idpel']] ?? ''); $bl = sd_bulan($sel[$peta['bulan']] ?? ''); $rp = sd_rp($sel[$peta['rp']] ?? '');
-                    $alasan = $id === null ? 'IdPel harus 12 digit angka' : ($bl === null ? 'ThBlRek harus YYYYMM/YYYYMMDD' : ($rp === null ? 'RpTag kosong/bukan angka/negatif' : null));
+                    $alasan = sd_idpel_alasan($id) ?? ($bl === null ? 'ThBlRek harus YYYYMM/YYYYMMDD' : ($rp === null ? 'RpTag kosong/bukan angka/negatif' : null));
                     if ($alasan !== null) {
                         $salah++;
                         if (count($detail_import) < 20) $detail_import[] = "Baris $no: $alasan (" . trim((string) ($sel[$peta['idpel']] ?? '')) . ')';
                         continue;
                     }
                     if (isset($baris[$id . '|' . $bl])) $dobel++;           // baris terakhir yang dipakai
-                    $baris[$id . '|' . $bl] = [$id, $bl, $rp];
+                    $baris[$id . '|' . $bl] = [$id, $bl, $rp, $no];
                 }
                 if ($peta === null) throw new RuntimeException('Baris judul kolom (IdPel, ThBlRek, RpTag) tidak ditemukan.');
+
+                // IdPel WAJIB sudah terdaftar di DIL: yang tidak ada dilewati (tidak pernah ditambahkan ke DIL)
+                if ($baris) {
+                    $ada = [];
+                    foreach (array_chunk(array_values(array_unique(array_column($baris, 0))), 1000) as $paket) {
+                        $st = $conn->prepare("SELECT IdPel FROM dil WHERE IdPel IN (" . implode(',', array_fill(0, count($paket), '?')) . ")");
+                        $st->execute($paket);
+                        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $x) $ada[(string) $x] = true;
+                    }
+                    foreach ($baris as $k => $b) {
+                        if (isset($ada[$b[0]])) continue;
+                        $tidak_dil++;
+                        if (count($detail_import) < 20) $detail_import[] = 'Baris ' . $b[3] . ': IdPel ' . $b[0] . ' tidak terdaftar di DIL, tidak disimpan';
+                        unset($baris[$k]);
+                    }
+                }
                 if (!$baris) {
                     $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
                 } else {
@@ -184,7 +222,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $conn->commit();
                     $pesan_sukses = 'Import selesai: <strong>' . pg_n(count($baris)) . '</strong> baris saldo disimpan'
                         . ($dobel ? ', ' . pg_n($dobel) . ' baris dobel dalam file (dipakai yang terakhir)' : '')
-                        . ($salah ? ', ' . pg_n($salah) . ' baris tidak valid' : '') . '.';
+                        . ($salah ? ', ' . pg_n($salah) . ' baris tidak valid (termasuk IdPel kurang dari 12 karakter)' : '')
+                        . ($tidak_dil ? ', ' . pg_n($tidak_dil) . ' baris dilewati karena IdPel tidak terdaftar di DIL' : '') . '.';
                 }
             } catch (Throwable $e) {
                 if ($conn->inTransaction()) $conn->rollBack();

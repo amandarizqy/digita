@@ -15,6 +15,7 @@ if (!in_array($limit, [10, 25, 50, 100], true)) $limit = 10;
 $hal     = max(1, (int) ($_GET['hal'] ?? 1));
 
 $daftar_tahun = [];
+$tahun_pl = []; $tahun_dpp = [];   // jumlah pelunasan per tahun; tahun yang punya saldo (dpp)
 $tahun        = '';
 $data = []; $total_data = 0;
 $ringkas = ['lunas' => 0, 'rp_tag' => 0, 'rp_bk' => 0, 'belum' => 0];
@@ -23,25 +24,26 @@ if (!$unit_siap) {
     $pesan_error = 'Akun Anda belum memiliki Unit UPI, sehingga data pelunasan tidak dapat ditampilkan.';
 } else {
     try {
-        // ---- daftar tahun yang punya data di wilayah akun (pelunasan + tagihan dpp); cache session 5 menit per wilayah ----
-        $ck = 'pg_tahun_pl_' . md5($u['upi'] . '|' . $u['ap'] . '|' . $u['up']);
+        // ---- daftar tahun: SEMUA tahun yang punya data di pelunasan_ap2t (termasuk data lama yang tidak ada di dpp)
+        //      ditambah tahun yang hanya ada di dpp. Wilayah = kode unit session. Cache session 5 menit per wilayah. ----
+        $ck = 'pg_thn_pl2_' . md5($u['upi'] . '|' . $u['ap'] . '|' . $u['up']);
         if (!empty($_SESSION[$ck]) && $_SESSION[$ck]['t'] > time() - 300) {
-            $daftar_tahun = $_SESSION[$ck]['v'];
+            [$tahun_pl, $tahun_dpp] = [$_SESSION[$ck]['pl'], $_SESSION[$ck]['dpp']];
         } else {
             $p1 = []; $sc1 = pg_scope($u, 'p', 'Unit', $p1);
-            $st = $conn->prepare("SELECT DISTINCT LEFT(p.ThBlRek, 4) FROM pelunasan_ap2t p WHERE $sc1");
+            $st = $conn->prepare("SELECT LEFT(p.ThBlRek, 4) AS th, COUNT(*) AS n FROM pelunasan_ap2t p WHERE $sc1 GROUP BY LEFT(p.ThBlRek, 4)");
             $st->execute($p1);
-            $th = $st->fetchAll(PDO::FETCH_COLUMN);
+            $tahun_pl = [];                                   // [tahun => jumlah pelunasan]
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) if (preg_match('/^\d{4}$/', (string) $r['th'])) $tahun_pl[(string) $r['th']] = (int) $r['n'];
 
             $p2 = []; $sc2 = pg_scope($u, 'd', 'Kode', $p2);
             $st = $conn->prepare("SELECT DISTINCT LEFT(d.ThBlRek, 4) FROM dpp d WHERE $sc2");
             $st->execute($p2);
-            $th = array_merge($th, $st->fetchAll(PDO::FETCH_COLUMN));
-
-            $daftar_tahun = array_values(array_unique(array_filter(array_map('strval', $th), fn($y) => preg_match('/^\d{4}$/', $y))));
-            rsort($daftar_tahun);
-            $_SESSION[$ck] = ['t' => time(), 'v' => $daftar_tahun];
+            $tahun_dpp = array_values(array_filter(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), fn($y) => preg_match('/^\d{4}$/', $y)));
+            $_SESSION[$ck] = ['t' => time(), 'pl' => $tahun_pl, 'dpp' => $tahun_dpp];
         }
+        $daftar_tahun = array_map('strval', array_unique(array_merge(array_keys($tahun_pl), $tahun_dpp)));
+        rsort($daftar_tahun);
 
         // tahun terpilih: harus ada di daftar; default = tahun terbaru
         $tahun = (string) ($_GET['tahun'] ?? '');

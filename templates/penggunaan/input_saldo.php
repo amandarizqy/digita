@@ -5,12 +5,10 @@
 //   $pesan_sukses, $pesan_error, $detail_import
 
 echo pg_header([
-    'title'    => 'Input Saldo',
+    'title'    => 'Input Saldo Tunggakan',
     'subtitle' => 'Saldo tagihan pelanggan per periode (tabel DPP). Kode UPI/AP/UP otomatis dari akun yang login.',
     'action'   => 'input_saldo',
     'buttons'  => !$unit_siap ? [] : array_values(array_filter([
-        $boleh_monitor ? ['label' => 'Monitoring Saldo', 'icon' => 'bi-display', 'href' => pg_url('monitor_saldo'),
-                          'class' => 'btn btn-outline-primary btn-sm px-3 shadow-sm rounded-2 bg-white'] : null,
         ['label' => 'Import Excel', 'icon' => 'bi-file-earmark-excel',
          'class' => 'btn btn-success btn-sm px-3 shadow-sm rounded-2',
          'attrs' => 'data-bs-toggle="modal" data-bs-target="#modalImportSaldo"'],
@@ -50,17 +48,17 @@ $unit_fields = function (string $p) use ($perlu_pilih, $sAp, $sUp, $peta_unit, $
 <!-- FORM TAMBAH -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
-        <h6 class="fw-bold mb-3"><i class="bi bi-plus-circle me-2 text-primary"></i>Input Saldo Manual</h6>
+        <h6 class="fw-bold mb-3"><i class="bi bi-plus-circle me-2 text-primary"></i>Input Saldo Tunggakan Manual</h6>
         <form method="POST" action="<?= pg_e(pg_url('input_saldo')) ?>" class="row g-3 align-items-end">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="tambah">
             <div class="col-md-3">
                 <label for="idpel" class="form-label small fw-bold text-secondary text-uppercase">IdPel</label>
-                <input type="text" class="form-control font-monospace" id="idpel" name="idpel" maxlength="12" pattern="\d{1,12}" placeholder="12 digit" required>
+                <input type="text" class="form-control font-monospace" id="idpel" name="idpel" minlength="12" maxlength="12" pattern="\d{12}" inputmode="numeric" title="IdPel harus 12 digit angka dan terdaftar di DIL" placeholder="12 digit (dari DIL)" required>
             </div>
             <div class="col-md-3">
                 <label for="thblrek" class="form-label small fw-bold text-secondary text-uppercase">ThBlRek</label>
-                <input type="text" class="form-control font-monospace" id="thblrek" name="thblrek" maxlength="8" pattern="\d{6}(\d{2})?" placeholder="YYYYMM / YYYYMMDD" required>
+                <input type="month" class="form-control" id="thblrek" name="thblrek" max="<?= date('Y-m') ?>" required>
             </div>
             <div class="col-md-4">
                 <label for="rptag" class="form-label small fw-bold text-secondary text-uppercase">Saldo (RpTag)</label>
@@ -72,16 +70,10 @@ $unit_fields = function (string $p) use ($perlu_pilih, $sAp, $sUp, $peta_unit, $
             </div>
             <div class="col-12"><?= $unit_fields('tb') ?></div>
         </form>
-        <div class="form-text mt-2">Data dengan IdPel + ThBlRek yang sama akan diperbarui, bukan digandakan.</div>
+        <div class="form-text mt-2">IdPel harus sudah terdaftar di DIL (halaman ini tidak menambah data DIL). Data dengan IdPel + ThBlRek yang sama akan diperbarui, bukan digandakan.</div>
     </div>
 </div>
 
-<?php if ($boleh_monitor): ?>
-<div class="text-center text-muted small mb-4">
-    Ingin melihat atau mencari data saldo? Buka
-    <a href="<?= pg_e(pg_url('monitor_saldo')) ?>" class="fw-semibold text-decoration-none"><i class="bi bi-display me-1"></i>Monitoring Saldo</a>.
-</div>
-<?php endif; ?>
 
 <!-- MODAL IMPORT EXCEL -->
 <div class="modal fade" id="modalImportSaldo" tabindex="-1" aria-hidden="true">
@@ -90,7 +82,7 @@ $unit_fields = function (string $p) use ($perlu_pilih, $sAp, $sUp, $peta_unit, $
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="import">
             <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-excel text-success me-2"></i>Import Saldo dari Excel</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-excel text-success me-2"></i>Import Saldo Tunggakan dari Excel</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
@@ -101,8 +93,9 @@ $unit_fields = function (string $p) use ($perlu_pilih, $sAp, $sUp, $peta_unit, $
                 </table>
                 <ul class="small text-muted ps-3">
                     <li>Kode UPI/AP/UP disimpan otomatis sesuai wilayah akun.</li>
-                    <li>IdPel + ThBlRek yang sudah ada diperbarui.</li>
-                    <li>Semua baris disimpan dalam satu transaksi; bila gagal, tidak ada yang tersimpan.</li>
+                    <li>IdPel yang sudah terdaftar akan mengubah data yang lama (pada ThBlRek yang sama).</li>
+                    <li>IdPel kurang dari 12 karakter tidak akan disimpan.</li>
+                    <li>IdPel harus sudah ada di DIL; yang tidak ada di DIL dilewati dan tidak ditambahkan.</li>
                 </ul>
                 <div class="mb-3"><?= $unit_fields('im') ?></div>
                 <input type="file" name="file_xlsx" class="form-control" accept=".xlsx" required>

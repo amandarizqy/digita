@@ -39,7 +39,7 @@ function pg_menu(): array
         'input' => [
             'label' => 'Input', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'input_dil'       => ['DIL', 'bi-journal-text'],
-                'input_saldo'     => ['Saldo', 'bi-wallet2'],
+                'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'input_perintah'  => ['Perintah', 'bi-terminal'],
             ],
@@ -47,9 +47,9 @@ function pg_menu(): array
         'monitoring' => [
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
-                'monitor_saldo'     => ['Saldo', 'bi-wallet2'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_perintah'  => ['Perintah', 'bi-terminal'],
+                'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],
     ];

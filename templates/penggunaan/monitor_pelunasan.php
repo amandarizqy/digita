@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/monitor_pelunasan.php  -  Monitoring Pelunasan
 // Variabel dari modules/penggunaan/monitor_pelunasan.php:
-//   $data, $total_data, $ringkas, $keyword, $tahun, $daftar_tahun, $bulan_f, $limit, $hal, $u, $unit_siap, $boleh_input, $pesan_error
+//   $data, $total_data, $ringkas, $keyword, $tahun, $daftar_tahun, $tahun_pl, $tahun_dpp, $bulan_f, $limit, $hal, $u, $unit_siap, $boleh_input, $pesan_error
 
 $url_pl = fn(array $ubah = []) => pg_url('monitor_pelunasan', array_merge(
     ['tahun' => $tahun, 'bulan' => $bulan_f, 'keyword' => $keyword, 'limit' => $limit == 10 ? '' : $limit], $ubah));
@@ -18,11 +18,16 @@ echo pg_header([
 
 if (!empty($pesan_error)) echo pg_alert('danger', $pesan_error);
 if (!$unit_siap) return;
+$ada_saldo = in_array($tahun, $tahun_dpp, true);   // tahun ini punya data saldo di dpp?
 if ($tahun === '') {
     echo pg_alert('info', 'Belum ada data tagihan atau pelunasan di wilayah Anda.');
     return;
 }
 ?>
+
+<?php if (!$ada_saldo): ?>
+<div class="alert alert-info border-0 shadow-sm rounded-3 small"><i class="bi bi-archive me-2"></i>Tahun <strong><?= pg_e($tahun) ?></strong> tidak memiliki data saldo (dpp); yang ditampilkan adalah data pelunasan lama saja, jadi "Tagihan Belum Lunas" tidak dihitung.</div>
+<?php endif; ?>
 
 <!-- RINGKASAN -->
 <div class="row g-3 mb-4">
@@ -30,7 +35,7 @@ if ($tahun === '') {
         ['Pelunasan Tercatat', pg_n($ringkas['lunas']), 'text-dark'],
         ['Total Tagihan Lunas', 'Rp ' . pg_n($ringkas['rp_tag']), 'text-success'],
         ['Total Biaya Keterlambatan', 'Rp ' . pg_n($ringkas['rp_bk']), 'text-warning'],
-        ['Tagihan Belum Lunas', pg_n($ringkas['belum']), 'text-danger'],
+        ['Tagihan Belum Lunas', $ada_saldo ? pg_n($ringkas['belum']) : '-', 'text-danger'],
     ] as [$lbl, $val, $cls]): ?>
     <div class="col-md-6 col-xl-3">
         <div class="card border-0 shadow-sm rounded-4 py-3 px-4 bg-white h-100">
@@ -49,7 +54,7 @@ if ($tahun === '') {
             <div class="col-md-2">
                 <select name="tahun" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()" aria-label="Tahun">
                     <?php foreach ($daftar_tahun as $y): ?>
-                    <option value="<?= pg_e($y) ?>" <?= (string) $y === $tahun ? 'selected' : '' ?>>Tahun <?= pg_e($y) ?></option>
+                    <option value="<?= pg_e($y) ?>" <?= (string) $y === $tahun ? 'selected' : '' ?>>Tahun <?= pg_e($y) ?> — <?= isset($tahun_pl[$y]) ? pg_n($tahun_pl[$y]) . ' pelunasan' : 'belum ada pelunasan' ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
