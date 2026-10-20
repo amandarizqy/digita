@@ -231,7 +231,10 @@ $users_tampil = array_slice($users, $offset, $per_hal);
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Kata Kunci (Password) *</label>
-                    <input type="password" name="KataKunci" class="form-control" required>
+                    <div class="input-group">
+                        <input type="password" name="KataKunci" class="form-control" autocomplete="new-password" required>
+                        <button type="button" class="btn btn-outline-secondary btn-toggle-pw" title="Tampilkan / sembunyikan"><i class="bi bi-eye"></i></button>
+                    </div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Kode Hak Access *</label>
@@ -292,6 +295,14 @@ $users_tampil = array_slice($users, $offset, $per_hal);
                         <option value="TIDAK">TIDAK AKTIF</option>
                     </select>
                 </div>
+                <div class="col-md-12">
+                    <label class="form-label">Kata Kunci Baru (Password)</label>
+                    <div class="input-group">
+                        <input type="password" name="KataKunci" id="edit_pg_password" class="form-control" placeholder="Kosongkan jika tidak ingin mengubah kata kunci" autocomplete="new-password">
+                        <button type="button" class="btn btn-outline-secondary btn-toggle-pw" title="Tampilkan / sembunyikan"><i class="bi bi-eye"></i></button>
+                    </div>
+                    <small class="text-muted" style="font-size: 0.725rem;">* Isi hanya kalau ingin mengganti kata kunci. Kalau dikosongkan, kata kunci lama tetap dipakai.</small>
+                </div>
             </div>
             <div class="modal-footer border-top px-4 py-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal">Batal</button>
@@ -317,7 +328,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const modalEdit = new bootstrap.Modal(document.getElementById('modalEditPengguna'));
+    // Tombol mata: tampilkan / sembunyikan isi kolom kata kunci
+    document.querySelectorAll('.btn-toggle-pw').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.closest('.input-group').querySelector('input');
+            const icon = this.querySelector('i');
+            const tampil = input.type === 'password';
+            input.type = tampil ? 'text' : 'password';
+            icon.className = tampil ? 'bi bi-eye-slash' : 'bi bi-eye';
+        });
+    });
+
+    const modalEditEl = document.getElementById('modalEditPengguna');
+    const modalEdit = new bootstrap.Modal(modalEditEl);
+
+    // Reset kolom kata kunci tiap kali modal edit ditutup
+    modalEditEl.addEventListener('hidden.bs.modal', function() {
+        const pw = document.getElementById('edit_pg_password');
+        pw.value = '';
+        pw.type = 'password';
+        modalEditEl.querySelector('.btn-toggle-pw i').className = 'bi bi-eye';
+    });
+
     document.querySelectorAll('.btn-edit-pengguna').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('edit_pg_akun').value = this.dataset.akun;
@@ -327,6 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_pg_kontak').value = this.dataset.kontak;
             document.getElementById('edit_pg_hak').value = this.dataset.hak;
             document.getElementById('edit_pg_status').value = (this.dataset.status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+            document.getElementById('edit_pg_password').value = '';
             modalEdit.show();
         });
     });

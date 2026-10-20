@@ -35,6 +35,14 @@ try {
         font-size: 0.7rem !important;
         padding: 0.3em 0.45em !important;
     }
+    .preview-img-box {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
 </style>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
@@ -102,21 +110,51 @@ try {
                             </td>
                             <td class="font-monospace text-secondary small"><?= htmlspecialchars($row['WaktuData'] ?? '-') ?></td>
                             <td class="pe-2 text-center">
-                                <?php if (!empty($row['FotoPasang'])): ?>
-                                    <button type="button" class="btn btn-sm btn-outline-info p-1 lh-1 rounded-2" data-bs-toggle="modal" data-bs-target="#modalFotoMon<?= $idx ?>" title="Lihat Foto Bukti">
+                                <?php if (!empty($row['FotoPasang']) || !empty($row['FotoBarang'])): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-info p-1 lh-1 rounded-2" data-bs-toggle="modal" data-bs-target="#modalFotoMon<?= $idx ?>" title="Lihat Foto Dokumentasi">
                                         <i class="bi bi-image"></i>
                                     </button>
 
-                                    <!-- Pop-up Foto -->
+                                    <!-- Pop-up Foto Dual (Foto Pasang & Foto Barang) -->
                                     <div class="modal fade" id="modalFotoMon<?= $idx ?>" tabindex="-1">
-                                        <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-dialog modal-dialog-centered modal-lg">
                                             <div class="modal-content border-0 rounded-4 shadow">
                                                 <div class="modal-header border-bottom py-3 px-4">
-                                                    <h6 class="modal-title fw-bold text-dark">Foto Hasil Pemeliharaan</h6>
+                                                    <div>
+                                                        <h6 class="modal-title fw-bold text-dark mb-0">Foto Hasil Pemeliharaan</h6>
+                                                        <small class="text-muted font-monospace">No Form: <?= htmlspecialchars($row['NoFormPemeliharaan']) ?></small>
+                                                    </div>
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                 </div>
-                                                <div class="modal-body text-center p-3">
-                                                    <img src="data:image/jpeg;base64,<?= base64_encode($row['FotoPasang']) ?>" class="img-fluid rounded-3 shadow-sm" alt="Foto Laporan">
+                                                <div class="modal-body p-4">
+                                                    <div class="row g-3">
+                                                        <!-- Foto Pasang / Lapangan -->
+                                                        <div class="col-md-6 text-center">
+                                                            <label class="form-label text-muted fw-bold small text-uppercase mb-2"><i class="bi bi-camera me-1"></i>Foto Pemasangan / Lapangan</label>
+                                                            <?php if (!empty($row['FotoPasang'])): ?>
+                                                                <img src="data:image/jpeg;base64,<?= base64_encode($row['FotoPasang']) ?>" class="preview-img-box shadow-sm" alt="Foto Pasang">
+                                                            <?php else: ?>
+                                                                <div class="preview-img-box d-flex align-items-center justify-content-center text-muted">
+                                                                    <i class="bi bi-image me-2"></i>Tidak ada foto pemasangan
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+
+                                                        <!-- Foto Fisik Barang / Perangkat -->
+                                                        <div class="col-md-6 text-center">
+                                                            <label class="form-label text-muted fw-bold small text-uppercase mb-2"><i class="bi bi-box-seam me-1"></i>Foto Fisik Perangkat / Barang</label>
+                                                            <?php if (!empty($row['FotoBarang'])): ?>
+                                                                <img src="data:image/jpeg;base64,<?= base64_encode($row['FotoBarang']) ?>" class="preview-img-box shadow-sm" alt="Foto Barang">
+                                                            <?php else: ?>
+                                                                <div class="preview-img-box d-flex align-items-center justify-content-center text-muted">
+                                                                    <i class="bi bi-image me-2"></i>Tidak ada foto barang
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer border-top p-3 justify-content-end">
+                                                    <button type="button" class="btn btn-secondary rounded-3" data-bs-dismiss="modal">Tutup</button>
                                                 </div>
                                             </div>
                                         </div>
