@@ -3,8 +3,8 @@
 // Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(8) PK | RpTag BIGINT | UnitUp CHAR(5) | UnitAp CHAR(5) | UnitUpi CHAR(2) | WaktuData TIMESTAMP
 // UnitUpi / UnitAp / UnitUp diambil dari session akun yang login (atau dari unit tujuan yang dipilih di langkah 1).
 // Akun tingkat UPI/AP tidak punya AP/UP di session -> unit yang kurang dipilih dari master (dibatasi ke bawah unit akun).
-// Urutan kerja halaman: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (master_barang, terhubung ke dil) -> (3) isi periode & saldo.
-// IdPel manual HANYA lewat pilihan dari master_barang pada unit terpilih dan WAJIB ada di dil; tidak pernah menambah data dil.
+// Urutan kerja halaman: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (VIEW $sumber_barang, terhubung ke dil) -> (3) isi periode & saldo.
+// IdPel manual HANYA lewat pilihan dari view aset barang pada unit terpilih dan WAJIB ada di dil; tidak pernah menambah data dil.
 // Fitur: input manual dan import Excel (.xlsx). Daftar & ringkasan saldo ada di Monitoring > Saldo (monitor_saldo.php).
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
 
@@ -12,6 +12,11 @@ $pesan_sukses  = '';
 $pesan_error   = '';
 $detail_import = [];
 $chunk         = 500;
+
+// Sumber aset barang untuk pencarian IdPel = VIEW (bukan tabel master_barang). Ganti nama view sesuai di database.
+// View ini membawa kolom: NoRef, SimIdBarang, ImeiModem, StatusRelay, IdPel, UnitUp, UnitAp, UnitUpi, SimIdModem, NomorBarang, NomorModem.
+$sumber_barang = 'vw_terpasang';   // default: vw_terpasang (unit UPi/UPi/UP diambil dari session akun yang login)
+if (!preg_match('/^\w+$/', $sumber_barang)) throw new RuntimeException('Nama view aset barang tidak valid.');
 
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['pg_csrf'];
@@ -109,7 +114,7 @@ if ($perlu_pilih) {
 }
 $unit_lengkap = $unit_siap && $sel_ap !== '' && $sel_up !== '';
 $unit_tujuan  = fn() => $unit_lengkap ? [$sUpi, $sel_ap, $sel_up] : null;     // [Upi, Ap, Up]
-$ut           = ['upi' => $sUpi, 'ap' => $sel_ap, 'up' => $sel_up];           // untuk pg_scope() pada master_barang
+$ut           = ['upi' => $sUpi, 'ap' => $sel_ap, 'up' => $sel_up];           // untuk pg_scope() pada view aset barang
 
 if (!empty($_SESSION['pg_flash'])) {
     $fl = $_SESSION['pg_flash']; unset($_SESSION['pg_flash']);
@@ -150,14 +155,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $punya_barang = false;
                 if ($dil) {                                          // IdPel juga harus punya aset barang di unit terpilih
                     $pb = []; $sc_b = pg_scope($ut, 'b', 'Unit', $pb); $pb[':idp'] = $idpel;
-                    $st = $conn->prepare("SELECT 1 FROM master_barang b WHERE b.IdPel = :idp AND $sc_b LIMIT 1");
+                    $st = $conn->prepare("SELECT 1 FROM `$sumber_barang` b WHERE b.IdPel = :idp AND $sc_b LIMIT 1");
                     $st->execute($pb);
                     $punya_barang = (bool) $st->fetchColumn();
                 }
                 if (!$dil) {
                     $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak terdaftar di DIL, saldo tidak disimpan. Tambahkan dulu lewat Input DIL.';
                 } elseif (!$punya_barang) {
-                    $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak memiliki aset barang (master_barang) pada unit yang dipilih. Pilih IdPel lewat pencarian.';
+                    $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak memiliki aset barang pada unit yang dipilih. Pilih IdPel lewat pencarian.';
                 } else {
                     $conn->prepare($sql_simpan(1))->execute([$idpel, $bulan, $rp, $tuj[2], $tuj[1], $tuj[0]]);
                     $nm = trim((string) $dil['NamaPelanggan']);
@@ -258,7 +263,7 @@ $nama_sel_up = $sUp !== '' ? $nama_up : ($opsi_up[$sel_ap][$sel_up] ?? '');
 $label_wilayah = $nama_upi . ($nama_sel_ap !== '' ? ' › ' . $nama_sel_ap : '') . ($nama_sel_up !== '' ? ' › ' . $nama_sel_up : '');
 
 // ---------------------------------------------------------
-// LANGKAH 2: cari & pilih IdPel dari aset barang (master_barang) di unit terpilih, terhubung ke dil (INNER JOIN).
+// LANGKAH 2: cari & pilih IdPel dari aset barang (view) di unit terpilih, terhubung ke dil (INNER JOIN).
 // ---------------------------------------------------------
 $keyword = trim($_GET['keyword'] ?? '');
 $limit   = 5;      // 5 baris per halaman agar pemilihan IdPel ringkas
@@ -269,17 +274,17 @@ if ($unit_lengkap) {
         $p = []; $scope = pg_scope($ut, 'b', 'Unit', $p);
         $w = ['b.IdPel IS NOT NULL', $scope];
         if ($keyword !== '') {
-            $w[] = '(b.IdPel LIKE :k1 OR b.NoRef LIKE :k2 OR b.SimId LIKE :k3 OR b.ImeiModem LIKE :k4 OR l.NamaPelanggan LIKE :k5)';
-            foreach (['k1', 'k2', 'k3', 'k4', 'k5'] as $k) $p[":$k"] = '%' . $keyword . '%';
+            $w[] = '(b.IdPel LIKE :k1 OR b.NoRef LIKE :k2 OR b.SimIdBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR b.NomorBarang LIKE :k6 OR l.NamaPelanggan LIKE :k5)';
+            foreach (['k1', 'k2', 'k3', 'k4', 'k5', 'k6'] as $k) $p[":$k"] = '%' . $keyword . '%';
         }
-        $from = "FROM master_barang b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE " . implode(' AND ', $w);
+        $from = "FROM `$sumber_barang` b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE " . implode(' AND ', $w);
 
         $st = $conn->prepare("SELECT COUNT(DISTINCT b.IdPel) $from");
         $st->execute($p);
         $total_cari = (int) $st->fetchColumn();
         $hal = min($hal, max(1, (int) ceil($total_cari / $limit)));
 
-        $st = $conn->prepare("SELECT b.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, COUNT(*) AS jml, MIN(b.NoRef) AS NoRef, MIN(b.SimId) AS SimId
+        $st = $conn->prepare("SELECT b.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, COUNT(*) AS jml, MIN(b.NoRef) AS NoRef, MIN(b.SimIdBarang) AS SimIdBarang, MIN(b.ImeiModem) AS ImeiModem, MIN(b.NomorBarang) AS NomorBarang
                               $from GROUP BY b.IdPel, l.NamaPelanggan ORDER BY b.IdPel LIMIT :lim OFFSET :off");
         foreach ($p as $k => $v) $st->bindValue($k, $v);
         $st->bindValue(':lim', $limit, PDO::PARAM_INT);
@@ -287,11 +292,11 @@ if ($unit_lengkap) {
         $st->execute();
         $cari = $st->fetchAll(PDO::FETCH_ASSOC);
 
-        // IdPel yang dipilih (?idpel=) harus valid pada unit ini: ada di master_barang DAN di dil
+        // IdPel yang dipilih (?idpel=) harus valid pada unit ini: ada di view aset barang DAN di dil
         $pil = (string) ($_GET['idpel'] ?? '');
         if (preg_match('/^\d{12}$/', $pil)) {
             $pp = []; $sc2 = pg_scope($ut, 'b', 'Unit', $pp); $pp[':pil'] = $pil;
-            $st = $conn->prepare("SELECT NULLIF(l.NamaPelanggan,'') AS nama, COUNT(*) AS jml FROM master_barang b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE b.IdPel = :pil AND $sc2 GROUP BY l.NamaPelanggan");
+            $st = $conn->prepare("SELECT NULLIF(l.NamaPelanggan,'') AS nama, COUNT(*) AS jml FROM `$sumber_barang` b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE b.IdPel = :pil AND $sc2 GROUP BY l.NamaPelanggan");
             $st->execute($pp);
             if ($r = $st->fetch(PDO::FETCH_ASSOC)) { $idpel_pilih = $pil; $info_pilih = $r; }
         }

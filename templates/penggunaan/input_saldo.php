@@ -1,6 +1,6 @@
 <?php
 // templates/penggunaan/input_saldo.php  -  Input Saldo Tunggakan (tabel dpp)
-// Urutan: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (master_barang) -> (3) isi periode & saldo.
+// Urutan: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (view aset barang) -> (3) isi periode & saldo.
 // Variabel dari modules/penggunaan/input_saldo.php:
 //   $unit_siap, $perlu_pilih, $sAp, $sUp, $sel_ap, $sel_up, $unit_lengkap, $opsi_ap, $opsi_up, $label_wilayah,
 //   $keyword, $hal, $limit, $cari, $total_cari, $idpel_pilih, $info_pilih, $csrf, $boleh_monitor,
@@ -81,7 +81,7 @@ if (!$unit_siap) {
     </div>
 </div>
 
-<!-- LANGKAH 2: CARI & PILIH IDPEL (master_barang <-> dil) -->
+<!-- LANGKAH 2: CARI & PILIH IDPEL (view aset barang <-> dil) -->
 <div class="card border-0 shadow-sm rounded-4 mb-4 <?= $unit_lengkap ? '' : 'opacity-50' ?>">
     <div class="card-body p-4 pb-2">
         <h6 class="fw-bold mb-3"><span class="badge <?= $idpel_pilih ? 'bg-success' : 'bg-primary' ?> rounded-circle me-2"><?= $idpel_pilih ? '✓' : '2' ?></span>Cari &amp; Pilih IdPel
@@ -92,7 +92,7 @@ if (!$unit_siap) {
         <form method="GET" action="" class="row g-2 align-items-center mb-3">
             <?= pg_hidden('input_saldo') ?><?= $hidden_unit() ?>
             <div class="col-md-8">
-                <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm" placeholder="Cari IdPel, nama, NoRef, IMEI, atau nomor SIM...">
+                <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm" placeholder="Cari IdPel, nama, NoRef, SIM ID, IMEI, atau nomor barang...">
             </div>
             <div class="col-md-4 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary px-3"><i class="bi bi-search me-1"></i>Cari</button>
@@ -106,19 +106,21 @@ if (!$unit_siap) {
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
-                    <th class="ps-4">IdPel</th><th>Nama Pelanggan</th><th>NoRef</th><th>Nomor SIM</th><th class="text-center">Aset</th><th class="text-end pe-4">Aksi</th>
+                    <th class="ps-4">IdPel</th><th>Nama Pelanggan</th><th>NoRef</th><th>SIM ID Barang</th><th>IMEI Modem</th><th>Nomor Barang</th><th class="text-center">Aset</th><th class="text-end pe-4">Aksi</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (!$cari): ?>
-                <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-2 d-block mb-1 text-secondary"></i>
+                <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox fs-2 d-block mb-1 text-secondary"></i>
                     <?= $keyword !== '' ? 'Tidak ada IdPel yang cocok pada unit ini.' : 'Belum ada aset barang terpasang (IdPel terisi dan terdaftar di DIL) pada unit ini.' ?></td></tr>
             <?php else: foreach ($cari as $r): $dipilih = $idpel_pilih === $r['IdPel']; ?>
                 <tr class="<?= $dipilih ? 'table-primary' : '' ?>">
                     <td class="ps-4 font-monospace fw-semibold"><?= pg_e($r['IdPel']) ?></td>
                     <td><?= $r['NamaPelanggan'] === null ? '<span class="text-muted">-</span>' : pg_e($r['NamaPelanggan']) ?></td>
                     <td class="font-monospace small"><?= pg_e($r['NoRef']) ?></td>
-                    <td class="font-monospace small"><?= $r['SimId'] === null ? '-' : pg_e($r['SimId']) ?></td>
+                    <td class="font-monospace small"><?= $r['SimIdBarang'] === null ? '-' : pg_e($r['SimIdBarang']) ?></td>
+                    <td class="font-monospace small"><?= $r['ImeiModem'] === null ? '-' : pg_e($r['ImeiModem']) ?></td>
+                    <td class="font-monospace small"><?= $r['NomorBarang'] === null ? '-' : pg_e($r['NomorBarang']) ?></td>
                     <td class="text-center"><?= (int) $r['jml'] ?></td>
                     <td class="text-end pe-4">
                         <?php if ($dipilih): ?><span class="badge bg-primary"><i class="bi bi-check2 me-1"></i>Dipilih</span>

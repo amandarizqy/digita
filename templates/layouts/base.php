@@ -6,10 +6,7 @@
   <title><?= $page_title ?? 'DIGITA' ?></title>
   <!-- Untuk CSS -->
   <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
-
-  <!-- Untuk Gambar (seperti logo di sidebar/navbar) -->
-  <img src="<?= BASE_URL ?>/assets/img/logo.png" alt="Logo"> 
-
+  <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/loader.css">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
@@ -33,6 +30,12 @@
   </style>
 </head>
 <body class="bg-light">
+  <!-- Overlay animasi berputar saat pindah halaman -->
+  <div id="page-loader" class="page-loader" role="status" aria-live="polite">
+    <div class="ring"></div>
+    <div class="txt">Memproses…</div>
+  </div>
+
   <?php include __DIR__ . '/../../includes/sidebar.php'; ?>
   <div class="main-wrapper">
     <?php include __DIR__ . '/../../includes/navbar.php'; ?>
@@ -41,5 +44,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <!-- SweetAlert2 CSS & JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="<?= BASE_URL ?>/assets/js/loader.js"></script>
 </body>
 </html>
