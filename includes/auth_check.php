@@ -35,6 +35,11 @@ if ($page_request === 'master' && !in_array($kode_hak, $role_boleh_master, true)
     echo "<script>alert('Akses Ditolak: Anda tidak memiliki wewenang untuk membuka modul master.'); window.location.href='" . $base_path . "/index.php';</script>";
     exit;
 }
+
+// Modul pengaturan: cukup login. Pengecekan role per sub-menu dilakukan di modules/pengaturan/index.php
+if ($page_request === 'pengaturan') {
+    return;
+}
 // ==== AKHIR TAMBAHAN ====
 
 try {

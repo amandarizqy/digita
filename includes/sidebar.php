@@ -17,6 +17,39 @@ $current_page = $_GET['page'] ?? 'dashboard';
 $request_uri = $_SERVER['REQUEST_URI'] ?? '';
 
 if (!empty($kode_hak)) {
+    // ===== Menu Pengaturan (SA.KP sengaja tidak dimasukkan) =====
+$semua  = ['MB.UI','AM.UI','AM.AP','ML.UP','TL.AP','TL.UP','SF.UI','SF.AP','SF.UP','SF.VD'];
+$sf_bot = ['SF.UI','SF.AP','SF.UP']; // SF.VD tidak punya akses Bot
+
+$menu_pengaturan = [
+    'Akun' => [
+        ['label' => 'Update Password', 'sub' => 'update_password', 'roles' => $semua],
+    ],
+    'Bot' => [
+        ['label' => 'DIL',             'sub' => 'dil',             'roles' => $sf_bot],
+        ['label' => 'Saldo Tunggakan', 'sub' => 'saldo_tunggakan', 'roles' => $sf_bot],
+        ['label' => 'Pelunasan',       'sub' => 'pelunasan',       'roles' => $sf_bot],
+        ['label' => 'SMS Gateway',     'sub' => 'sms_gateway',     'roles' => $sf_bot],
+    ],
+    'Pesan' => [
+        ['label' => 'Kotak Masuk',  'sub' => 'kotak_masuk',  'roles' => $semua],
+        ['label' => 'Kotak Keluar', 'sub' => 'kotak_keluar', 'roles' => $semua],
+        ['label' => 'Terkirim',     'sub' => 'terkirim',     'roles' => $semua],
+    ],
+    'Panduan' => [
+        ['label' => 'Buku Manual Aplikasi', 'sub' => 'manual',      'roles' => $semua],
+        ['label' => 'Buku Tata Kelola S41', 'sub' => 'tata_kelola', 'roles' => $semua],
+    ],
+];
+
+// Filter sesuai role yang sedang login; grup kosong tidak ditampilkan
+$pengaturan_tampil = [];
+foreach ($menu_pengaturan as $grup => $items) {
+    $boleh = array_filter($items, fn($i) => in_array($kode_hak, $i['roles'], true));
+    if ($boleh) $pengaturan_tampil[$grup] = $boleh;
+}
+$sub_aktif = $_GET['sub'] ?? '';
+
     try {
         $query_menu = "SELECT m.NamaMenu, m.UrlRoute, m.Icon 
                        FROM pengaturan_menu m 
@@ -84,15 +117,30 @@ if (!empty($kode_hak)) {
         <?php endforeach; ?>
     </ul>
     
-    <hr class="text-secondary">
-    <div class="dropdown">
-        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle p-2 rounded hover-bg" data-bs-toggle="dropdown" aria-expanded="false">
+         <hr class="text-secondary">
+    <div class="dropdown dropup">
+        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle p-2 rounded hover-bg"
+           data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">
             <i class="bi bi-person-circle fs-5 me-2"></i>
             <strong><?= htmlspecialchars($_SESSION['NamaPengguna'] ?? 'Administrator'); ?></strong>
         </a>
-        <ul class="dropdown-menu dropdown-menu-dark text-small shadow">
-            <li><a class="dropdown-item" href="#">Profil</a></li>
-            <li><hr class="dropdown-divider"></li>
+        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" style="min-width: 230px; max-height: 70vh; overflow-y: auto;">
+            <?php if (!empty($pengaturan_tampil)): ?>
+                <li><h6 class="dropdown-header text-white"><i class="bi bi-gear-fill me-1"></i> Pengaturan</h6></li>
+                <?php foreach ($pengaturan_tampil as $grup => $items): ?>
+                    <li><span class="dropdown-header text-uppercase small text-white-50"><?= htmlspecialchars($grup) ?></span></li>
+                    <?php foreach ($items as $item): ?>
+                        <?php $aktif = ($current_page === 'pengaturan' && $sub_aktif === $item['sub']); ?>
+                        <li>
+                            <a class="dropdown-item ps-4 <?= $aktif ? 'active' : '' ?>"
+                               href="<?= BASE_URL ?>/index.php?page=pengaturan&sub=<?= urlencode($item['sub']) ?>">
+                                <?= htmlspecialchars($item['label']) ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                <?php endforeach; ?>
+                <li><hr class="dropdown-divider"></li>
+            <?php endif; ?>
             <li><a class="dropdown-item text-danger" href="<?= BASE_URL ?>/modules/auth/logout.php">Keluar (Logout)</a></li>
         </ul>
     </div>

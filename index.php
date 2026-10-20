@@ -38,6 +38,7 @@ $pages = [
     'pemeliharaan' => 'Pemeliharaan',
     'penghapusan'  => 'Penghapusan',
     'laporan'      => 'Laporan',
+    'pengaturan'   => 'Pengaturan',
 ];
 
 if (($_GET['module'] ?? '') === 'perencanaan') {
