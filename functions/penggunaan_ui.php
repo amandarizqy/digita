@@ -187,7 +187,7 @@ function pg_unit_akun(PDO $conn): array
 }
 
 /**
- * Kondisi SQL wilayah akun: UPI, + AP / UP bila akun terikat. $awalan = 'Kode' (dpp) atau 'Unit' (pelunasan_ap2t).
+ * Kondisi SQL wilayah akun: UPI, + AP / UP bila akun terikat. $awalan = 'Unit' (kolom UnitUpi/UnitAp/UnitUp: dpp, pelunasan_ap2t, master_barang).
  * Parameter ditambahkan ke $p (:s_upi, :s_ap, :s_up).
  */
 function pg_scope(array $u, string $alias, string $awalan, array &$p): string

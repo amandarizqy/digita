@@ -87,7 +87,7 @@ if ($tahun === '') {
             <thead class="table-light">
                 <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
                     <th class="ps-4">IdPel</th><th>Nama Pelanggan</th><th>ThBlRek</th><th>Tgl Bayar</th>
-                    <th class="text-end">Tagihan (RpTag)</th><th class="text-end">RpBK</th><th>Kode UP</th><th class="pe-4">Waktu Data</th>
+                    <th class="text-end">Tagihan (RpTag)</th><th class="text-end">RpBK</th><th>Unit UP</th><th class="pe-4">Waktu Data</th>
                 </tr>
             </thead>
             <tbody>

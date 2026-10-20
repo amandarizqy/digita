@@ -36,7 +36,7 @@ if (!$unit_siap) {
             $tahun_pl = [];                                   // [tahun => jumlah pelunasan]
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) if (preg_match('/^\d{4}$/', (string) $r['th'])) $tahun_pl[(string) $r['th']] = (int) $r['n'];
 
-            $p2 = []; $sc2 = pg_scope($u, 'd', 'Kode', $p2);
+            $p2 = []; $sc2 = pg_scope($u, 'd', 'Unit', $p2);
             $st = $conn->prepare("SELECT DISTINCT LEFT(d.ThBlRek, 4) FROM dpp d WHERE $sc2");
             $st->execute($p2);
             $tahun_dpp = array_values(array_filter(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), fn($y) => preg_match('/^\d{4}$/', $y)));
@@ -59,7 +59,7 @@ if (!$unit_siap) {
             $st->execute($p);
             [$ringkas['lunas'], $ringkas['rp_tag'], $ringkas['rp_bk']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
 
-            $pd = [':per' => $like]; $scope_d = pg_scope($u, 'd', 'Kode', $pd);
+            $pd = [':per' => $like]; $scope_d = pg_scope($u, 'd', 'Unit', $pd);
             $st = $conn->prepare("SELECT COUNT(*) FROM dpp d LEFT JOIN pelunasan_ap2t p ON p.IdPel = d.IdPel AND p.ThBlRek = d.ThBlRek
                                   WHERE d.ThBlRek LIKE :per AND p.IdPel IS NULL AND $scope_d");
             $st->execute($pd);
