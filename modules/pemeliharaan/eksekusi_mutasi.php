@@ -62,6 +62,10 @@ try {
 }
 ?>
 
+<!-- Include Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
 <style>
     .table-compact thead th {
         font-size: 0.75rem !important;
@@ -73,9 +77,8 @@ try {
         padding: 0.5rem 0.35rem !important;
         font-size: 0.81rem !important;
     }
-    .select-scrollable {
-        max-height: 200px;
-        font-size: 0.82rem !important;
+    .select2-container--open {
+        z-index: 99999 !important;
     }
 </style>
 
@@ -146,14 +149,14 @@ try {
                                 </span>
                             </td>
                             <td class="pe-2 text-center">
-                                <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1" data-bs-toggle="modal" data-bs-target="#modalMutasiPerangkat<?= $idx ?>">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1 btn-trigger-mutasi" data-bs-toggle="modal" data-bs-target="#modalMutasiPerangkat<?= $idx ?>">
                                     <i class="bi bi-arrow-left-right me-1"></i> Mutasi
                                 </button>
                             </td>
                         </tr>
 
-                        <!-- Modal Mutasi dengan Info Perangkat Saat Ini -->
-                        <div class="modal fade" id="modalMutasiPerangkat<?= $idx ?>" tabindex="-1">
+                        <!-- Modal Mutasi dengan Searchable Select2 -->
+                        <div class="modal fade modal-mutasi-class" id="modalMutasiPerangkat<?= $idx ?>" tabindex="-1">
                             <div class="modal-dialog modal-dialog-centered">
                                 <div class="modal-content border-0 rounded-4 shadow">
                                     <div class="modal-header border-0 pb-0 pt-4 px-4">
@@ -170,7 +173,6 @@ try {
                                                 <input type="text" class="form-control rounded-3 bg-light text-muted font-monospace fw-bold" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>" readonly>
                                             </div>
 
-                                            <!-- INFORMASI PERANGKAT SAAT INI (LAMA) -->
                                             <div class="p-3 bg-light rounded-3 mb-3 border">
                                                 <div class="text-uppercase text-muted fw-bold small mb-2"><i class="bi bi-info-circle me-1"></i> Perangkat Terpasang Saat Ini</div>
                                                 <div class="row g-2 small">
@@ -185,11 +187,11 @@ try {
                                                 </div>
                                             </div>
 
-                                            <!-- PILIHAN PERANGKAT BARU -->
+                                            <!-- SEARCHABLE SELECT2 SIM CARD -->
                                             <div class="mb-3">
                                                 <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE SIM CARD BARU</label>
-                                                <select name="sim_id" class="form-select rounded-3 font-monospace select-scrollable">
-                                                    <option value="">-- Tanpa SIM Card (Sama / Lepas) --</option>
+                                                <select name="sim_id" class="form-select select2-searchable-sim" style="width: 100%;">
+                                                    <option value="">-- Cari / Ketik SIM ID --</option>
                                                     <?php foreach ($list_sim_mutasi as $s): ?>
                                                         <option value="<?= htmlspecialchars($s['SimId']); ?>" <?= (($row['SimId'] ?? '') === $s['SimId']) ? 'selected' : ''; ?>>
                                                             <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
@@ -198,10 +200,11 @@ try {
                                                 </select>
                                             </div>
 
+                                            <!-- SEARCHABLE SELECT2 IMEI MODEM -->
                                             <div class="mb-3">
                                                 <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE IMEI MODEM BARU</label>
-                                                <select name="imei_modem" class="form-select rounded-3 font-monospace select-scrollable">
-                                                    <option value="">-- Tanpa Modem (Sama / Lepas) --</option>
+                                                <select name="imei_modem" class="form-select select2-searchable-modem" style="width: 100%;">
+                                                    <option value="">-- Cari / Ketik IMEI Modem --</option>
                                                     <?php foreach ($list_modem_mutasi as $m): ?>
                                                         <option value="<?= htmlspecialchars($m['ImeiModem']); ?>" <?= (($row['ImeiModem'] ?? '') === $m['ImeiModem']) ? 'selected' : ''; ?>>
                                                             <?= htmlspecialchars($m['ImeiModem']); ?>
@@ -226,8 +229,13 @@ try {
     </div>
 </div>
 
+<!-- Include jQuery & Select2 JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    // Live Search Table
     const searchMut = document.getElementById("searchMutasi");
     if (searchMut) {
         searchMut.addEventListener("keyup", function() {
@@ -239,5 +247,22 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     }
+
+    // Inisialisasi Select2 saat Modal Mutasi Terbuka
+    $('.modal-mutasi-class').on('shown.bs.modal', function () {
+        var $modal = $(this);
+        $modal.find('.select2-searchable-sim').select2({
+            theme: 'bootstrap-5',
+            dropdownParent: $modal,
+            placeholder: '-- Cari / Ketik SIM ID --',
+            allowClear: true
+        });
+        $modal.find('.select2-searchable-modem').select2({
+            theme: 'bootstrap-5',
+            dropdownParent: $modal,
+            placeholder: '-- Cari / Ketik IMEI Modem --',
+            allowClear: true
+        });
+    });
 });
 </script>
