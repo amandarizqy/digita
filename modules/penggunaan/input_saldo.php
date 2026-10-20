@@ -1,8 +1,10 @@
 <?php
 // modules/penggunaan/input_saldo.php  -  Input Saldo (tabel `dpp`)
-// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(8) PK | RpTag BIGINT | KodeUp CHAR(5) | KodeAp CHAR(5) | KodeUpi CHAR(2) | WaktuData TIMESTAMP
-// KodeUpi / KodeAp / KodeUp diambil dari session akun yang login (UnitUpi / UnitAp / UnitUp).
+// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(8) PK | RpTag BIGINT | UnitUp CHAR(5) | UnitAp CHAR(5) | UnitUpi CHAR(2) | WaktuData TIMESTAMP
+// UnitUpi / UnitAp / UnitUp diambil dari session akun yang login (atau dari unit tujuan yang dipilih di langkah 1).
 // Akun tingkat UPI/AP tidak punya AP/UP di session -> unit yang kurang dipilih dari master (dibatasi ke bawah unit akun).
+// Urutan kerja halaman: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (master_barang, terhubung ke dil) -> (3) isi periode & saldo.
+// IdPel manual HANYA lewat pilihan dari master_barang pada unit terpilih dan WAJIB ada di dil; tidak pernah menambah data dil.
 // Fitur: input manual dan import Excel (.xlsx). Daftar & ringkasan saldo ada di Monitoring > Saldo (monitor_saldo.php).
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
 
@@ -98,13 +100,16 @@ if ($unit_siap) {
     } catch (PDOException $e) { $pesan_error = 'Gagal memuat daftar unit: ' . pg_e($e->getMessage()); $unit_siap = false; }
 }
 
-/** Tentukan [Upi, Ap, Up] tujuan dari session + pilihan form; null jika belum lengkap/valid. */
-$unit_tujuan = function () use ($sUpi, $sAp, $sUp, $perlu_pilih, $opsi_ap, $opsi_up) {
-    $ap = $sAp !== '' ? $sAp : trim((string) ($_POST['unit_ap'] ?? ''));
-    $up = $sUp !== '' ? $sUp : trim((string) ($_POST['unit_up'] ?? ''));
-    if ($perlu_pilih && (!isset($opsi_ap[$ap]) || !isset($opsi_up[$ap][$up]))) return null;
-    return ($ap !== '' && $up !== '') ? [$sUpi, $ap, $up] : null;
-};
+// ---- LANGKAH 1: unit tujuan = session + pilihan (GET/POST). AP & UP harus lengkap sebelum langkah berikutnya. ----
+$sel_ap = $sAp !== '' ? $sAp : trim((string) ($_POST['unit_ap'] ?? $_GET['unit_ap'] ?? ''));
+$sel_up = $sUp !== '' ? $sUp : trim((string) ($_POST['unit_up'] ?? $_GET['unit_up'] ?? ''));
+if ($perlu_pilih) {
+    if (!isset($opsi_ap[$sel_ap]))                  { $sel_ap = ''; $sel_up = ''; }
+    elseif (!isset($opsi_up[$sel_ap][$sel_up]))     { $sel_up = ''; }
+}
+$unit_lengkap = $unit_siap && $sel_ap !== '' && $sel_up !== '';
+$unit_tujuan  = fn() => $unit_lengkap ? [$sUpi, $sel_ap, $sel_up] : null;     // [Upi, Ap, Up]
+$ut           = ['upi' => $sUpi, 'ap' => $sel_ap, 'up' => $sel_up];           // untuk pg_scope() pada master_barang
 
 if (!empty($_SESSION['pg_flash'])) {
     $fl = $_SESSION['pg_flash']; unset($_SESSION['pg_flash']);
@@ -114,9 +119,9 @@ if (!empty($_SESSION['pg_flash'])) {
 // ---------------------------------------------------------
 // PROSES FORM (POST)
 // ---------------------------------------------------------
-$sql_simpan = fn(int $n) => "INSERT INTO dpp (IdPel, ThBlRek, RpTag, KodeUp, KodeAp, KodeUpi, WaktuData) VALUES "
+$sql_simpan = fn(int $n) => "INSERT INTO dpp (IdPel, ThBlRek, RpTag, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES "
     . implode(',', array_fill(0, $n, '(?,?,?,?,?,?,NOW())'))
-    . " ON DUPLICATE KEY UPDATE RpTag = VALUES(RpTag), KodeUp = VALUES(KodeUp), KodeAp = VALUES(KodeAp), KodeUpi = VALUES(KodeUpi), WaktuData = NOW()";
+    . " ON DUPLICATE KEY UPDATE RpTag = VALUES(RpTag), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = NOW()";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = $_POST['aksi'] ?? '';
@@ -142,8 +147,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st = $conn->prepare("SELECT NamaPelanggan FROM dil WHERE IdPel = ?");
                 $st->execute([$idpel]);
                 $dil = $st->fetch(PDO::FETCH_ASSOC);
+                $punya_barang = false;
+                if ($dil) {                                          // IdPel juga harus punya aset barang di unit terpilih
+                    $pb = []; $sc_b = pg_scope($ut, 'b', 'Unit', $pb); $pb[':idp'] = $idpel;
+                    $st = $conn->prepare("SELECT 1 FROM master_barang b WHERE b.IdPel = :idp AND $sc_b LIMIT 1");
+                    $st->execute($pb);
+                    $punya_barang = (bool) $st->fetchColumn();
+                }
                 if (!$dil) {
                     $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak terdaftar di DIL, saldo tidak disimpan. Tambahkan dulu lewat Input DIL.';
+                } elseif (!$punya_barang) {
+                    $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak memiliki aset barang (master_barang) pada unit yang dipilih. Pilih IdPel lewat pencarian.';
                 } else {
                     $conn->prepare($sql_simpan(1))->execute([$idpel, $bulan, $rp, $tuj[2], $tuj[1], $tuj[0]]);
                     $nm = trim((string) $dil['NamaPelanggan']);
@@ -234,12 +248,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!headers_sent()) {
         $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'detail' => $detail_import];
-        header('Location: ' . pg_url('input_saldo'));
+        header('Location: ' . pg_url('input_saldo', ['unit_ap' => $sAp === '' ? $sel_ap : '', 'unit_up' => $sUp === '' ? $sel_up : '']));
         exit;
     }
 }
 
-$label_wilayah = $nama_upi . ($sAp !== '' ? ' › ' . $nama_ap : '') . ($sUp !== '' ? ' › ' . $nama_up : '');
+$nama_sel_ap = $sAp !== '' ? $nama_ap : ($opsi_ap[$sel_ap] ?? '');
+$nama_sel_up = $sUp !== '' ? $nama_up : ($opsi_up[$sel_ap][$sel_up] ?? '');
+$label_wilayah = $nama_upi . ($nama_sel_ap !== '' ? ' › ' . $nama_sel_ap : '') . ($nama_sel_up !== '' ? ' › ' . $nama_sel_up : '');
+
+// ---------------------------------------------------------
+// LANGKAH 2: cari & pilih IdPel dari aset barang (master_barang) di unit terpilih, terhubung ke dil (INNER JOIN).
+// ---------------------------------------------------------
+$keyword = trim($_GET['keyword'] ?? '');
+$limit   = 5;      // 5 baris per halaman agar pemilihan IdPel ringkas
+$hal     = max(1, (int) ($_GET['hal'] ?? 1));
+$cari = []; $total_cari = 0; $idpel_pilih = null; $info_pilih = null;
+if ($unit_lengkap) {
+    try {
+        $p = []; $scope = pg_scope($ut, 'b', 'Unit', $p);
+        $w = ['b.IdPel IS NOT NULL', $scope];
+        if ($keyword !== '') {
+            $w[] = '(b.IdPel LIKE :k1 OR b.NoRef LIKE :k2 OR b.SimId LIKE :k3 OR b.ImeiModem LIKE :k4 OR l.NamaPelanggan LIKE :k5)';
+            foreach (['k1', 'k2', 'k3', 'k4', 'k5'] as $k) $p[":$k"] = '%' . $keyword . '%';
+        }
+        $from = "FROM master_barang b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE " . implode(' AND ', $w);
+
+        $st = $conn->prepare("SELECT COUNT(DISTINCT b.IdPel) $from");
+        $st->execute($p);
+        $total_cari = (int) $st->fetchColumn();
+        $hal = min($hal, max(1, (int) ceil($total_cari / $limit)));
+
+        $st = $conn->prepare("SELECT b.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, COUNT(*) AS jml, MIN(b.NoRef) AS NoRef, MIN(b.SimId) AS SimId
+                              $from GROUP BY b.IdPel, l.NamaPelanggan ORDER BY b.IdPel LIMIT :lim OFFSET :off");
+        foreach ($p as $k => $v) $st->bindValue($k, $v);
+        $st->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $st->bindValue(':off', ($hal - 1) * $limit, PDO::PARAM_INT);
+        $st->execute();
+        $cari = $st->fetchAll(PDO::FETCH_ASSOC);
+
+        // IdPel yang dipilih (?idpel=) harus valid pada unit ini: ada di master_barang DAN di dil
+        $pil = (string) ($_GET['idpel'] ?? '');
+        if (preg_match('/^\d{12}$/', $pil)) {
+            $pp = []; $sc2 = pg_scope($ut, 'b', 'Unit', $pp); $pp[':pil'] = $pil;
+            $st = $conn->prepare("SELECT NULLIF(l.NamaPelanggan,'') AS nama, COUNT(*) AS jml FROM master_barang b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE b.IdPel = :pil AND $sc2 GROUP BY l.NamaPelanggan");
+            $st->execute($pp);
+            if ($r = $st->fetch(PDO::FETCH_ASSOC)) { $idpel_pilih = $pil; $info_pilih = $r; }
+        }
+    } catch (PDOException $e) {
+        $pesan_error = trim($pesan_error . ' Gagal memuat aset barang: ' . pg_e($e->getMessage()));
+    }
+}
 
 // tombol ke monitoring hanya bila akun berhak membukanya
 $boleh_monitor = pga_boleh('monitor_saldo');

@@ -65,15 +65,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // tagihan harus ada di dpp pada wilayah akun
                 $p = [':id' => $idpel, ':bl' => $bulan];
-                $scope = pg_scope($u, 'd', 'Kode', $p);
-                $st = $conn->prepare("SELECT d.ThBlRek, d.RpTag, d.KodeUp, d.KodeAp FROM dpp d WHERE d.IdPel = :id AND d.ThBlRek = :bl AND $scope LIMIT 1");
+                $scope = pg_scope($u, 'd', 'Unit', $p);
+                $st = $conn->prepare("SELECT d.ThBlRek, d.RpTag, d.UnitUp, d.UnitAp FROM dpp d WHERE d.IdPel = :id AND d.ThBlRek = :bl AND $scope LIMIT 1");
                 $st->execute($p);
                 $tg = $st->fetch(PDO::FETCH_ASSOC);
                 if (!$tg)                                       { $gagal[] = "$lbl: tagihan tidak ditemukan di wilayah Anda"; continue; }
                 if (strlen(trim((string) $tg['ThBlRek'])) > 7)  { $gagal[] = "$lbl: ThBlRek lebih dari 7 karakter"; continue; }
 
                 $ins->execute([$idpel, $tg['ThBlRek'], $tgl, (int) $bk, (int) $tg['RpTag'],
-                               $u['up'] !== '' ? $u['up'] : $tg['KodeUp'], $u['ap'] !== '' ? $u['ap'] : $tg['KodeAp'], $u['upi']]);
+                               $u['up'] !== '' ? $u['up'] : $tg['UnitUp'], $u['ap'] !== '' ? $u['ap'] : $tg['UnitAp'], $u['upi']]);
                 if ($ins->rowCount() > 0) $ok++; else $sudah++;
             }
             $conn->commit();
@@ -109,7 +109,7 @@ if ($unit_siap) {
         if (!empty($_SESSION[$ck]) && $_SESSION[$ck]['t'] > time() - 300) {
             $daftar_tahun = $_SESSION[$ck]['v'];
         } else {
-            $p0 = []; $sc0 = pg_scope($u, 'd', 'Kode', $p0);
+            $p0 = []; $sc0 = pg_scope($u, 'd', 'Unit', $p0);
             $st = $conn->prepare("SELECT DISTINCT LEFT(d.ThBlRek, 4) FROM dpp d WHERE $sc0");
             $st->execute($p0);
             $daftar_tahun = array_values(array_filter(array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN)), fn($y) => preg_match('/^\d{4}$/', $y)));
@@ -121,7 +121,7 @@ if ($unit_siap) {
 
         if ($tahun !== '') {
             $p = [':per' => $tahun . $bulan_f . '%'];
-            $scope = pg_scope($u, 'd', 'Kode', $p);
+            $scope = pg_scope($u, 'd', 'Unit', $p);
             $w = ['d.ThBlRek LIKE :per', 'p.IdPel IS NULL', $scope];
             if ($keyword !== '') { $w[] = '(d.IdPel LIKE :k1 OR l.NamaPelanggan LIKE :k2)'; $p[':k1'] = $p[':k2'] = '%' . $keyword . '%'; }
             $from = "FROM dpp d
