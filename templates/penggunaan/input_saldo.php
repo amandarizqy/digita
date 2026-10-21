@@ -157,7 +157,7 @@ if (!$unit_siap) {
             </div>
             <div class="col-md-2">
                 <label for="thblrek" class="form-label small fw-bold text-secondary text-uppercase">ThBlRek</label>
-                <input type="month" class="form-control" id="thblrek" name="thblrek" max="<?= date('Y-m') ?>" required>
+                <input type="month" class="form-control" id="thblrek" name="thblrek" value="<?= date('Y-m', strtotime('first day of this month')) ?>" required>
             </div>
             <div class="col-md-2">
                 <label for="rptag" class="form-label small fw-bold text-secondary text-uppercase">Saldo (RpTag)</label>
@@ -168,7 +168,7 @@ if (!$unit_siap) {
                 <button type="submit" class="btn btn-primary shadow-sm"><i class="bi bi-save me-1"></i> Simpan</button>
             </div>
         </form>
-        <div class="form-text mt-2">Data dengan IdPel + ThBlRek yang sama akan diperbarui, bukan digandakan. Unit UPI/AP/UP mengikuti unit tujuan.</div>
+        <div class="form-text mt-2">ThBlRek otomatis diisi bulan depan; bulan dan tahun lain (termasuk yang belum berjalan) bisa dipilih. Data IdPel + ThBlRek yang sudah ada tidak akan diperbarui. Unit UPI/AP/UP mengikuti unit tujuan.</div>
         <?php endif; ?>
     </div>
 </div>
@@ -194,7 +194,7 @@ if (!$unit_siap) {
                 </table>
                 <ul class="small text-muted ps-3">
                     <li>Unit UPI/AP/UP disimpan otomatis sesuai unit tujuan di atas.</li>
-                    <li>IdPel yang sudah terdaftar akan mengubah data yang lama (pada ThBlRek yang sama).</li>
+                    <li>IdPel + ThBlRek yang sudah ada di DPP tidak diperbarui (dilewati); hanya data baru yang disimpan.</li>
                     <li>IdPel kurang dari 12 karakter tidak akan disimpan.</li>
                     <li>IdPel harus sudah ada di DIL; yang tidak ada di DIL dilewati dan tidak ditambahkan.</li>
                 </ul>

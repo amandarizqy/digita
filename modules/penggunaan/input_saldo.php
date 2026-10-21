@@ -1,6 +1,7 @@
 <?php
 // modules/penggunaan/input_saldo.php  -  Input Saldo (tabel `dpp`)
-// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(8) PK | RpTag BIGINT | UnitUp CHAR(5) | UnitAp CHAR(5) | UnitUpi CHAR(2) | WaktuData TIMESTAMP
+// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(8) PK | RpTag BIGINT | NamaAkun VARCHAR(20) | UnitUp CHAR(5) | UnitAp CHAR(5) | UnitUpi CHAR(2) | WaktuData TIMESTAMP
+// NamaAkun = akun yang menginput (session). Data IdPel + ThBlRek yang SUDAH ADA di dpp TIDAK diperbarui (dilewati).
 // UnitUpi / UnitAp / UnitUp diambil dari session akun yang login (atau dari unit tujuan yang dipilih di langkah 1).
 // Akun tingkat UPI/AP tidak punya AP/UP di session -> unit yang kurang dipilih dari master (dibatasi ke bawah unit akun).
 // Urutan kerja halaman: (1) pilih unit tujuan -> (2) cari & pilih IdPel dari aset barang (VIEW $sumber_barang, terhubung ke dil) -> (3) isi periode & saldo.
@@ -15,8 +16,10 @@ $chunk         = 500;
 
 // Sumber aset barang untuk pencarian IdPel = VIEW (bukan tabel master_barang). Ganti nama view sesuai di database.
 // View ini membawa kolom: NoRef, SimIdBarang, ImeiModem, StatusRelay, IdPel, UnitUp, UnitAp, UnitUpi, SimIdModem, NomorBarang, NomorModem.
-$sumber_barang = 'vw_terpasang';   // default: vw_terpasang (unit UPi/UPi/UP diambil dari session akun yang login)
+$sumber_barang = 'vw_terpasang';
 if (!preg_match('/^\w+$/', $sumber_barang)) throw new RuntimeException('Nama view aset barang tidak valid.');
+
+$nama_akun = (string) ($_SESSION['NamaAkun'] ?? '');
 
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['pg_csrf'];
@@ -124,9 +127,9 @@ if (!empty($_SESSION['pg_flash'])) {
 // ---------------------------------------------------------
 // PROSES FORM (POST)
 // ---------------------------------------------------------
-$sql_simpan = fn(int $n) => "INSERT INTO dpp (IdPel, ThBlRek, RpTag, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES "
-    . implode(',', array_fill(0, $n, '(?,?,?,?,?,?,NOW())'))
-    . " ON DUPLICATE KEY UPDATE RpTag = VALUES(RpTag), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = NOW()";
+// Hanya MENAMBAH data baru: IdPel + ThBlRek yang sudah ada di dpp tidak diubah (INSERT IGNORE sebagai pengaman bila ada input bersamaan).
+$sql_simpan = fn(int $n) => "INSERT IGNORE INTO dpp (IdPel, ThBlRek, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES "
+    . implode(',', array_fill(0, $n, '(?,?,?,?,?,?,?,NOW())'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = $_POST['aksi'] ?? '';
@@ -136,6 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pesan_error = 'Sesi formulir tidak valid. Muat ulang halaman lalu coba lagi.';
     } elseif (!$unit_siap) {
         $pesan_error = $pesan_error ?: 'Akun Anda belum memiliki Unit UPI, sehingga saldo tidak dapat disimpan.';
+    } elseif ($nama_akun === '') {
+        $pesan_error = 'Sesi akun tidak valid. Silakan login ulang.';
     } elseif ($tuj === null) {
         $pesan_error = 'Pilih Unit AP dan Unit UP tujuan terlebih dahulu.';
 
@@ -164,10 +169,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (!$punya_barang) {
                     $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak memiliki aset barang pada unit yang dipilih. Pilih IdPel lewat pencarian.';
                 } else {
-                    $conn->prepare($sql_simpan(1))->execute([$idpel, $bulan, $rp, $tuj[2], $tuj[1], $tuj[0]]);
+                    // cek dpp: bila IdPel + ThBlRek sudah ada, JANGAN diperbarui
+                    $st = $conn->prepare("SELECT RpTag FROM dpp WHERE IdPel = ? AND ThBlRek = ?");
+                    $st->execute([$idpel, $bulan]);
+                    $ada_rp = $st->fetchColumn();
+                    $baru = false;
+                    if ($ada_rp === false) {
+                        $ins = $conn->prepare($sql_simpan(1));
+                        $ins->execute([$idpel, $bulan, $rp, $nama_akun, $tuj[2], $tuj[1], $tuj[0]]);
+                        $baru = $ins->rowCount() > 0;
+                    }
                     $nm = trim((string) $dil['NamaPelanggan']);
-                    $pesan_sukses = 'Saldo IdPel <strong>' . pg_e($idpel) . '</strong>' . ($nm !== '' ? ' (' . pg_e($nm) . ')' : '')
-                                  . ' periode <strong>' . pg_e($bulan) . '</strong> sebesar <strong>Rp ' . pg_n($rp) . '</strong> berhasil disimpan.';
+                    if (!$baru) {
+                        $pesan_error = 'Saldo IdPel <strong>' . pg_e($idpel) . '</strong> periode <strong>' . pg_e($bulan) . '</strong> sudah ada di DPP'
+                                     . ($ada_rp !== false ? ' (Rp ' . pg_n($ada_rp) . ')' : '') . ', tidak diperbarui.';
+                    } else {
+                        $pesan_sukses = 'Saldo IdPel <strong>' . pg_e($idpel) . '</strong>' . ($nm !== '' ? ' (' . pg_e($nm) . ')' : '')
+                                      . ' periode <strong>' . pg_e($bulan) . '</strong> sebesar <strong>Rp ' . pg_n($rp) . '</strong> berhasil disimpan.';
+                    }
                 }
             } catch (PDOException $e) { $pesan_error = 'Gagal menyimpan: ' . pg_e($e->getMessage()); }
         }
@@ -186,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @set_time_limit(300);
             $alias = ['idpel' => ['idpel'], 'bulan' => ['thblrek', 'bulan'], 'rp' => ['rptag', 'rptagihan', 'saldo']];
             $nama_kol = ['idpel' => 'IdPel', 'bulan' => 'ThBlRek', 'rp' => 'RpTag'];
-            $peta = null; $baris = []; $dibaca = $salah = $dobel = $tidak_dil = 0;
+            $peta = null; $baris = []; $dibaca = $salah = $dobel = $tidak_dil = $sudah_ada = 0;
             try {
                 foreach (xlsx_baris($f['tmp_name']) as $no => $sel) {
                     if ($peta === null) {                                   // cari baris judul (20 baris pertama)
@@ -229,17 +248,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         unset($baris[$k]);
                     }
                 }
+
+                // cek dpp: IdPel + ThBlRek yang sudah ada TIDAK diperbarui (dilewati)
+                if ($baris) {
+                    $sudah = [];
+                    foreach (array_chunk(array_values($baris), 500) as $paket) {
+                        $st = $conn->prepare("SELECT IdPel, ThBlRek FROM dpp WHERE (IdPel, ThBlRek) IN (" . implode(',', array_fill(0, count($paket), '(?,?)')) . ")");
+                        $prm = [];
+                        foreach ($paket as $b) array_push($prm, $b[0], $b[1]);
+                        $st->execute($prm);
+                        foreach ($st->fetchAll(PDO::FETCH_NUM) as $r) $sudah[trim((string) $r[0]) . '|' . trim((string) $r[1])] = true;
+                    }
+                    foreach ($baris as $k => $b) {
+                        if (!isset($sudah[$b[0] . '|' . $b[1]])) continue;
+                        $sudah_ada++;
+                        if (count($detail_import) < 20) $detail_import[] = 'Baris ' . $b[3] . ': IdPel ' . $b[0] . ' periode ' . $b[1] . ' sudah ada di DPP, tidak diperbarui';
+                        unset($baris[$k]);
+                    }
+                }
                 if (!$baris) {
-                    $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
+                    $pesan_error = $sudah_ada > 0 ? 'Semua baris valid sudah ada di DPP, tidak ada data baru yang disimpan.' : 'Tidak ada baris valid yang bisa disimpan.';
                 } else {
                     $conn->beginTransaction();
                     foreach (array_chunk(array_values($baris), $chunk) as $paket) {
                         $prm = [];
-                        foreach ($paket as $b) array_push($prm, $b[0], $b[1], $b[2], $tuj[2], $tuj[1], $tuj[0]);
+                        foreach ($paket as $b) array_push($prm, $b[0], $b[1], $b[2], $nama_akun, $tuj[2], $tuj[1], $tuj[0]);
                         $conn->prepare($sql_simpan(count($paket)))->execute($prm);
                     }
                     $conn->commit();
-                    $pesan_sukses = 'Import selesai: <strong>' . pg_n(count($baris)) . '</strong> baris saldo disimpan'
+                    $pesan_sukses = 'Import selesai: <strong>' . pg_n(count($baris)) . '</strong> baris saldo baru disimpan'
+                        . ($sudah_ada ? ', ' . pg_n($sudah_ada) . ' baris sudah ada di DPP (tidak diperbarui)' : '')
                         . ($dobel ? ', ' . pg_n($dobel) . ' baris dobel dalam file (dipakai yang terakhir)' : '')
                         . ($salah ? ', ' . pg_n($salah) . ' baris tidak valid (termasuk IdPel kurang dari 12 karakter)' : '')
                         . ($tidak_dil ? ', ' . pg_n($tidak_dil) . ' baris dilewati karena IdPel tidak terdaftar di DIL' : '') . '.';
