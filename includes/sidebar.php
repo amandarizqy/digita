@@ -16,40 +16,28 @@ $current_page = $_GET['page'] ?? 'dashboard';
 // Ambil jalur URI saat ini untuk deteksi halaman di luar query parameter ?page=
 $request_uri = $_SERVER['REQUEST_URI'] ?? '';
 
-if (!empty($kode_hak)) {
-    // ===== Menu Pengaturan (SA.KP sengaja tidak dimasukkan) =====
-$semua  = ['MB.UI','AM.UI','AM.AP','ML.UP','TL.AP','TL.UP','SF.UI','SF.AP','SF.UP','SF.VD'];
-$sf_bot = ['SF.UI','SF.AP','SF.UP']; // SF.VD tidak punya akses Bot
-
-$menu_pengaturan = [
-    'Akun' => [
-        ['label' => 'Update Password', 'sub' => 'update_password', 'roles' => $semua],
-    ],
-    'Bot' => [
-        ['label' => 'DIL',             'sub' => 'dil',             'roles' => $sf_bot],
-        ['label' => 'Saldo Tunggakan', 'sub' => 'saldo_tunggakan', 'roles' => $sf_bot],
-        ['label' => 'Pelunasan',       'sub' => 'pelunasan',       'roles' => $sf_bot],
-        ['label' => 'SMS Gateway',     'sub' => 'sms_gateway',     'roles' => $sf_bot],
-    ],
-    'Pesan' => [
-        ['label' => 'Kotak Masuk',  'sub' => 'kotak_masuk',  'roles' => $semua],
-        ['label' => 'Kotak Keluar', 'sub' => 'kotak_keluar', 'roles' => $semua],
-        ['label' => 'Terkirim',     'sub' => 'terkirim',     'roles' => $semua],
-    ],
-    'Panduan' => [
-        ['label' => 'Buku Manual Aplikasi', 'sub' => 'manual',      'roles' => $semua],
-        ['label' => 'Buku Tata Kelola S41', 'sub' => 'tata_kelola', 'roles' => $semua],
-    ],
-];
-
-// Filter sesuai role yang sedang login; grup kosong tidak ditampilkan
-$pengaturan_tampil = [];
-foreach ($menu_pengaturan as $grup => $items) {
-    $boleh = array_filter($items, fn($i) => in_array($kode_hak, $i['roles'], true));
-    if ($boleh) $pengaturan_tampil[$grup] = $boleh;
-}
+// ===== Menu Pengaturan (sumber data: includes/menu_pengaturan.php) =====
+$menu_pengaturan = require __DIR__ . '/menu_pengaturan.php';
 $sub_aktif = $_GET['sub'] ?? '';
 
+// Grup yang tampil sebagai menu di sidebar (sisanya masuk ke dropdown nama pengguna)
+$grup_sidebar = ['Bot'];
+$icon_grup    = ['Bot' => 'bi-robot'];
+
+$sidebar_grup      = [];  // grup yang tampil di sidebar
+$pengaturan_tampil = [];  // grup yang tampil di dropdown
+foreach ($menu_pengaturan as $grup => $items) {
+    // Filter sesuai role yang sedang login; grup kosong tidak ditampilkan
+    $boleh = array_filter($items, fn($i) => in_array($kode_hak, $i['roles'], true));
+    if (!$boleh) continue;
+    if (in_array($grup, $grup_sidebar, true)) {
+        $sidebar_grup[$grup] = $boleh;
+    } else {
+        $pengaturan_tampil[$grup] = $boleh;
+    }
+}
+
+if (!empty($kode_hak)) {
     try {
         $query_menu = "SELECT m.NamaMenu, m.UrlRoute, m.Icon 
                        FROM pengaturan_menu m 
@@ -75,7 +63,7 @@ $sub_aktif = $_GET['sub'] ?? '';
     <hr class="text-secondary">
     <div class="small text-uppercase text-muted fw-bold ps-2 mb-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">Menu Utama</div>
     
-    <ul class="nav nav-pills flex-column mb-auto">
+    <ul class="nav nav-pills flex-column mb-auto" style="min-height: 0; overflow-y: auto;">
         <?php foreach ($menus as $menu): ?>
             <?php 
                 // 1. Ekstrak nama modul dari UrlRoute database (misal: "/modules/master/index.php" -> "master")
@@ -115,9 +103,25 @@ $sub_aktif = $_GET['sub'] ?? '';
                 </a>
             </li>
         <?php endforeach; ?>
+
+        <?php /* ===== Menu dari Pengaturan yang ditampilkan di sidebar (Bot): link tunggal, tanpa dropdown ===== */ ?>
+        <?php foreach ($sidebar_grup as $grup => $items): ?>
+            <?php
+                $pertama    = reset($items); // sub-menu pertama yang boleh diakses role ini
+                $grup_aktif = ($current_page === 'pengaturan'
+                               && in_array($sub_aktif, array_column($items, 'sub'), true));
+                $icon_menu  = $icon_grup[$grup] ?? 'bi-gear';
+            ?>
+            <li class="nav-item mb-1">
+                <a href="<?= BASE_URL ?>/index.php?page=pengaturan&sub=<?= urlencode($pertama['sub']) ?>"
+                   class="nav-link text-white <?= $grup_aktif ? 'active bg-primary' : '' ?>">
+                    <i class="bi <?= htmlspecialchars($icon_menu) ?> me-2"></i> <?= htmlspecialchars($grup) ?>
+                </a>
+            </li>
+        <?php endforeach; ?>
     </ul>
     
-         <hr class="text-secondary">
+    <hr class="text-secondary">
     <div class="dropdown dropup">
         <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle p-2 rounded hover-bg"
            data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false">
