@@ -18,6 +18,27 @@ if (isset($_SESSION['NamaAkun'])) {
     exit;
 }
 
+/**
+ * Cek status unit akun (bukan SA.KP) di master_upi, master_ap, dan master_up.
+ * Hanya level yang terisi pada akun yang diperiksa (akun tingkat UPI tidak punya AP/UP).
+ * Unit yang tidak terdaftar dianggap tidak aktif. Mengembalikan nama level yang bermasalah, atau null bila semua aktif.
+ */
+function login_unit_nonaktif(PDO $conn, array $user): ?string
+{
+    $cek = [
+        'UPI' => ['master_upi', 'UnitUpi', trim((string) ($user['UnitUpi'] ?? ''))],
+        'AP'  => ['master_ap',  'UnitAp',  trim((string) ($user['UnitAp']  ?? ''))],
+        'UP'  => ['master_up',  'UnitUp',  trim((string) ($user['UnitUp']  ?? ''))],
+    ];
+    foreach ($cek as $level => [$tabel, $kolom, $kode]) {
+        if ($kode === '') continue;
+        $st = $conn->prepare("SELECT StatusData FROM $tabel WHERE $kolom = ? LIMIT 1");
+        $st->execute([$kode]);
+        if ($st->fetchColumn() !== 'AKTIF') return $level;
+    }
+    return null;
+}
+
 $error_message = '';
 $error_field   = '';   // 'username' | 'password' | '' -> dapat dipakai template untuk menandai kolom yang salah
 
@@ -50,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 $gagal = false;
+                $unit_ditolak = false;   // kata sandi benar tetapi unit akun tidak aktif (bukan percobaan gagal)
                 if (!$user) {
                     $error_message = "Username tidak ditemukan.";
                     $error_field   = 'username';
@@ -64,6 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $error_message = "Kata sandi salah.";
                         $error_field   = 'password';
                         $gagal = true;
+                    } elseif (($user['KodeHak'] ?? '') !== 'SA.KP') {
+                        // Selain SA.KP: UPI, AP, dan UP akun harus berstatus AKTIF di tabel master masing-masing.
+                        // Dicek setelah kata sandi benar agar status unit tidak bisa diintip tanpa kredensial.
+                        $level_nonaktif = login_unit_nonaktif($conn, $user);
+                        if ($level_nonaktif !== null) {
+                            $error_message = "Unit $level_nonaktif akun Anda tidak aktif atau tidak terdaftar. Hubungi administrator.";
+                            $error_field   = '';
+                            $unit_ditolak  = true;
+                        }
                     }
                 }
 
@@ -78,6 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $error_message = "Terlalu banyak percobaan login yang gagal. Coba lagi dalam " . LT_KUNCI_MENIT . " menit.";
                         $error_field   = '';
                     }
+                } elseif ($unit_ditolak) {
+                    // Kata sandi benar tetapi unit tidak aktif: tolak login tanpa menambah hitungan gagal dan tanpa membuat session.
                 } else {
                     // 3. Berhasil: bersihkan hitungan gagal, perbarui hash bila perlu, buat session baru
                     lt_reset($kunci_ua);
