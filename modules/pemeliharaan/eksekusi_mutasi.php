@@ -3,10 +3,26 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Load Koneksi Database jika belum terdefinisi
+$root_path = $_SERVER['DOCUMENT_ROOT'];
+if (!isset($conn)) {
+    if (file_exists($root_path . '/config/database.php')) {
+        require_once $root_path . '/config/database.php';
+    } else {
+        require_once __DIR__ . '/../../config/database.php';
+    }
+}
+
+// Dynamic Hybrid Loader CSS/JS (Server Offline & Intranet PLN)
+$select2_css_path   = file_exists($root_path . '/assets/css/select2.min.css') ? '/assets/css/select2.min.css' : 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css';
+$select2_theme_path = file_exists($root_path . '/assets/css/select2-bootstrap-5-theme.min.css') ? '/assets/css/select2-bootstrap-5-theme.min.css' : 'https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css';
+$jquery_js_path     = file_exists($root_path . '/assets/js/jquery-3.6.0.min.js') ? '/assets/js/jquery-3.6.0.min.js' : 'https://code.jquery.com/jquery-3.6.0.min.js';
+$select2_js_path    = file_exists($root_path . '/assets/js/select2.min.js') ? '/assets/js/select2.min.js' : 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+
 $pesan_sukses_mut = '';
 $pesan_error_mut  = '';
 
-// 1. Fetch Pilihan SIM ID & Modem Aktif yang Siap Dipilih
+// 1. Fetch Pilihan SIM ID & Modem Aktif
 $list_sim_mutasi = [];
 $list_modem_mutasi = [];
 try {
@@ -16,7 +32,7 @@ try {
     $stmt_m = $conn->query("SELECT ImeiModem FROM master_modem WHERE StatusData = 'AKTIF' ORDER BY ImeiModem ASC");
     $list_modem_mutasi = $stmt_m->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Error handler
+    $pesan_error_mut = "Gagal memuat master data: " . $e->getMessage();
 }
 
 // 2. Submit Mutasi
@@ -62,9 +78,8 @@ try {
 }
 ?>
 
-<!-- Include Select2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<link href="<?= $select2_css_path ?>" rel="stylesheet" />
+<link href="<?= $select2_theme_path ?>" rel="stylesheet" />
 
 <style>
     .table-compact thead th {
@@ -149,79 +164,11 @@ try {
                                 </span>
                             </td>
                             <td class="pe-2 text-center">
-                                <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1 btn-trigger-mutasi" data-bs-toggle="modal" data-bs-target="#modalMutasiPerangkat<?= $idx ?>">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1" data-bs-toggle="modal" data-bs-target="#modalMutasiPerangkat<?= $idx ?>">
                                     <i class="bi bi-arrow-left-right me-1"></i> Mutasi
                                 </button>
                             </td>
                         </tr>
-
-                        <!-- Modal Mutasi dengan Searchable Select2 -->
-                        <div class="modal fade modal-mutasi-class" id="modalMutasiPerangkat<?= $idx ?>" tabindex="-1">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content border-0 rounded-4 shadow">
-                                    <div class="modal-header border-0 pb-0 pt-4 px-4">
-                                        <h5 class="modal-title fw-bold text-dark">Mutasi / Ganti Perangkat</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <form method="POST">
-                                        <div class="modal-body p-4 text-start">
-                                            <input type="hidden" name="action_mutasi" value="simpan_mutasi">
-                                            <input type="hidden" name="no_form_pemeliharaan" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>">
-
-                                            <div class="mb-3">
-                                                <label class="form-label text-uppercase text-muted fw-bold small mb-1">NO FORM PEMELIHARAAN</label>
-                                                <input type="text" class="form-control rounded-3 bg-light text-muted font-monospace fw-bold" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>" readonly>
-                                            </div>
-
-                                            <div class="p-3 bg-light rounded-3 mb-3 border">
-                                                <div class="text-uppercase text-muted fw-bold small mb-2"><i class="bi bi-info-circle me-1"></i> Perangkat Terpasang Saat Ini</div>
-                                                <div class="row g-2 small">
-                                                    <div class="col-6">
-                                                        <span class="text-muted d-block">SIM ID:</span>
-                                                        <strong class="font-monospace text-dark"><?= htmlspecialchars($row['SimId'] ?? 'Tanpa SIM') ?></strong>
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <span class="text-muted d-block">IMEI Modem:</span>
-                                                        <strong class="font-monospace text-dark"><?= htmlspecialchars($row['ImeiModem'] ?? 'Tanpa Modem') ?></strong>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- SEARCHABLE SELECT2 SIM CARD -->
-                                            <div class="mb-3">
-                                                <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE SIM CARD BARU</label>
-                                                <select name="sim_id" class="form-select select2-searchable-sim" style="width: 100%;">
-                                                    <option value="">-- Cari / Ketik SIM ID --</option>
-                                                    <?php foreach ($list_sim_mutasi as $s): ?>
-                                                        <option value="<?= htmlspecialchars($s['SimId']); ?>" <?= (($row['SimId'] ?? '') === $s['SimId']) ? 'selected' : ''; ?>>
-                                                            <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-
-                                            <!-- SEARCHABLE SELECT2 IMEI MODEM -->
-                                            <div class="mb-3">
-                                                <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE IMEI MODEM BARU</label>
-                                                <select name="imei_modem" class="form-select select2-searchable-modem" style="width: 100%;">
-                                                    <option value="">-- Cari / Ketik IMEI Modem --</option>
-                                                    <?php foreach ($list_modem_mutasi as $m): ?>
-                                                        <option value="<?= htmlspecialchars($m['ImeiModem']); ?>" <?= (($row['ImeiModem'] ?? '') === $m['ImeiModem']) ? 'selected' : ''; ?>>
-                                                            <?= htmlspecialchars($m['ImeiModem']); ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div class="modal-footer border-top p-3 justify-content-end gap-2">
-                                            <button type="button" class="btn btn-outline-secondary rounded-3 px-4" data-bs-dismiss="modal">Batal</button>
-                                            <button type="submit" class="btn btn-primary rounded-3 px-4">Simpan Mutasi</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
@@ -229,39 +176,107 @@ try {
     </div>
 </div>
 
-<!-- Include jQuery & Select2 JS -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- MODAL MUTASI -->
+<?php foreach ($data_mutasi as $idx => $row): ?>
+    <div class="modal fade modal-mutasi-class" id="modalMutasiPerangkat<?= $idx ?>" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0 pb-0 pt-4 px-4">
+                    <h5 class="modal-title fw-bold text-dark">Mutasi / Ganti Perangkat</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body p-4 text-start">
+                        <input type="hidden" name="action_mutasi" value="simpan_mutasi">
+                        <input type="hidden" name="no_form_pemeliharaan" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>">
+
+                        <div class="mb-3">
+                            <label class="form-label text-uppercase text-muted fw-bold small mb-1">NO FORM PEMELIHARAAN</label>
+                            <input type="text" class="form-control rounded-3 bg-light text-muted font-monospace fw-bold" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>" readonly>
+                        </div>
+
+                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                            <div class="text-uppercase text-muted fw-bold small mb-2"><i class="bi bi-info-circle me-1"></i> Perangkat Terpasang Saat Ini</div>
+                            <div class="row g-2 small">
+                                <div class="col-6">
+                                    <span class="text-muted d-block">SIM ID:</span>
+                                    <strong class="font-monospace text-dark"><?= htmlspecialchars($row['SimId'] ?? 'Tanpa SIM') ?></strong>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted d-block">IMEI Modem:</span>
+                                    <strong class="font-monospace text-dark"><?= htmlspecialchars($row['ImeiModem'] ?? 'Tanpa Modem') ?></strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SEARCHABLE SELECT2 SIM CARD -->
+                        <div class="mb-3">
+                            <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE SIM CARD BARU</label>
+                            <select name="sim_id" class="form-select select2-searchable-sim" data-placeholder="-- Cari / Ketik SIM ID --" style="width: 100%;">
+                                <option value="">-- Cari / Ketik SIM ID --</option>
+                                <?php foreach ($list_sim_mutasi as $s): ?>
+                                    <option value="<?= htmlspecialchars($s['SimId']); ?>" <?= (($row['SimId'] ?? '') === $s['SimId']) ? 'selected' : ''; ?>>
+                                        <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- SEARCHABLE SELECT2 IMEI MODEM -->
+                        <div class="mb-3">
+                            <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE IMEI MODEM BARU</label>
+                            <select name="imei_modem" class="form-select select2-searchable-modem" data-placeholder="-- Cari / Ketik IMEI Modem --" style="width: 100%;">
+                                <option value="">-- Cari / Ketik IMEI Modem --</option>
+                                <?php foreach ($list_modem_mutasi as $m): ?>
+                                    <option value="<?= htmlspecialchars($m['ImeiModem']); ?>" <?= (($row['ImeiModem'] ?? '') === $m['ImeiModem']) ? 'selected' : ''; ?>>
+                                        <?= htmlspecialchars($m['ImeiModem']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-top p-3 justify-content-end gap-2">
+                        <button type="button" class="btn btn-outline-secondary rounded-3 px-4" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary rounded-3 px-4">Simpan Mutasi</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endforeach; ?>
+
+<script src="<?= $jquery_js_path ?>"></script>
+<script src="<?= $select2_js_path ?>"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Live Search Table
     const searchMut = document.getElementById("searchMutasi");
     if (searchMut) {
         searchMut.addEventListener("keyup", function() {
             const filter = searchMut.value.toLowerCase();
-            const rows = document.querySelectorAll("#tableMutasi tbody tr");
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(filter) ? "" : "none";
+            document.querySelectorAll("#tableMutasi tbody tr").forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? "" : "none";
             });
         });
     }
 
-    // Inisialisasi Select2 saat Modal Mutasi Terbuka
-    $('.modal-mutasi-class').on('shown.bs.modal', function () {
-        var $modal = $(this);
-        $modal.find('.select2-searchable-sim').select2({
-            theme: 'bootstrap-5',
-            dropdownParent: $modal,
-            placeholder: '-- Cari / Ketik SIM ID --',
-            allowClear: true
-        });
-        $modal.find('.select2-searchable-modem').select2({
-            theme: 'bootstrap-5',
-            dropdownParent: $modal,
-            placeholder: '-- Cari / Ketik IMEI Modem --',
-            allowClear: true
+    document.addEventListener("shown.bs.modal", function(ev) {
+        const modalEl = ev.target;
+        if (!modalEl.classList || !modalEl.classList.contains("modal-mutasi-class")) { return; }
+        if (!window.jQuery || !jQuery.fn.select2) { return; }
+
+        const $modal = jQuery(modalEl);
+        $modal.find("select.select2-searchable-sim, select.select2-searchable-modem").each(function () {
+            const $el = jQuery(this);
+            if ($el.hasClass("select2-hidden-accessible")) { return; }
+            $el.select2({
+                theme: "bootstrap-5",
+                dropdownParent: $modal,
+                width: "100%",
+                placeholder: $el.data("placeholder") || "-- Cari --",
+                allowClear: true
+            });
         });
     });
 });

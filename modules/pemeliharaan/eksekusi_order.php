@@ -3,7 +3,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 1. Load Koneksi Database jika belum
 $root_path = $_SERVER['DOCUMENT_ROOT'];
 if (!isset($conn)) {
     if (file_exists($root_path . '/config/database.php')) {
@@ -16,18 +15,17 @@ if (!isset($conn)) {
 $pesan_sukses_eks = '';
 $pesan_error_eks  = '';
 
-// 2. Handling Eksekusi Order (Update Status & Data Pengecekan)
+// Handling Eksekusi Order
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
     if ($_POST['action_eksekusi'] === 'proses_order') {
         try {
-            $no_form_pem = $_POST['no_form_pemeliharaan'];
+            $no_form_pem   = $_POST['no_form_pemeliharaan'];
             $kondisi_relay = $_POST['kondisi_relay'];
             $posisi_pasang = $_POST['posisi_pasang'];
             $longitude     = $_POST['longitude'] ?? null;
             $latitude      = $_POST['latitude'] ?? null;
             $status_data   = $_POST['status_data'] ?? 'AKTIF';
 
-            // Cek jika ada unggahan foto pengerjaan baru
             $sql_foto = "";
             $params = [
                 ':relay'     => $kondisi_relay,
@@ -40,8 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
             ];
 
             if (isset($_FILES['foto_pasang']) && $_FILES['foto_pasang']['error'] === UPLOAD_ERR_OK) {
-                $sql_foto = ", FotoPasang = :foto";
-                $params[':foto'] = file_get_contents($_FILES['foto_pasang']['tmp_name']);
+                $sql_foto .= ", FotoPasang = :foto_pasang";
+                $params[':foto_pasang'] = file_get_contents($_FILES['foto_pasang']['tmp_name']);
+            }
+            if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] === UPLOAD_ERR_OK) {
+                $sql_foto .= ", FotoBarang = :foto_barang";
+                $params[':foto_barang'] = file_get_contents($_FILES['foto_barang']['tmp_name']);
             }
 
             $stmt = $conn->prepare("UPDATE frm_pemeliharaan SET 
@@ -62,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
     }
 }
 
-// 3. Query Data Order Pemeliharaan yang Siap Dieksekusi
+// Fetch Data Order
 $data_eksekusi = [];
 try {
     $sql_eks = "SELECT p.*, n.NomorAkun 
@@ -96,7 +98,6 @@ foreach ($data_eksekusi as $d) {
     </div>
 <?php endif; ?>
 
-<!-- Ringkasan Statistik Eksekusi Order -->
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
@@ -128,7 +129,6 @@ foreach ($data_eksekusi as $d) {
     </div>
 </div>
 
-<!-- Tabel Daftar Eksekusi Order -->
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
         <h5 class="fw-bold text-primary mb-0">Daftar Eksekusi Order Pemeliharaan</h5>
@@ -189,7 +189,7 @@ foreach ($data_eksekusi as $d) {
                                 <?php if (($row['KondisiRelay'] ?? '') === 'BERFUNGSI'): ?>
                                     <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-2 px-2 py-1"><i class="bi bi-check-lg me-1"></i>BERFUNGSI</span>
                                 <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle rounded-2 px-2 py-1"><i class="bi bi-x-lg me-1"></i>RUSAK</span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle rounded-2 px-2 py-1"><i class="bi bi-x-lg me-1"></i>TIDAK BERFUNGSI</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-nowrap font-monospace small">
@@ -235,14 +235,15 @@ foreach ($data_eksekusi as $d) {
                                                     <label class="form-label text-uppercase text-muted fw-bold small mb-1">HASIL KONDISI RELAY *</label>
                                                     <select name="kondisi_relay" class="form-select rounded-3" required>
                                                         <option value="BERFUNGSI" <?= ($row['KondisiRelay'] ?? '') === 'BERFUNGSI' ? 'selected' : '' ?>>BERFUNGSI (NORMAL)</option>
-                                                        <option value="RUSAK" <?= ($row['KondisiRelay'] ?? '') === 'RUSAK' ? 'selected' : '' ?>>RUSAK (PERLU REPARASI/MUTASI)</option>
+                                                        <option value="TIDAK BERFUNGSI" <?= ($row['KondisiRelay'] ?? '') === 'TIDAK BERFUNGSI' ? 'selected' : '' ?>>TIDAK BERFUNGSI (PERLU REPARASI/MUTASI)</option>
                                                     </select>
                                                 </div>
                                                 <div class="col-md-6 mb-3">
                                                     <label class="form-label text-uppercase text-muted fw-bold small mb-1">POSISI PASANG PERANGKAT *</label>
                                                     <select name="posisi_pasang" class="form-select rounded-3" required>
                                                         <option value="PANGKAL" <?= ($row['PosisiPasang'] ?? '') === 'PANGKAL' ? 'selected' : '' ?>>PANGKAL</option>
-                                                        <option value="UJUNGBERIKUTNYA" <?= ($row['PosisiPasang'] ?? '') === 'UJUNGBERIKUTNYA' ? 'selected' : '' ?>>UJUNG BERIKUTNYA</option>
+                                                        <option value="TENGAH" <?= ($row['PosisiPasang'] ?? '') === 'TENGAH' ? 'selected' : '' ?>>TENGAH</option>
+                                                        <option value="UJUNG" <?= ($row['PosisiPasang'] ?? '') === 'UJUNG' ? 'selected' : '' ?>>UJUNG</option>
                                                     </select>
                                                 </div>
                                             </div>
@@ -260,16 +261,21 @@ foreach ($data_eksekusi as $d) {
 
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label text-uppercase text-muted fw-bold small mb-1">UNGGAH FOTO BUKTI LAPANGAN</label>
+                                                    <label class="form-label text-uppercase text-muted fw-bold small mb-1">FOTO PASANG (LAPANGAN)</label>
                                                     <input type="file" name="foto_pasang" class="form-control rounded-3" accept="image/*">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label text-uppercase text-muted fw-bold small mb-1">STATUS PEMELIHARAAN *</label>
-                                                    <select name="status_data" class="form-select rounded-3">
-                                                        <option value="AKTIF" <?= ($row['StatusData'] ?? 'AKTIF') === 'AKTIF' ? 'selected' : '' ?>>AKTIF (SELESAI)</option>
-                                                        <option value="TIDAK" <?= ($row['StatusData'] ?? '') === 'TIDAK' ? 'selected' : '' ?>>TIDAK / PENDING</option>
-                                                    </select>
+                                                    <label class="form-label text-uppercase text-muted fw-bold small mb-1">FOTO BARANG (PERANGKAT)</label>
+                                                    <input type="file" name="foto_barang" class="form-control rounded-3" accept="image/*">
                                                 </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label text-uppercase text-muted fw-bold small mb-1">STATUS PEMELIHARAAN *</label>
+                                                <select name="status_data" class="form-select rounded-3">
+                                                    <option value="AKTIF" <?= ($row['StatusData'] ?? 'AKTIF') === 'AKTIF' ? 'selected' : '' ?>>AKTIF (SELESAI)</option>
+                                                    <option value="TIDAK" <?= ($row['StatusData'] ?? '') === 'TIDAK' ? 'selected' : '' ?>>TIDAK / PENDING</option>
+                                                </select>
                                             </div>
                                         </div>
 

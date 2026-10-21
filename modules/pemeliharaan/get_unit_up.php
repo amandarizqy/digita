@@ -3,12 +3,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$root_path = $_SERVER['DOCUMENT_ROOT'];
-if (file_exists($root_path . '/config/database.php')) {
-    require_once $root_path . '/config/database.php';
-} else {
-    require_once __DIR__ . '/../../config/database.php';
-}
+// Koneksi database: selalu dari folder proyek ini (aman di server maupun di lokal)
+require_once __DIR__ . '/../../config/database.php';
 
 header('Content-Type: application/json');
 
