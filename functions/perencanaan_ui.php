@@ -67,8 +67,14 @@ function pr_periode_data(): array
     if (is_array($c) && ($c['t'] ?? 0) > time() - 120) return $c['v'];
     $v = [];
     if (!empty($GLOBALS['conn'])) {
-        try { $v = array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT th FROM (SELECT LEFT(ThBlRek, 4) AS th FROM pelunasan_ap2t UNION SELECT CAST(Periode AS CHAR) FROM kategorisasi_risiko) x WHERE th IS NOT NULL ORDER BY th DESC")->fetchAll(PDO::FETCH_COLUMN)); }
-        catch (Throwable $e) { $v = []; }
+        // Dua query terpisah: bila salah satu gagal / lambat, tahun dari yang lain tetap dipakai
+        // (sebelumnya satu UNION gagal => daftar kosong => periode jatuh ke tahun berjalan yang belum ada datanya).
+        try { $v = array_merge($v, array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT CAST(Periode AS CHAR) FROM kategorisasi_risiko WHERE Periode IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN))); }
+        catch (Throwable $e) { /* abaikan */ }
+        try { $v = array_merge($v, array_map('strval', $GLOBALS['conn']->query("SELECT DISTINCT LEFT(ThBlRek, 4) FROM pelunasan_ap2t")->fetchAll(PDO::FETCH_COLUMN))); }
+        catch (Throwable $e) { /* abaikan */ }
+        $v = array_values(array_unique(array_filter($v, fn($y) => preg_match('/^\d{4}$/', (string) $y))));
+        rsort($v);
     }
     $_SESSION['pr_periode_data_v2'] = ['t' => time(), 'v' => $v];
     return $v;
@@ -162,6 +168,7 @@ function pr_menu(): array
                 'hasil_survey'      => ['Survey SR', 'bi-clipboard-data'],
                 'hasil_risiko'      => ['Level Risiko', 'bi-shield-check'],
                 'hasil_prioritas'   => ['Skala Prioritas', 'bi-list-stars'],
+                ''
             ],
         ],
     ];

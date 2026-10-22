@@ -233,15 +233,20 @@ try {
 $total_dil = $total_mandiri = $total_tergantung = 0;
 try {
     // DIL tidak punya kolom unit -> unit pelanggan diambil dari pelunasan_ap2t (semua periode)
-    [$sc_u_sql, $sc_u_par] = $build_scope('u');
-    $st = $conn->prepare("
-        SELECT COUNT(*) FROM dil d
-        INNER JOIN (SELECT IdPel, MAX(UnitUp) AS UnitUp, MAX(UnitAp) AS UnitAp, MAX(UnitUpi) AS UnitUpi
-                    FROM pelunasan_ap2t GROUP BY IdPel) u ON u.IdPel = d.Idpel
-        WHERE $sc_u_sql
-    ");
-    $st->execute($sc_u_par);
-    $total_dil = (int) $st->fetchColumn();
+    // Populasi dihitung di blok sendiri: bila query ini gagal/lambat, hitungan di bawahnya tetap jalan.
+    try {
+        [$sc_u_sql, $sc_u_par] = $build_scope('p');
+        $st = $conn->prepare("
+            SELECT COUNT(DISTINCT p.IdPel) FROM pelunasan_ap2t p
+            INNER JOIN dil d ON d.Idpel = p.IdPel
+            WHERE $sc_u_sql
+        ");
+        $st->execute($sc_u_par);
+        $total_dil = (int) $st->fetchColumn();
+    } catch (PDOException $e) {
+        $total_dil = 0;
+        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan: ' . $e->getMessage());
+    }
 
     $st = $conn->prepare("SELECT k.PosisiSR, COUNT(*) FROM kategorisasi_risiko k WHERE k.Periode = :p AND k.PosisiSR IN ('0','1') AND $sc_k_sql GROUP BY k.PosisiSR");
     $st->execute(array_merge([':p' => pr_periode()], $sc_k_par));

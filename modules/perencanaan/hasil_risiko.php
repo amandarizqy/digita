@@ -151,7 +151,7 @@ try {
     $params = array_merge([':periode' => $periode], $sc_k_par);
 
     if ($keyword !== '') {
-        $where[] = "(d.Idpel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
+        $where[] = "(k.IdPel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
         $params[':kw1'] = $params[':kw2'] = '%' . $keyword . '%';
     }
     if ($prioritas !== '' && ctype_digit($prioritas)) {
@@ -173,21 +173,21 @@ try {
     $where_sql = " WHERE " . implode(' AND ', $where);
 
     // 4. Total & data
-    $st = $conn->prepare("SELECT COUNT(*) FROM dil d INNER JOIN kategorisasi_risiko k ON d.Idpel = k.IdPel $where_sql");
+    $st = $conn->prepare("SELECT COUNT(*) FROM kategorisasi_risiko k LEFT JOIN dil d ON d.Idpel = k.IdPel $where_sql");
     $st->execute($params);
     $total_rows = (int) $st->fetchColumn();
     $hal        = min($hal, max(1, (int) ceil($total_rows / $limit)));
     $offset     = ($hal - 1) * $limit;
 
     $st = $conn->prepare("
-        SELECT d.Idpel, d.NamaPelanggan, k.Periode, k.PosisiSR, k.LevelKeterlambatan, k.LevelKepentingan,
+        SELECT k.IdPel AS Idpel, d.NamaPelanggan, k.Periode, k.PosisiSR, k.LevelKeterlambatan, k.LevelKepentingan,
                k.LevelKemungkinan, k.LevelDampak, k.Kuadran, k.SkalaPrioritas,
                COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp) AS NamaUnitUp
-        FROM dil d
-        INNER JOIN kategorisasi_risiko k ON d.Idpel = k.IdPel
+        FROM kategorisasi_risiko k
+        LEFT JOIN dil d ON d.Idpel = k.IdPel
         LEFT JOIN master_up mu ON mu.UnitUp = k.UnitUp
         $where_sql
-        ORDER BY k.SkalaPrioritas DESC, d.Idpel ASC
+        ORDER BY k.SkalaPrioritas DESC, k.IdPel ASC
         LIMIT :lim OFFSET :off
     ");
     foreach ($params as $key => $val) {

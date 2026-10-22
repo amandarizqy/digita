@@ -39,6 +39,7 @@ switch ($action) {
     case 'hasil_survey':       include __DIR__ . '/hasil_survey.php'; break;
     case 'hasil_risiko':       include __DIR__ . '/hasil_risiko.php'; break;
     case 'hasil_prioritas':    include __DIR__ . '/hasil_prioritas.php'; break;
+    // case 'data_riwayat':       include __DIR__ . '/data_riwayat.php'; break;
     default:
         include __DIR__ . '/' . ($menu_pertama ?: 'upload_riwayat') . '.php';
 }

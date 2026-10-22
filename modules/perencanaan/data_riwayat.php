@@ -70,7 +70,7 @@ if ($total_pages < 1) $total_pages = 1;
 // ---------------------------------------------------------
 try {
     // Ganti SELECT * dengan kolom spesifik yang benar-benar ditampilkan di HTML
-    $query_tampil = "SELECT IdPel, ThBlRek, TglBayar, RpBK, RpTag, UnitUp, UnitAp, UnitUpi, WaktuData 
+    $query_tampil = "SELECT IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData 
                      FROM pelunasan_ap2t" 
                      . $where_sql . 
                      " ORDER BY WaktuData DESC LIMIT :limit OFFSET :offset";

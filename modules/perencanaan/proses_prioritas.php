@@ -164,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['proses_prioritas'])) 
                     COALESCE(SUM(CASE WHEN p.IdPel IS NOT NULL AND p.TglBayar IS NOT NULL AND DAY(p.TglBayar) > 20 THEN 1 ELSE 0 END), 0) AS late_count,
                     COALESCE(SUM(CASE WHEN p.IdPel IS NOT NULL AND (p.TglBayar IS NULL OR DATE_FORMAT(p.TglBayar, '%Y%m') > p.ThBlRek) THEN 1 ELSE 0 END), 0) AS lewat_bulan_count
                 FROM kategorisasi_risiko k
-                INNER JOIN dil d ON d.Idpel = k.IdPel
+                LEFT JOIN dil d ON d.Idpel = k.IdPel
                 LEFT JOIN pelunasan_ap2t p ON p.IdPel = k.IdPel AND LEFT(p.ThBlRek, 4) = :periode_p
                 WHERE k.Periode = :periode_k AND k.SkalaPrioritas = :skala
                   AND $scope_k_sql
@@ -307,7 +307,7 @@ try {
         $stmt_pv = $conn->prepare("
             SELECT h.Peringkat, h.IdPel, d.NamaPelanggan, h.TotalTagihan, h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas
             FROM hasil_prioritas h
-            INNER JOIN dil d ON d.Idpel = h.IdPel
+            LEFT JOIN dil d ON d.Idpel = h.IdPel
             WHERE h.Periode = :periode AND h.SkalaPrioritas = :skala AND $scope_h_sql
             ORDER BY h.Peringkat ASC, h.IdPel ASC
             LIMIT 10

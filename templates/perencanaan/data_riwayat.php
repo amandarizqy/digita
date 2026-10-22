@@ -59,6 +59,7 @@ if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
                         <th class="text-end">RpBK</th>
                         <th class="text-end">RpTag</th>
                         <th>Unit (UP / AP / UPI)</th>
+                        <th>Diinput Oleh</th>
                         <th>Waktu Input</th>
                         <th class="text-end pe-4" style="width:80px;">Aksi</th>
                     </tr>
@@ -85,7 +86,8 @@ if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
                             <span class="badge bg-light text-dark border font-monospace"><?= pr_e($row['UnitAp'] ?? '-') ?></span>
                             <span class="badge bg-light text-secondary border font-monospace"><?= pr_e($row['UnitUpi'] ?? '-') ?></span>
                         </td>
-                        <td class="text-muted font-monospace small"><?= pr_e(date('d/m/Y H:i', strtotime($row['WaktuData']))) ?></td>
+                        <td class="font-monospace small"><?= pr_e($row['NamaAkun'] ?? '') !== '' ? pr_e($row['NamaAkun']) : '-' ?></td>
+                        <td class="text-muted font-monospace small"><?= !empty($row['WaktuData']) ? pr_e(date('d/m/Y H:i', strtotime($row['WaktuData']))) : '-' ?></td>
                         <td class="text-end pe-4">
                             <a href="<?= pr_e($url_riwayat(['act' => 'delete', 'idpel' => $row['IdPel'], 'thblrek' => $row['ThBlRek'], 'hal' => $page])) ?>"
                                class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus data"
@@ -94,7 +96,7 @@ if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
                             </a>
                         </td>
                     </tr>
-                <?php endforeach; else: echo pr_empty_row(8, 'Belum ada data riwayat pelunasan.', 'bi-clock-history'); endif; ?>
+                <?php endforeach; else: echo pr_empty_row(9, 'Belum ada data riwayat pelunasan.', 'bi-clock-history'); endif; ?>
                 </tbody>
             </table>
         </div>

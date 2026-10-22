@@ -203,7 +203,7 @@ try {
     $stmt_cnt = $conn->prepare("
         SELECT COUNT(*) 
         FROM hasil_prioritas h 
-        INNER JOIN dil d ON d.Idpel = h.IdPel 
+        LEFT JOIN dil d ON d.Idpel = h.IdPel 
         WHERE $where_sql
     ");
     $stmt_cnt->execute($params);
@@ -218,7 +218,7 @@ try {
                k.LevelKepentingan, k.LevelKeterlambatan, k.LevelDampak, k.PosisiSR,
                COALESCE(NULLIF(mu.SingkatanNama, ''), h.UnitUp) AS NamaUnitUp
         FROM hasil_prioritas h
-        INNER JOIN dil d ON d.Idpel = h.IdPel
+        LEFT JOIN dil d ON d.Idpel = h.IdPel
         LEFT JOIN master_up mu ON mu.UnitUp = h.UnitUp
         LEFT JOIN kategorisasi_risiko k ON k.IdPel = h.IdPel AND k.Periode = h.Periode
         WHERE $where_sql

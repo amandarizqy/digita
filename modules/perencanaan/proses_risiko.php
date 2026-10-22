@@ -484,7 +484,12 @@ $status_filter= isset($_GET['status_filter']) ? trim($_GET['status_filter']) : '
 
 try {
     // Kondisi wilayah untuk seluruh query baca (alias unit pelanggan = u; dil = d hanya untuk nama)
-    [$scope_view_sql, $scope_view_params] = $build_scope('u');
+    // Wilayah difilter DI DALAM subquery pelunasan (memakai index unit), bukan GROUP BY seluruh tabel
+    // lalu disaring. Placeholder wilayah hanya muncul sekali per query, jadi kondisi luar dibuat netral.
+    [$scope_map_sql, $scope_view_params] = $build_scope('pp');
+    $scope_view_sql = '1 = 1';
+    $unit_map = "(SELECT pp.IdPel, MAX(pp.UnitUp) AS UnitUp, MAX(pp.UnitAp) AS UnitAp, MAX(pp.UnitUpi) AS UnitUpi
+                  FROM pelunasan_ap2t pp WHERE $scope_map_sql GROUP BY pp.IdPel)";
 
     // Ringkasan Statistik (seluruhnya mengikuti wilayah terpilih)
     // Populasi = pelanggan di pelunasan_ap2t pada wilayah terpilih (bukan tabel dil)

@@ -207,14 +207,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // c. simpan batch
             if ($baris) {
-                $head = "INSERT INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, UnitUp, UnitAp, UnitUpi) VALUES ";
+                // Struktur terbaru pelunasan_ap2t memiliki kolom NamaAkun (VARCHAR 20) = akun yang mengunggah,
+                // sama seperti tabel dpp. WaktuData diisi eksplisit.
+                $namaAkunInput = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
+                $head = "INSERT INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ";
                 $tail = " ON DUPLICATE KEY UPDATE TglBayar = VALUES(TglBayar), RpBK = VALUES(RpBK), RpTag = VALUES(RpTag),
-                          UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi)";
+                          NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi),
+                          WaktuData = VALUES(WaktuData)";
                 $conn->beginTransaction();
                 foreach (array_chunk(array_values($baris), $riwayat_chunk) as $paket) {
-                    $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?)')) . $tail);
+                    $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
                     $param = [];
-                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $tujuanUp, $tujuanAp, $tujuanUpi);
+                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $namaAkunInput, $tujuanUp, $tujuanAp, $tujuanUpi);
                     $stmt->execute($param);
                 }
 

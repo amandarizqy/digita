@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/input_pelunasan.php  -  Input Pelunasan (tabel `pelunasan_ap2t`)
-// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(7) PK | TglBayar DATE | RpBK INT | RpTag BIGINT | UnitUp | UnitAp | UnitUpi | WaktuData
+// Kolom: IdPel CHAR(12) PK | ThBlRek CHAR(7) PK | TglBayar DATE | RpBK INT | RpTag BIGINT | UnitUp | UnitAp | UnitUpi | NamaAkun VARCHAR(20) | WaktuData
 // Halaman langsung menampilkan SALDO (dpp) yang BELUM lunas pada wilayah akun, siap diproses:
 //   - per baris: isi Tanggal Bayar & RpBK lalu klik "Lunasi", atau
 //   - banyak sekaligus: centang baris lalu "Lunasi Terpilih".
@@ -50,8 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $st_dpp = null;
             $conn->beginTransaction();
-            $ins = $conn->prepare("INSERT IGNORE INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, UnitUp, UnitAp, UnitUpi, WaktuData)
-                                   VALUES (?,?,?,?,?,?,?,?,NOW())");
+            $namaAkunInput = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);   // kolom NamaAkun (struktur terbaru)
+            $ins = $conn->prepare("INSERT IGNORE INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData)
+                                   VALUES (?,?,?,?,?,?,?,?,?,NOW())");
             foreach (array_unique($targets) as $key) {
                 if (!preg_match('/^(\d{12})_([0-9A-Za-z]{1,8})$/', $key, $m)) { $gagal[] = 'Data tidak valid'; continue; }
                 [$idpel, $bulan] = [$m[1], $m[2]];
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$tg)                                       { $gagal[] = "$lbl: tagihan tidak ditemukan di wilayah Anda"; continue; }
                 if (strlen(trim((string) $tg['ThBlRek'])) > 7)  { $gagal[] = "$lbl: ThBlRek lebih dari 7 karakter"; continue; }
 
-                $ins->execute([$idpel, $tg['ThBlRek'], $tgl, (int) $bk, (int) $tg['RpTag'],
+                $ins->execute([$idpel, $tg['ThBlRek'], $tgl, (int) $bk, (int) $tg['RpTag'], $namaAkunInput,
                                $u['up'] !== '' ? $u['up'] : $tg['UnitUp'], $u['ap'] !== '' ? $u['ap'] : $tg['UnitAp'], $u['upi']]);
                 if ($ins->rowCount() > 0) $ok++; else $sudah++;
             }

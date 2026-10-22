@@ -65,8 +65,11 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
     $k = dash_q($conn, $err, 'Pengiriman',
         "SELECT COUNT(*) AS n FROM formulir_pengiriman WHERE StatusPengiriman = 'DIKIRIM'" . $s2, $p2);
     $r = dash_q($conn, $err, 'Prioritas',
-        "SELECT COUNT(*) AS n FROM hasil_prioritas
-          WHERE SkalaPrioritas = 'SANGAT TINGGI' AND Periode = (SELECT MAX(Periode) FROM hasil_prioritas)");
+        "SELECT COUNT(*) AS n, MAX(Periode) AS periode FROM hasil_prioritas
+          WHERE SkalaPrioritas >= 7 AND Periode = (SELECT MAX(Periode) FROM hasil_prioritas)");
+    // Catatan: SkalaPrioritas bertipe TINYINT 1-9 (bukan teks). 7-9 = tingkat tertinggi (merah).
+    // Periode TIDAK diambil dari periode berjalan, melainkan tahun terbaru yang ada di tabel hasil_prioritas.
+    $periode_prio = $r['periode'] ?? null;
 
     $izin = null;
     try {
@@ -88,7 +91,7 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
         'dil' => (int)($d['aktif'] ?? 0), 'dil_kosong' => (int)($d['kosong'] ?? 0),
         'tunggakan' => (float)($l['tunggakan'] ?? 0), 'lunas' => (int)($l['lunas'] ?? 0),
         'rusak' => (int)($m['rusak'] ?? 0), 'pml' => (int)($m['bulan_ini'] ?? 0),
-        'kirim' => (int)($k['n'] ?? 0), 'prio' => (int)($r['n'] ?? 0),
+        'kirim' => (int)($k['n'] ?? 0), 'prio' => (int)($r['n'] ?? 0), 'periode_prio' => $periode_prio ?? null,
         'izin' => $izin, 'err' => $err, 'waktu' => time(),
     ];
     $_SESSION['dash_cache'] = ['k' => $kunci, 't' => time(), 'd' => $D];
@@ -97,7 +100,7 @@ extract($D, EXTR_SKIP);
 
 // ===== TAMPILAN ==================================================================================
 $modul = [
-    'perencanaan'  => ['Perencanaan',      'bi-bullseye',               dash_n($prio),   'prioritas sangat tinggi', 'periode terbaru',                1],
+    'perencanaan'  => ['Perencanaan',      'bi-bullseye',               dash_n($prio),   'prioritas sangat tinggi', !empty($periode_prio) ? 'periode ' . $periode_prio : 'belum ada hasil prioritas',                1],
     'pengadaan'    => ['Pengadaan & Stok', 'bi-box-seam',               dash_n($gudang), 'S41 di stok',            dash_n($kirim) . ' pengiriman berjalan', 2],
     'pemasangan'   => ['Pemasangan',       'bi-tools',                  dash_n($pasang), 'S41 terpasang',          dash_n($gudang) . ' belum terpasang',    3],
     'penggunaan'   => ['Penggunaan',       'bi-people',                 dash_n($dil),    'pelanggan DIL aktif',    dash_n($lunas) . ' pelunasan bulan ini', 4],
