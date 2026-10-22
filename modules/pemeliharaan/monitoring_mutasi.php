@@ -3,8 +3,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Pengaman: kalau koneksi belum dibuka oleh halaman induk, buka dari folder proyek ini
+if (!isset($conn)) {
+    require_once __DIR__ . '/../../config/database.php';
+}
+
 // Query Data Monitoring Mutasi Pemeliharaan
 $data_mon_mutasi = [];
+$pesan_error_monmut = '';
 try {
     $sql_mon_mut = "SELECT p.*, n.NomorAkun 
                     FROM frm_pemeliharaan p 
@@ -13,7 +19,7 @@ try {
     $stmt_mon_mut = $conn->query($sql_mon_mut);
     $data_mon_mutasi = $stmt_mon_mut->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Error handler
+    $pesan_error_monmut = "Gagal memuat data monitoring mutasi: " . $e->getMessage();
 }
 ?>
 
@@ -36,6 +42,13 @@ try {
         padding: 0.3em 0.45em !important;
     }
 </style>
+
+<?php if (!empty($pesan_error_monmut)): ?>
+    <div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($pesan_error_monmut) ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
@@ -108,10 +121,8 @@ document.addEventListener("DOMContentLoaded", function() {
     if (searchMonMut) {
         searchMonMut.addEventListener("keyup", function() {
             const filter = searchMonMut.value.toLowerCase();
-            const rows = document.querySelectorAll("#tableMonMutasi tbody tr");
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(filter) ? "" : "none";
+            document.querySelectorAll("#tableMonMutasi tbody tr").forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? "" : "none";
             });
         });
     }
