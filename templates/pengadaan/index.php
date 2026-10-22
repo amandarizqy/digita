@@ -15,9 +15,11 @@ if ($is_monitoring && !isset($_GET['sub'])) {
 }
 
 // Cek hak akses untuk penanda gembok visual
-$can_pembelian_pengiriman = in_array($kode_hak, ['AM.UI', 'SA.KP']);
+$can_pembelian = in_array($kode_hak, ['AM.UI', 'SA.KP']);
+$can_pengiriman = in_array($kode_hak, ['AM.UI', 'AM.AP', 'SA.KP']); // AM.AP diizinkan pengiriman
 $can_penerimaan = in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP']);
-$can_barang = ($can_pembelian_pengiriman || $can_penerimaan);
+
+$can_barang = ($can_pembelian || $can_pengiriman || $can_penerimaan);
 $can_kartu = in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP']);
 
 // Daftar aksi/menu yang ditolak berdasarkan role
@@ -25,9 +27,11 @@ $ditolak_list = [];
 if (!$can_barang) {
     $ditolak_list[] = 'barang';
 }
-if (!$can_pembelian_pengiriman) {
-    $ditolak_list[] = 'pembelian';
+if (!$can_pengiriman) {
     $ditolak_list[] = 'pengiriman';
+}
+if (!$can_pembelian) {
+    $ditolak_list[] = 'pembelian';
 }
 if (!$can_penerimaan) {
     $ditolak_list[] = 'penerimaan';
@@ -39,9 +43,15 @@ if (!$can_kartu) {
 
 <!-- LEVEL 2: NAVIGASI TAB MENU UTAMA -->
 <?php 
-$barang_default_link = $can_barang 
-    ? (in_array($kode_hak, ['TL.AP', 'TL.UP']) ? 'index.php?page=pengadaan&menu=penerimaan&view=daftar' : 'index.php?page=pengadaan&menu=pembelian&view=daftar')
-    : 'javascript:void(0);';
+// Jika AM.AP klik Barang, arahkan langsung ke pengiriman. Jika TL.AP/TL.UP ke penerimaan. Sisanya ke pembelian.
+if ($kode_hak === 'AM.AP') {
+    $barang_default_link = 'index.php?page=pengadaan&menu=pengiriman&view=daftar';
+} else {
+    $barang_default_link = $can_barang 
+        ? (in_array($kode_hak, ['TL.AP', 'TL.UP']) ? 'index.php?page=pengadaan&menu=penerimaan&view=daftar' : 'index.php?page=pengadaan&menu=pembelian&view=daftar')
+        : 'javascript:void(0);';
+}
+
 $barang_class = $can_barang ? '' : 'sub-menu-link';
 $barang_attr = $can_barang ? '' : 'data-menu="barang"';
 
@@ -73,11 +83,11 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
         <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
         <div class="d-flex flex-wrap gap-2" role="group">
             <?php if ($is_barang): ?>
-                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pembelian' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pembelian" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pembelian_pengiriman ? 'style="opacity: 0.6;"' : '') ?>>
-                    <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-cart-plus me-1"></i> Pembelian (UI) <?= !$can_pembelian_pengiriman ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
+                <a href="<?= $can_pembelian ? 'index.php?page=pengadaan&menu=pembelian' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pembelian" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pembelian ? 'style="opacity: 0.6;"' : '') ?>>
+                    <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-cart-plus me-1"></i> Pembelian (UI) <?= !$can_pembelian ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
-                <a href="<?= $can_pembelian_pengiriman ? 'index.php?page=pengadaan&menu=pengiriman' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pengiriman') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pengiriman" <?= ($sub == 'pengiriman') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pembelian_pengiriman ? 'style="opacity: 0.6;"' : '') ?>>
-                    <?= ($sub == 'pengiriman') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-truck me-1"></i> Pengiriman <?= !$can_pembelian_pengiriman ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
+                <a href="<?= $can_pengiriman ? 'index.php?page=pengadaan&menu=pengiriman' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'pengiriman') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pengiriman" <?= ($sub == 'pengiriman') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pengiriman ? 'style="opacity: 0.6;"' : '') ?>>
+                    <?= ($sub == 'pengiriman') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-truck me-1"></i> Pengiriman <?= !$can_pengiriman ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
                 <a href="<?= $can_penerimaan ? 'index.php?page=pengadaan&menu=penerimaan' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium sub-menu-link <?= ($sub == 'penerimaan') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="penerimaan" <?= ($sub == 'penerimaan') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_penerimaan ? 'style="opacity: 0.6;"' : '') ?>>
                     <?= ($sub == 'penerimaan') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-box-arrow-in-down me-1"></i> Penerimaan <?= !$can_penerimaan ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
@@ -91,7 +101,7 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
                 </a>
             <?php elseif ($is_monitoring): ?>
                 <a href="index.php?page=pengadaan&menu=monitoring&sub=aset" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub == 'aset') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub == 'aset') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
-                    <?= ($sub == 'aset') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-box-seam me-1"></i> Aset
+                    <?= ($sub == 'aset') ? '<i class="bi bi-box-seam me-1"></i>' : '' ?><i class="bi bi-box-seam me-1"></i> Aset
                 </a>
                 <a href="index.php?page=pengadaan&menu=monitoring&sub=pembelian" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= ($sub == 'pembelian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" <?= ($sub == 'pembelian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : '' ?>>
                     <?= ($sub == 'pembelian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-sim me-1"></i> Aktivasi Perdana
@@ -174,7 +184,7 @@ $kartu_attr = $can_kartu ? '' : 'data-menu="kartu"';
                 title: "Akses ditolak", 
                 text: pesan, 
                 confirmButtonText: "OK", 
-                confirmButtonColor: "#0d6efd"
+                confirmButtonColor: '#0d6efd'
             });
         } else {
             alert("Akses ditolak\n" + pesan);
