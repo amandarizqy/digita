@@ -63,9 +63,20 @@
                                 <?php endif; ?>
                             </td>
                             <td class="text-center pe-4">
-                                <a href="index.php?page=pengadaan&menu=pembelian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="Buka Detail">
-                                    <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i>
-                                </a>
+                                <div class="d-flex justify-content-center gap-1">
+                                    <a href="index.php?page=pengadaan&menu=pembelian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="<?= ($row['StatusData'] == 'AKTIF') ? 'Buka Detail' : 'Edit Draft' ?>">
+                                        <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i>
+                                    </a>
+                                    
+                                    <?php if ($row['StatusData'] !== 'AKTIF'): ?>
+                                        <form action="modules/pengadaan/proses_pembelian.php?action=delete_draft" method="POST" style="display:inline-block;" onsubmit="return confirm('Apakah Anda yakin ingin menghapus draft formulir pembelian ini?');">
+                                            <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($row['NoFormulir']) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus Draft">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; else: ?>

@@ -32,10 +32,13 @@ if (!in_array($kode_hak, $allowed_roles)) {
     exit;
 }
 
-// OTOMATIS REDIRECT BERDASARKAN ROLE JIKA USER KLIK MENU PENGADAAN
+// OTOMATIS REDIRECT BERDASARKAN ROLE JIKA USER KLIK MENU PENGADAAN TANPA PARAMETER
 if (!isset($_GET['menu'])) {
     if (in_array($kode_hak, ['TL.AP', 'TL.UP'])) {
         header("Location: index.php?page=pengadaan&menu=penerimaan&view=daftar");
+        exit;
+    } elseif ($kode_hak === 'AM.AP') {
+        header("Location: index.php?page=pengadaan&menu=pengiriman&view=daftar");
         exit;
     } elseif (in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
         header("Location: index.php?page=pengadaan&menu=pembelian&view=daftar");
@@ -51,8 +54,13 @@ $menu = $_GET['menu'] ?? 'monitoring';
 $sub  = $_GET['sub'] ?? ($menu === 'monitoring' ? 'aset' : $menu);
 $view = $_GET['view'] ?? 'daftar'; 
 
-// PENGAMANAN UTAMA: Jika role non-otoritas memaksa akses menu Barang atau Kartu, langsung lempar ke monitoring
-if (in_array($menu, ['pembelian', 'pengiriman', 'barang']) && !in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+// PENGAMANAN UTAMA: Izinkan AM.AP mengakses menu pengiriman, cegah akses ilegal ke pembelian
+if (in_array($menu, ['pembelian']) && !in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+    header("Location: index.php?page=pengadaan&menu=pengiriman&view=daftar");
+    exit;
+}
+
+if (in_array($menu, ['pengiriman']) && !in_array($kode_hak, ['AM.UI', 'AM.AP', 'SA.KP'])) {
     header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
     exit;
 }
@@ -81,6 +89,11 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
     
     // --- 1. PEMBELIAN ---
     if ($sub === 'pembelian') {
+        if (!in_array($kode_hak, ['AM.UI', 'SA.KP'])) {
+            header("Location: index.php?page=pengadaan&menu=pengiriman&view=daftar");
+            exit;
+        }
+
         if ($view === 'daftar') {
             $keyword = '%' . trim($_GET['q'] ?? '') . '%';
             
@@ -144,18 +157,21 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
 
     // --- 2. PENGIRIMAN ---
     elseif ($sub === 'pengiriman') {
+        if (!in_array($kode_hak, ['AM.UI', 'AM.AP', 'SA.KP'])) {
+            header("Location: index.php?page=pengadaan&menu=monitoring&sub=aset");
+            exit;
+        }
+
         if ($view === 'daftar') {
             $keyword = '%' . trim($_GET['q'] ?? '') . '%';
             
-            // --- PENGATURAN PAGING ---
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
             if (!in_array($limit, [5, 10, 20, 30])) { $limit = 10; }
             $page = isset($_GET['p']) ? (int)$_GET['p'] : 1;
             if ($page < 1) { $page = 1; }
             $offset = ($page - 1) * $limit;
 
-            // Hitung Total Data Pengiriman
-            $stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_pengiriman f WHERE f.NoFormulir LIKE :keyword");
+            $stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_pengiriman f WHERE f.NoFormKirim LIKE :keyword");
             $stmt_count->bindValue(':keyword', $keyword, PDO::PARAM_STR);
             $stmt_count->execute();
             $total_data = (int) $stmt_count->fetchColumn();
@@ -163,12 +179,14 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
             if ($total_pages < 1) { $total_pages = 1; }
             if ($page > $total_pages) { $page = $total_pages; $offset = ($page - 1) * $limit; }
 
-            // Query Data dengan LIMIT & OFFSET
+            // Status dicek secara relasional: Jika ada di formulir_penerimaan, maka 'DITERIMA', jika belum 'DIKIRIM'
             $query = "SELECT 
-                        f.NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusPengiriman, f.StatusData, f.WaktuData,
-                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                        f.NoFormKirim as NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusData, f.WaktuData,
+                        CASE WHEN p.NoFormKirim IS NOT NULL THEN 'DITERIMA' ELSE 'DIKIRIM' END as StatusPengiriman,
+                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormKirim = f.NoFormKirim) as TotalItem 
                     FROM formulir_pengiriman f 
-                    WHERE f.NoFormulir LIKE :keyword
+                    LEFT JOIN formulir_penerimaan p ON f.NoFormKirim = p.NoFormKirim
+                    WHERE f.NoFormKirim LIKE :keyword
                     ORDER BY f.WaktuData DESC
                     LIMIT :limit OFFSET :offset";
             try {
@@ -189,30 +207,36 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                 die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "');</script>");
             }
         } elseif ($view === 'baru') {
-            $unit_upi_login = $_SESSION['UnitUpi'] ?? '56';
+            $user_upi = $_SESSION['UnitUpi'] ?? '56';
+            $user_ap  = $_SESSION['UnitAp'] ?? '';
+            $is_ap    = ($kode_hak === 'AM.AP');
 
             $stmt_ap = $conn->prepare("SELECT UnitAp, NamaUnit FROM master_ap WHERE UnitUpi = :upi AND StatusData = 'AKTIF'");
-            $stmt_ap->execute([':upi' => $unit_upi_login]);
+            $stmt_ap->execute([':upi' => $user_upi]);
             $list_ap = $stmt_ap->fetchAll(PDO::FETCH_ASSOC);
 
-            $stmt_up = $conn->prepare("SELECT UnitUp, NamaUnit FROM master_up WHERE UnitUpi = :upi AND StatusData = 'AKTIF'");
-            $stmt_up->execute([':upi' => $unit_upi_login]);
+            if ($is_ap) {
+                $stmt_up = $conn->prepare("SELECT UnitUp, NamaUnit FROM master_up WHERE UnitAp = :ap AND StatusData = 'AKTIF'");
+                $stmt_up->execute([':ap' => $user_ap]);
+            } else {
+                $stmt_up = $conn->prepare("SELECT UnitUp, NamaUnit FROM master_up WHERE UnitUpi = :upi AND StatusData = 'AKTIF'");
+                $stmt_up->execute([':upi' => $user_upi]);
+            }
             $list_up = $stmt_up->fetchAll(PDO::FETCH_ASSOC);
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
             $no_pengiriman = $_GET['no_form'];
             
-            // 1. PERBAIKAN: Join ke tabel tujuan (KodeUp_Tujuan & KodeAp_Tujuan)
-            $stmt = $conn->prepare("SELECT f.*, 
-                                    COALESCE(u.NamaUnit, f.KodeUp, '-') as NamaUP_Pembuat, 
-                                    COALESCE(a.NamaUnit, f.KodeAp, '-') as NamaAP_Pembuat,
-                                    COALESCE(ut.NamaUnit, f.KodeUp_Tujuan, '-') as NamaUP_Tujuan,
-                                    COALESCE(at.NamaUnit, f.KodeAp_Tujuan, '-') as NamaAP_Tujuan
+            $stmt = $conn->prepare("SELECT f.*, f.NoFormKirim as NoFormulir,
+                                    COALESCE(u.NamaUnit, f.UnitUp, '-') as NamaUP_Pembuat, 
+                                    COALESCE(a.NamaUnit, f.UnitAp, '-') as NamaAP_Pembuat,
+                                    COALESCE(ut.NamaUnit, f.KodeUpTujuan, '-') as NamaUP_Tujuan,
+                                    COALESCE(at.NamaUnit, f.KodeApTujuan, '-') as NamaAP_Tujuan
                                     FROM formulir_pengiriman f 
-                                    LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
-                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
-                                    LEFT JOIN master_up ut ON f.KodeUp_Tujuan = ut.UnitUp
-                                    LEFT JOIN master_ap at ON f.KodeAp_Tujuan = at.UnitAp
-                                    WHERE f.NoFormulir = :no_form");
+                                    LEFT JOIN master_up u ON f.UnitUp = u.UnitUp
+                                    LEFT JOIN master_ap a ON f.UnitAp = a.UnitAp 
+                                    LEFT JOIN master_up ut ON f.KodeUpTujuan = ut.UnitUp
+                                    LEFT JOIN master_ap at ON f.KodeApTujuan = at.UnitAp
+                                    WHERE f.NoFormKirim = :no_form");
             $stmt->execute([':no_form' => $no_pengiriman]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
             
@@ -221,50 +245,66 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
                     'NoFormulir' => $no_pengiriman,
                     'TglFormulir' => date('Y-m-d'),
                     'StatusData' => 'TIDAK',
-                    'StatusPengiriman' => 'DIKIRIM',
                     'NamaAP_Tujuan' => '-',
                     'NamaUP_Tujuan' => '-',
-                    'KodeUpi_Tujuan' => '-',
+                    'KodeUpiTujuan' => '-',
                     'NamaAkun' => ''
                 ];
             }
 
-            // 2. PERBAIKAN: Menentukan Nama Tujuan yang Tampil
             $nama_tujuan = "-";
             if (!empty($formulir['NamaUP_Tujuan']) && $formulir['NamaUP_Tujuan'] !== '-') {
                 $nama_tujuan = $formulir['NamaUP_Tujuan'];
             } elseif (!empty($formulir['NamaAP_Tujuan']) && $formulir['NamaAP_Tujuan'] !== '-') {
                 $nama_tujuan = $formulir['NamaAP_Tujuan'];
-            } elseif (!empty($formulir['KodeUpi_Tujuan'])) {
-                $nama_tujuan = "UPI " . $formulir['KodeUpi_Tujuan'];
+            } elseif (!empty($formulir['KodeUpiTujuan'])) {
+                $nama_tujuan = "UPI " . $formulir['KodeUpiTujuan'];
             }
             $formulir['NamaTujuanStr'] = $nama_tujuan;
 
-            // 3. PERBAIKAN: Cek Proteksi Pembuat (Hanya yang buat form ini yang boleh edit)
-            $session_akun = $_SESSION['NamaAkun'] ?? '';
-            $is_creator = ($formulir['NamaAkun'] === $session_akun);
-            
-            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormKirim = :no_form");
             $stmt_items->execute([':no_form' => $no_pengiriman]);
             $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
-            // 4. PERBAIKAN: Ambil Stok Tersedia di Gudang UPI untuk Dropdown Barcode Scanner
+            // --- AMBIL STOK BERDASARKAN LEVEL USER (UPI vs AP) ---
             $user_upi = $_SESSION['UnitUpi'] ?? '56';
-            $stmt_stok = $conn->prepare("
-                SELECT b.NoRef 
-                FROM master_barang b
-                WHERE b.UnitUpi = :upi 
-                  AND b.StatusData = 'AKTIF'
-                  AND (b.UnitAp IS NULL OR b.UnitAp = '') 
-                  AND (b.UnitUp IS NULL OR b.UnitUp = '')
-                  AND b.NoRef NOT IN (
-                      SELECT d.NoRef 
-                      FROM formulir_pengiriman_detil d 
-                      JOIN formulir_pengiriman p ON d.NoFormulir = p.NoFormulir 
-                      WHERE p.StatusPengiriman = 'DIKIRIM'
-                  )
-            ");
-            $stmt_stok->execute([':upi' => $user_upi]);
+            $user_ap  = $_SESSION['UnitAp'] ?? '';
+            $is_ap_role = ($kode_hak === 'AM.AP');
+
+            if ($is_ap_role) {
+                // Jika login sebagai AM.AP: Ambil barang di UnitAp miliknya, dan UnitUp-nya harus kosong (belum turun ke UP)
+                $stmt_stok = $conn->prepare("
+                    SELECT b.NoRef 
+                    FROM master_barang b
+                    WHERE b.UnitAp = :ap 
+                      AND b.StatusData = 'AKTIF'
+                      AND (b.UnitUp IS NULL OR b.UnitUp = '')
+                      AND b.NoRef NOT IN (
+                          SELECT d.NoRef 
+                          FROM formulir_pengiriman_detil d 
+                          JOIN formulir_pengiriman p ON d.NoFormKirim = p.NoFormKirim 
+                          WHERE p.NoFormKirim NOT IN (SELECT NoFormKirim FROM formulir_penerimaan)
+                      )
+                ");
+                $stmt_stok->execute([':ap' => $user_ap]);
+            } else {
+                // Jika login sebagai AM.UI (Default): Ambil barang di tingkat UPI (UnitAp & UnitUp kosong)
+                $stmt_stok = $conn->prepare("
+                    SELECT b.NoRef 
+                    FROM master_barang b
+                    WHERE b.UnitUpi = :upi 
+                      AND b.StatusData = 'AKTIF'
+                      AND (b.UnitAp IS NULL OR b.UnitAp = '') 
+                      AND (b.UnitUp IS NULL OR b.UnitUp = '')
+                      AND b.NoRef NOT IN (
+                          SELECT d.NoRef 
+                          FROM formulir_pengiriman_detil d 
+                          JOIN formulir_pengiriman p ON d.NoFormKirim = p.NoFormKirim 
+                          WHERE p.NoFormKirim NOT IN (SELECT NoFormKirim FROM formulir_penerimaan)
+                      )
+                ");
+                $stmt_stok->execute([':upi' => $user_upi]);
+            }
             $stok_tersedia = $stmt_stok->fetchAll(PDO::FETCH_ASSOC);
         }
     }
@@ -281,22 +321,20 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
             $unit_up = $_SESSION['UnitUp'] ?? '';
 
             if ($kode_hak === 'TL.UP') {
-                $filter_query = "f.KodeUp_Tujuan = :lokasi";
+                $filter_query = "f.KodeUpTujuan = :lokasi";
                 $lokasi = $unit_up;
             } else {
-                $filter_query = "f.KodeAp_Tujuan = :lokasi AND (f.KodeUp_Tujuan IS NULL OR f.KodeUp_Tujuan = '')";
+                $filter_query = "f.KodeApTujuan = :lokasi AND (f.KodeUpTujuan IS NULL OR f.KodeUpTujuan = '')";
                 $lokasi = $unit_ap;
             }
             if ($kode_hak === 'SA.KP') { $filter_query = "1=1"; $lokasi = 1; }
 
-            // --- PENGATURAN PAGING ---
             $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
             if (!in_array($limit, [5, 10, 20, 30])) { $limit = 10; }
             $page = isset($_GET['p']) ? (int)$_GET['p'] : 1;
             if ($page < 1) { $page = 1; }
             $offset = ($page - 1) * $limit;
 
-            // Hitung Total Data Penerimaan
             $stmt_count = $conn->prepare("SELECT COUNT(*) FROM formulir_pengiriman f WHERE f.StatusData = 'AKTIF' AND $filter_query");
             if ($kode_hak !== 'SA.KP') { $stmt_count->bindParam(':lokasi', $lokasi); }
             $stmt_count->execute();
@@ -305,13 +343,15 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
             if ($total_pages < 1) { $total_pages = 1; }
             if ($page > $total_pages) { $page = $total_pages; $offset = ($page - 1) * $limit; }
 
-            // Query Data dengan LIMIT & OFFSET
             $query = "SELECT 
-                        f.NoFormulir, f.TglFormulir, f.NamaAkun, f.StatusPengiriman, f.TglTerima, f.WaktuData,
-                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalItem 
+                        f.NoFormKirim as NoFormulir, f.TglFormulir, f.NamaAkun, f.WaktuData,
+                        CASE WHEN p.NoFormKirim IS NOT NULL THEN 'DITERIMA' ELSE 'DIKIRIM' END as StatusPengiriman,
+                        p.TglFormulir as TglTerima,
+                        (SELECT COUNT(NoRef) FROM formulir_pengiriman_detil d WHERE d.NoFormKirim = f.NoFormKirim) as TotalItem 
                       FROM formulir_pengiriman f 
+                      LEFT JOIN formulir_penerimaan p ON f.NoFormKirim = p.NoFormKirim
                       WHERE f.StatusData = 'AKTIF' AND $filter_query
-                      ORDER BY (CASE WHEN f.StatusPengiriman = 'DIKIRIM' THEN 1 ELSE 2 END), f.WaktuData DESC
+                      ORDER BY (CASE WHEN p.NoFormKirim IS NULL THEN 1 ELSE 2 END), f.WaktuData DESC
                       LIMIT :limit OFFSET :offset";
                       
             try {
@@ -334,15 +374,15 @@ elseif (in_array($menu, ['barang', 'pembelian', 'pengiriman', 'penerimaan'])) {
         } elseif ($view === 'detail' && isset($_GET['no_form'])) {
             $no_pengiriman = $_GET['no_form'];
             
-            $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+            $stmt = $conn->prepare("SELECT f.*, f.NoFormKirim as NoFormulir, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
                                     FROM formulir_pengiriman f 
-                                    LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
-                                    LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp 
-                                    WHERE f.NoFormulir = :no_form");
+                                    LEFT JOIN master_up u ON f.UnitUp = u.UnitUp
+                                    LEFT JOIN master_ap a ON f.UnitAp = a.UnitAp 
+                                    WHERE f.NoFormKirim = :no_form");
             $stmt->execute([':no_form' => $no_pengiriman]);
             $formulir = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+            $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormKirim = :no_form");
             $stmt_items->execute([':no_form' => $no_pengiriman]);
             $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
         }

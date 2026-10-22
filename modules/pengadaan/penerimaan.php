@@ -42,25 +42,28 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
 
 ob_start();
 
-if ($view === 'detail' && isset($_GET['no_pengiriman'])) {
+if ($view === 'detail' && isset($_GET['no_form'])) {
     $page_title = "Inspeksi & Penerimaan Barang - Digita";
-    $no_pengiriman = $_GET['no_pengiriman'];
+    $no_pengiriman = $_GET['no_form'];
     
-    // Ambil Header Pengiriman
-    $stmt = $conn->prepare("SELECT f.*, u.NamaUnit as NamaUP, a.NamaUnit as NamaAP 
+    // Ambil Header Pengiriman beserta status relasionalnya
+    $stmt = $conn->prepare("SELECT f.*, f.NoFormKirim as NoFormulir, 
+                            u.NamaUnit as NamaUP, a.NamaUnit as NamaAP,
+                            CASE WHEN p.NoFormKirim IS NOT NULL THEN 'DITERIMA' ELSE 'DIKIRIM' END as StatusPengiriman
                             FROM formulir_pengiriman f 
-                            LEFT JOIN master_up u ON f.KodeUp = u.UnitUp
-                            LEFT JOIN master_ap a ON f.KodeAp = a.UnitAp
-                            WHERE f.NoFormulir = :no_form");
+                            LEFT JOIN master_up u ON f.UnitUp = u.UnitUp
+                            LEFT JOIN master_ap a ON f.UnitAp = a.UnitAp 
+                            LEFT JOIN formulir_penerimaan p ON f.NoFormKirim = p.NoFormKirim
+                            WHERE f.NoFormKirim = :no_form");
     $stmt->execute([':no_form' => $no_pengiriman]);
-    $pengiriman = $stmt->fetch(PDO::FETCH_ASSOC);
+    $formulir = $stmt->fetch(PDO::FETCH_ASSOC); // Gunakan $formulir agar sinkron dengan template
     
     // Ambil Item Detail Pengiriman
-    $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormulir = :no_form");
+    $stmt_items = $conn->prepare("SELECT * FROM formulir_pengiriman_detil WHERE NoFormKirim = :no_form");
     $stmt_items->execute([':no_form' => $no_pengiriman]);
     $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
     
-    require_once '../../templates/pengadaan/penerimaan.php'; 
+    require_once '../../templates/pengadaan/penerimaan.php';  
 
 } else {
     $page_title = "Daftar Barang Masuk (Inbound) - Digita";

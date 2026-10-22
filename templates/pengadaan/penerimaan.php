@@ -1,47 +1,44 @@
 <?php 
-$formulir = $formulir ?? false;
-$items = $items ?? [];
-
-if (!$formulir):
+$no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
+$status_kirim = $formulir['StatusPengiriman'] ?? 'DIKIRIM';
 ?>
-    <div class="alert alert-danger shadow-sm mt-4">
-        <h4>Data Pengiriman Tidak Ditemukan!</h4>
-        <a href="index.php?page=pengadaan&menu=penerimaan" class="btn btn-secondary mt-2">Kembali ke Daftar Inbound</a>
-    </div>
-<?php return; endif; ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-clipboard-check me-2"></i>Inspeksi & Penerimaan Inbound</h1>
-    <a href="index.php?page=pengadaan&menu=penerimaan" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
+    <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-box-arrow-in-down me-2"></i>Inspeksi & Penerimaan Inbound: <?= htmlspecialchars($no_formulir_valid) ?></h1>
+    <a href="index.php?page=pengadaan&menu=penerimaan&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
 </div>
 
-<!-- Informasi Header Pengiriman -->
-<div class="card shadow-sm border-0 mb-4 p-4 bg-white">
-    <div class="row">
-        <div class="col-md-4">
-            <span class="text-muted small d-block">No. Pengiriman / Formulir</span>
-            <h5 class="fw-bold text-primary mb-0"><?= htmlspecialchars($formulir['NoFormulir']) ?></h5>
-        </div>
-        <div class="col-md-3">
-            <span class="text-muted small d-block">Tanggal Kirim</span>
-            <span class="fw-bold"><?= htmlspecialchars($formulir['TglFormulir']) ?></span>
-        </div>
-        <div class="col-md-3">
-            <span class="text-muted small d-block">Pengirim (UI)</span>
-            <span class="fw-bold"><?= htmlspecialchars($formulir['NamaAkun']) ?></span>
-        </div>
-        <div class="col-md-2 text-end">
-            <span class="text-muted small d-block">Status Sistem</span>
-            <span class="badge bg-<?= ($formulir['StatusPengiriman'] == 'DITERIMA') ? 'success' : 'warning text-dark' ?>">
-                <?= htmlspecialchars($formulir['StatusPengiriman']) ?>
-            </span>
+<!-- Informasi Header -->
+<div class="card shadow-sm mb-4 border-0">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <span class="text-muted small d-block">No. Pengiriman / Formulir</span>
+                <strong class="text-primary"><?= htmlspecialchars($no_formulir_valid) ?></strong>
+            </div>
+            <div class="col-md-3">
+                <span class="text-muted small d-block">Tanggal Kirim</span>
+                <strong><?= htmlspecialchars($formulir['TglFormulir'] ?? '-') ?></strong>
+            </div>
+            <div class="col-md-3">
+                <span class="text-muted small d-block">Pengirim (UI)</span>
+                <strong><?= htmlspecialchars($formulir['NamaAkun'] ?? '-') ?></strong>
+            </div>
+            <div class="col-md-2 text-md-end">
+                <span class="text-muted small d-block">Status Sistem</span>
+                <?php if ($status_kirim === 'DITERIMA'): ?>
+                    <span class="badge bg-primary px-3 py-2">Diterima</span>
+                <?php else: ?>
+                    <span class="badge bg-info text-dark px-3 py-2">Diperjalanan</span>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Form Konfirmasi Penerimaan -->
+<!-- Form Penerimaan Barang -->
 <form action="modules/pengadaan/proses_penerimaan.php?action=terima_barang" method="POST">
-    <input type="hidden" name="no_pengiriman" value="<?= htmlspecialchars($formulir['NoFormulir']) ?>">
+    <input type="hidden" name="no_pengiriman" value="<?= htmlspecialchars($no_formulir_valid) ?>">
 
     <div class="card shadow mb-4 border-0">
         <div class="card-header bg-white py-3">
@@ -50,54 +47,45 @@ if (!$formulir):
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light text-muted">
+                    <thead class="table-light">
                         <tr>
-                            <th class="ps-4 py-3">NO REF (BARCODE/STIKER)</th>
-                            <th class="text-center">STIKER QC</th>
-                            <th class="text-center pe-4">CACAT FISIK</th>
+                            <th class="ps-4">NO REF (BARCODE/STIKER)</th>
+                            <th>STIKER QC</th>
+                            <th>CACAT FISIK</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (!empty($items)): foreach ($items as $item): ?>
                             <tr>
-                                <td class="fw-bold ps-4 text-dark">
+                                <td class="ps-4">
                                     <input type="hidden" name="item_ref[]" value="<?= htmlspecialchars($item['NoRef']) ?>">
-                                    <i class="bi bi-tag me-2 text-primary"></i><?= htmlspecialchars($item['NoRef']) ?>
+                                    <i class="bi bi-tag me-1 text-muted"></i><strong><?= htmlspecialchars($item['NoRef']) ?></strong>
                                 </td>
-                                <td class="text-center">
-                                    <?php if ($formulir['StatusPengiriman'] == 'DIKIRIM'): ?>
-                                        <select class="form-select form-select-sm w-50 mx-auto" name="qc[<?= htmlspecialchars($item['NoRef']) ?>]">
-                                            <option value="ADA" <?= ($item['StikerQC'] == 'ADA') ? 'selected' : '' ?>>ADA</option>
-                                            <option value="TIDAK" <?= ($item['StikerQC'] == 'TIDAK') ? 'selected' : '' ?>>TIDAK</option>
-                                        </select>
-                                    <?php else: ?>
-                                        <span class="badge bg-light text-dark border"><?= htmlspecialchars($item['StikerQC']) ?></span>
-                                    <?php endif; ?>
+                                <td>
+                                    <select class="form-select form-select-sm w-auto" name="qc[<?= htmlspecialchars($item['NoRef']) ?>]" <?= ($status_kirim === 'DITERIMA') ? 'disabled' : '' ?>>
+                                        <option value="ADA" <?= ($item['StikerQC'] === 'ADA') ? 'selected' : '' ?>>ADA</option>
+                                        <option value="TIDAK" <?= ($item['StikerQC'] === 'TIDAK') ? 'selected' : '' ?>>TIDAK</option>
+                                    </select>
                                 </td>
-                                <td class="text-center pe-4">
-                                    <?php if ($formulir['StatusPengiriman'] == 'DIKIRIM'): ?>
-                                        <select class="form-select form-select-sm w-50 mx-auto" name="cacat[<?= htmlspecialchars($item['NoRef']) ?>]">
-                                            <option value="TIDAK" <?= ($item['CacatFisik'] == 'TIDAK') ? 'selected' : '' ?>>TIDAK</option>
-                                            <option value="YA" <?= ($item['CacatFisik'] == 'YA') ? 'selected' : '' ?>>YA</option>
-                                        </select>
-                                    <?php else: ?>
-                                        <span class="badge bg-light text-dark border"><?= htmlspecialchars($item['CacatFisik']) ?></span>
-                                    <?php endif; ?>
+                                <td>
+                                    <select class="form-select form-select-sm w-auto text-danger fw-bold" name="cacat[<?= htmlspecialchars($item['NoRef']) ?>]" <?= ($status_kirim === 'DITERIMA') ? 'disabled' : '' ?>>
+                                        <option value="TIDAK" <?= ($item['CacatFisik'] === 'TIDAK') ? 'selected' : '' ?>>TIDAK</option>
+                                        <option value="ADA" <?= ($item['CacatFisik'] === 'ADA') ? 'selected' : '' ?>>ADA</option>
+                                    </select>
                                 </td>
                             </tr>
                         <?php endforeach; else: ?>
-                            <tr><td colspan="3" class="text-center py-4 text-muted">Tidak ada item dalam pengiriman ini.</td></tr>
+                            <tr><td colspan="3" class="text-center py-4 text-muted">Tidak ada item barang dalam pengiriman ini.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Tombol Aksi Final Terima Barang -->
-        <?php if ($formulir['StatusPengiriman'] == 'DIKIRIM'): ?>
-        <div class="card-footer bg-white p-3 text-end">
-            <button type="submit" class="btn btn-success btn-lg fw-bold px-5" onclick="return confirm('Apakah Anda yakin barang sudah diterima lengkap dan lolos inspeksi? Kepemilikan aset akan berpindah ke unit Anda.')">
-                <i class="bi bi-check-circle-fill me-2"></i>KONFIRMASI TERIMA & SIMPAN KE STOK UNIT
+        <?php if ($status_kirim !== 'DITERIMA' && !empty($items)): ?>
+        <div class="card-footer bg-white p-3 text-end border-top">
+            <button type="submit" class="btn btn-success px-4 fw-bold" onclick="return confirm('Proses penerimaan barang ini? Lokasi aset akan otomatis berpindah ke unit Anda.')">
+                <i class="bi bi-check-circle-fill me-2"></i>PROSES TERIMA BARANG
             </button>
         </div>
         <?php endif; ?>

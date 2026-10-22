@@ -1,5 +1,10 @@
 <?php 
 $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
+
+// Pastikan pengecekan kreator / pembuat formulir menggunakan NamaAkun yang login
+$session_akun = $_SESSION['NamaAkun'] ?? '';
+$db_akun = trim($formulir['NamaAkun'] ?? '');
+$is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 'SA.KP');
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -24,7 +29,7 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
 
 <!-- CEK APAKAH USER ADALAH PEMBUAT FORMULIR -->
 <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
-    <?php if (isset($is_creator) && $is_creator): ?>
+    <?php if ($is_creator): ?>
         <div class="card shadow mb-4">
             <div class="card-header bg-white">
                 <ul class="nav nav-tabs card-header-tabs" id="pengirimanTabs" role="tablist">
@@ -47,7 +52,6 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                             <div class="row align-items-end">
                                 <div class="col-md-5">
                                     <label class="form-label fw-bold">Nomor Ref Perangkat</label>
-                                    <!-- UBAH: form-select diganti menjadi form-control -->
                                     <select class="form-control select2-noref" name="no_ref" required>
                                         <option value="">Pilih / Ketik Nomor Ref S41...</option>
                                         <?php if(isset($stok_tersedia)): foreach ($stok_tersedia as $stok): ?>
@@ -120,7 +124,7 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                         <th>NO REF PERANGKAT</th>
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
-                        <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && isset($is_creator) && $is_creator): ?>
+                        <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && $is_creator): ?>
                             <th class="text-end pe-4">AKSI</th>
                         <?php endif; ?>
                     </tr>
@@ -142,7 +146,7 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                                     TIDAK
                                 <?php endif; ?>
                             </td>
-                            <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && isset($is_creator) && $is_creator): ?>
+                            <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && $is_creator): ?>
                                 <td class="text-end pe-4">
                                     <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang pengiriman?')">
                                         <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
@@ -158,7 +162,7 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
                         endforeach; 
                     else: 
                     ?>
-                        <tr><td colspan="<?= (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && isset($is_creator) && $is_creator) ? 5 : 4 ?>" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
+                        <tr><td colspan="<?= (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && $is_creator) ? 5 : 4 ?>" class="text-center py-4 text-muted">Belum ada barang di truk pengiriman.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -166,7 +170,7 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
     </div>
     
     <!-- Tombol Reset & Eksekusi di Bagian Paling Bawah -->
-    <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items) && isset($is_creator) && $is_creator): ?>
+    <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items) && $is_creator): ?>
     <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
         <form action="modules/pengadaan/proses_pengiriman.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar muatan pengiriman ini?')">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
@@ -185,19 +189,16 @@ $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
     <?php endif; ?>
 </div>
 
-<!-- SCRIPT SELECT2 DAN SCANNER AUTO-SUBMIT -->
 <!-- SCRIPT SELECT2 -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     if (typeof jQuery !== 'undefined' && $.fn.select2) {
         $('.select2-noref').select2({
-            theme: 'bootstrap-5', // Aktifkan tema ini
+            theme: 'bootstrap-5',
             placeholder: "Pilih / Ketik Nomor Ref S41...",
             allowClear: true,
-            width: '100%' // Memastikan lebar penuh sesuai grid kolom
+            width: '100%'
         });
-    } else {
-        console.error("Library jQuery atau Select2 belum dimuat!");
     }
 });
 </script>

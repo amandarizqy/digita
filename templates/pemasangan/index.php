@@ -10,7 +10,6 @@ $is_pra_eksekusi = ($menu === 'pra_eksekusi');
 $is_eksekusi     = ($menu === 'eksekusi');
 $is_monitoring   = ($menu === 'monitoring');
 
-// Daftar menu yang diblokir untuk script SweetAlert2 visual
 $ditolak_list = [];
 if (!$can_pra_eksekusi)  $ditolak_list[] = 'pra_eksekusi';
 if (!$can_eksekusi)      $ditolak_list[] = 'eksekusi';
@@ -20,14 +19,6 @@ if (!$can_pengujian)     $ditolak_list[] = 'pengujian';
 if (!$can_order_pasang)  $ditolak_list[] = 'order_pasang';
 if (!$can_mutasi_pasang) $ditolak_list[] = 'mutasi_pasang';
 
-if (!$can_monitoring) {
-    $ditolak_list[] = 'status_pengujian';
-    $ditolak_list[] = 'riwayat_pengujian';
-    $ditolak_list[] = 'monitoring_order';
-    $ditolak_list[] = 'monitoring_mutasi';
-}
-
-// Link navigasi default per Tab
 $link_pra = $can_pra_eksekusi ? 'index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian' : 'javascript:void(0);';
 $link_eks = $can_eksekusi ? ($can_order_pasang ? 'index.php?page=pemasangan&menu=eksekusi&sub=order_pasang' : 'index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang') : 'javascript:void(0);';
 $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=status_pengujian' : 'javascript:void(0);';
@@ -52,14 +43,14 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
     </li>
 </ul>
 
-<!-- LEVEL 3: SUB ENTITAS & TOMBOL AKSI KANAN -->
+<!-- LEVEL 3: SUB ENTITAS & TOMBOL AKSI -->
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <div class="d-flex align-items-center flex-wrap gap-2">
         <span class="text-secondary small fw-bold text-uppercase me-2" style="letter-spacing: 0.5px; font-size: 0.75rem;">SUB ENTITAS:</span>
         <div class="d-flex flex-wrap gap-2" role="group">
             <?php if ($is_pra_eksekusi): ?>
                 <a href="<?= $can_pengujian ? 'index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= !$can_pengujian ? 'sub-menu-link' : '' ?> <?= ($sub == 'pengujian') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="pengujian" <?= ($sub == 'pengujian') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_pengujian ? 'style="opacity: 0.6;"' : '') ?>>
-                    <?= ($sub == 'pengujian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-check-circle me-1"></i> Pengujian Alat & SIM <?= !$can_pengujian ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
+                    <?= ($sub == 'pengujian') ? '<i class="bi bi-check2 me-1"></i>' : '' ?><i class="bi bi-shield-check me-1"></i> Pengujian Alat & SIM <?= !$can_pengujian ? '<i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i>' : '' ?>
                 </a>
             <?php elseif ($is_eksekusi): ?>
                 <a href="<?= $can_order_pasang ? 'index.php?page=pemasangan&menu=eksekusi&sub=order_pasang' : 'javascript:void(0);' ?>" class="btn btn-sm rounded-pill px-3 py-1 fw-medium <?= !$can_order_pasang ? 'sub-menu-link' : '' ?> <?= ($sub == 'order_pasang') ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white' ?>" data-menu="order_pasang" <?= ($sub == 'order_pasang') ? 'style="border-color: #0d6efd; background-color: #e7f1ff; color: #0d6efd;"' : (!$can_order_pasang ? 'style="opacity: 0.6;"' : '') ?>>
@@ -85,8 +76,7 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
         </div>
     </div>
     
-    <!-- TOMBOL KANAN (Daftar / Form Baru) -->
-    <?php if (!$is_monitoring && $sub !== 'riwayat_pengujian'): ?>
+    <?php if (!$is_monitoring): ?>
     <div class="btn-group rounded-pill border bg-white shadow-sm" role="group">
         <a href="index.php?page=pemasangan&menu=<?= $menu ?>&sub=<?= $sub ?>&view=daftar" class="btn btn-sm rounded-pill <?= ($view == 'daftar') ? 'btn-primary fw-bold' : 'btn-light text-muted' ?> px-3">
             Daftar Data
@@ -98,23 +88,18 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
     <?php endif; ?>
 </div>
 
-<!-- KONTEN DINAMIS DIMUAT DI SINI -->
+<!-- MEMUAT VIEW DINAMIS -->
 <div class="mt-2">
     <?php 
-        if ($sub === 'pengujian' && $view === 'baru') {
-            require_once __DIR__ . '/pengujian_baru.php';
-        } else {
-            // Tampilan default / placeholder jika tidak ada view yang cocok
-            echo '<div class="card shadow-sm border-0"><div class="card-body p-5 text-center">';
-            echo '<h5 class="text-muted"><i class="bi bi-tools fs-1 text-light d-block mb-3"></i> Tampilan '.strtoupper(str_replace('_', ' ', $sub)).'</h5>';
-            echo '<p class="text-muted small">Silakan pilih menu Form Baru atau Daftar Data di atas.</p>';
-            echo '</div></div>';
-        }
+    if ($sub === 'pengujian') {
+        if ($view === 'detail') require_once __DIR__ . '/pengujian_detail.php';
+        else require_once __DIR__ . '/pengujian_daftar.php';
+    } else {
+        echo '<div class="card shadow-sm border-0"><div class="card-body p-5 text-center"><h5 class="text-muted"><i class="bi bi-tools fs-1 text-light d-block mb-3"></i> Tampilan '.strtoupper(str_replace('_', ' ', $sub)).'</h5></div></div>';
+    }
     ?>
-    
 </div>
 
-<!-- SCRIPT SWEETALERT UNTUK VISUALISASI GEMBOK DAN TOLAK AKSES -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {
@@ -156,4 +141,15 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
         }
     }, true);
 })();
+
+// SWEETALERT POPUP SAAT BERHASIL MENYIMPAN FORMULIR PENGUJIAN
+<?php if (isset($_GET['status']) && $_GET['status'] === 'sukses'): ?>
+Swal.fire({
+    icon: 'success',
+    title: 'Pengujian Berhasil Disimpan!',
+    text: 'Data hasil pengujian dan pairing SIM Card S41 telah tersimpan.',
+    confirmButtonColor: '#0d6efd',
+    confirmButtonText: 'Selesai'
+});
+<?php endif; ?>
 </script>
