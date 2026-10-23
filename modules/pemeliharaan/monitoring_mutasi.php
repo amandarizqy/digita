@@ -3,20 +3,39 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Pengaman: kalau koneksi belum dibuka oleh halaman induk, buka dari folder proyek ini
 if (!isset($conn)) {
     require_once __DIR__ . '/../../config/database.php';
 }
 
-// Query Data Monitoring Mutasi Pemeliharaan
+$user_role  = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
+$session_ap = $_SESSION['UnitAp'] ?? '';
+$session_up = $_SESSION['UnitUp'] ?? '';
+
 $data_mon_mutasi = [];
 $pesan_error_monmut = '';
 try {
-    $sql_mon_mut = "SELECT p.*, n.NomorAkun 
+    $where_clauses = [];
+    $params_query = [];
+
+    if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+        if (!empty($session_up)) {
+            $where_clauses[] = "p.UnitUp = ?";
+            $params_query[] = $session_up;
+        } elseif (!empty($session_ap)) {
+            $where_clauses[] = "p.UnitAp = ?";
+            $params_query[] = $session_ap;
+        }
+    }
+
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    $sql_mon_mut = "SELECT p.*, b.SimId AS SimBarang, b.ImeiModem AS ImeiBarang 
                     FROM frm_pemeliharaan p 
-                    LEFT JOIN master_nomor n ON p.SimId = n.SimId 
-                    ORDER BY p.WaktuData DESC";
-    $stmt_mon_mut = $conn->query($sql_mon_mut);
+                    LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
+                    $where_sql
+                    ORDER BY p.WaktuData DESC LIMIT 100";
+    $stmt_mon_mut = $conn->prepare($sql_mon_mut);
+    $stmt_mon_mut->execute($params_query);
     $data_mon_mutasi = $stmt_mon_mut->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $pesan_error_monmut = "Gagal memuat data monitoring mutasi: " . $e->getMessage();
@@ -24,24 +43,13 @@ try {
 ?>
 
 <style>
-    .table-compact thead th {
-        font-size: 0.75rem !important;
-        font-weight: 700 !important;
-        color: #6c757d !important;
-        padding: 0.6rem 0.35rem !important;
-        white-space: normal !important;
-    }
-    .table-compact tbody td {
-        padding: 0.5rem 0.35rem !important;
-        font-size: 0.81rem !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-    }
-    .table-compact .badge {
-        font-size: 0.7rem !important;
-        padding: 0.3em 0.45em !important;
-    }
+    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
+    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; word-break: break-word !important; }
+    .table-compact .badge { font-size: 0.7rem !important; padding: 0.3em 0.45em !important; }
 </style>
+
+<!-- Iframe Tersembunyi untuk Download Tanpa Trigger Spinner -->
+<iframe id="iframeDownloadMutasi" style="display: none;"></iframe>
 
 <?php if (!empty($pesan_error_monmut)): ?>
     <div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
@@ -56,13 +64,17 @@ try {
             <h5 class="fw-bold text-primary mb-0">Monitoring Laporan Mutasi Pemeliharaan</h5>
             <p class="text-muted small mb-0">Rekapitulasi riwayat pergantian kartu SIM dan Modem di lokasi pelanggan.</p>
         </div>
-        <div class="input-group style-search" style="width: 260px;">
-            <span class="input-group-text bg-light border-end-0 rounded-start-3 text-muted"><i class="bi bi-search"></i></span>
-            <input type="text" id="searchMonMutasi" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari data mutasi...">
+        <div class="d-flex gap-2">
+            <div class="input-group style-search" style="width: 240px;">
+                <span class="input-group-text bg-light border-end-0 rounded-start-3 text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" id="searchMonMutasi" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari data mutasi...">
+            </div>
+            <button type="button" id="btnExportMutasi" class="btn btn-outline-success rounded-3 fw-medium">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+            </button>
         </div>
     </div>
 
-    <!-- Container Tabel Pas Layar -->
     <div class="w-100">
         <table class="table table-hover align-middle mb-0 table-compact w-100" id="tableMonMutasi">
             <thead class="table-light text-dark border-top border-bottom">
@@ -95,9 +107,6 @@ try {
                                     <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle font-monospace">
                                         <?= htmlspecialchars($row['SimId']) ?>
                                     </span>
-                                    <?php if (!empty($row['NomorAkun'])): ?>
-                                        <div class="small text-muted mt-1 font-monospace"><?= htmlspecialchars($row['NomorAkun']) ?></div>
-                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted fst-italic small">-</span>
                                 <?php endif; ?>
@@ -117,6 +126,7 @@ try {
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    // Pencarian tabel
     const searchMonMut = document.getElementById("searchMonMutasi");
     if (searchMonMut) {
         searchMonMut.addEventListener("keyup", function() {
@@ -124,6 +134,15 @@ document.addEventListener("DOMContentLoaded", function() {
             document.querySelectorAll("#tableMonMutasi tbody tr").forEach(row => {
                 row.style.display = row.textContent.toLowerCase().includes(filter) ? "" : "none";
             });
+        });
+    }
+
+    // Trigger unduh Excel via iframe
+    const btnExport = document.getElementById("btnExportMutasi");
+    if (btnExport) {
+        btnExport.addEventListener("click", function(e) {
+            e.preventDefault();
+            document.getElementById("iframeDownloadMutasi").src = "modules/pemeliharaan/export_excel.php?type=mutasi";
         });
     }
 });

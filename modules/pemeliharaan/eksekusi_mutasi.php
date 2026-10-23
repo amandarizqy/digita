@@ -3,7 +3,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Load Koneksi Database jika belum terdefinisi
 $root_path = $_SERVER['DOCUMENT_ROOT'];
 if (!isset($conn)) {
     if (file_exists($root_path . '/config/database.php')) {
@@ -13,7 +12,10 @@ if (!isset($conn)) {
     }
 }
 
-// Dynamic Hybrid Loader CSS/JS (Server Offline & Intranet PLN)
+$user_role  = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
+$session_ap = $_SESSION['UnitAp'] ?? '';
+$session_up = $_SESSION['UnitUp'] ?? '';
+
 $select2_css_path   = file_exists($root_path . '/assets/css/select2.min.css') ? '/assets/css/select2.min.css' : 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css';
 $select2_theme_path = file_exists($root_path . '/assets/css/select2-bootstrap-5-theme.min.css') ? '/assets/css/select2-bootstrap-5-theme.min.css' : 'https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css';
 $jquery_js_path     = file_exists($root_path . '/assets/js/jquery-3.6.0.min.js') ? '/assets/js/jquery-3.6.0.min.js' : 'https://code.jquery.com/jquery-3.6.0.min.js';
@@ -22,21 +24,24 @@ $select2_js_path    = file_exists($root_path . '/assets/js/select2.min.js') ? '/
 $pesan_sukses_mut = '';
 $pesan_error_mut  = '';
 
-// 1. Fetch Pilihan SIM ID & Modem Aktif
-$list_sim_mutasi = [];
+$list_sim_mutasi   = [];
 $list_modem_mutasi = [];
 try {
-    $stmt_s = $conn->query("SELECT SimId, NomorAkun FROM master_nomor WHERE StatusData = 'AKTIF' ORDER BY SimId ASC");
+    // Ambil daftar SimId & ImeiModem dari master_barang
+    $stmt_s = $conn->query("SELECT DISTINCT SimId FROM master_barang WHERE StatusData = 'AKTIF' AND SimId IS NOT NULL AND SimId != '' ORDER BY SimId ASC");
     $list_sim_mutasi = $stmt_s->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmt_m = $conn->query("SELECT ImeiModem FROM master_modem WHERE StatusData = 'AKTIF' ORDER BY ImeiModem ASC");
+    $stmt_m = $conn->query("SELECT DISTINCT ImeiModem FROM master_barang WHERE StatusData = 'AKTIF' AND ImeiModem IS NOT NULL AND ImeiModem != '' ORDER BY ImeiModem ASC");
     $list_modem_mutasi = $stmt_m->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $pesan_error_mut = "Gagal memuat master data: " . $e->getMessage();
 }
 
-// 2. Submit Mutasi
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_mutasi'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+        die("Akses ditolak: Token CSRF tidak valid.");
+    }
+
     if ($_POST['action_mutasi'] === 'simpan_mutasi') {
         try {
             $no_form_pem = $_POST['no_form_pemeliharaan'];
@@ -64,14 +69,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_mutasi'])) {
     }
 }
 
-// 3. Fetch Data Mutasi
 $data_mutasi = [];
 try {
-    $sql_mut = "SELECT p.*, n.NomorAkun 
+    $where_clauses = [];
+    $params_query = [];
+
+    if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+        if (!empty($session_up)) {
+            $where_clauses[] = "p.UnitUp = ?";
+            $params_query[] = $session_up;
+        } elseif (!empty($session_ap)) {
+            $where_clauses[] = "p.UnitAp = ?";
+            $params_query[] = $session_ap;
+        }
+    }
+
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    // Membaca relasi dari master_barang berdasarkan NoRef
+    $sql_mut = "SELECT p.*, b.SimId AS SimBarang, b.ImeiModem AS ImeiBarang 
                 FROM frm_pemeliharaan p 
-                LEFT JOIN master_nomor n ON p.SimId = n.SimId 
-                ORDER BY p.WaktuData DESC";
-    $stmt_mut = $conn->query($sql_mut);
+                LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
+                $where_sql
+                ORDER BY p.WaktuData DESC LIMIT 100";
+    $stmt_mut = $conn->prepare($sql_mut);
+    $stmt_mut->execute($params_query);
     $data_mutasi = $stmt_mut->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $pesan_error_mut = "Error Database: " . $e->getMessage();
@@ -82,19 +104,9 @@ try {
 <link href="<?= $select2_theme_path ?>" rel="stylesheet" />
 
 <style>
-    .table-compact thead th {
-        font-size: 0.75rem !important;
-        font-weight: 700 !important;
-        color: #6c757d !important;
-        padding: 0.6rem 0.35rem !important;
-    }
-    .table-compact tbody td {
-        padding: 0.5rem 0.35rem !important;
-        font-size: 0.81rem !important;
-    }
-    .select2-container--open {
-        z-index: 99999 !important;
-    }
+    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
+    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; }
+    .select2-container--open { z-index: 99999 !important; }
 </style>
 
 <?php if (!empty($pesan_sukses_mut)): ?>
@@ -150,9 +162,6 @@ try {
                                     <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle font-monospace">
                                         <?= htmlspecialchars($row['SimId']) ?>
                                     </span>
-                                    <?php if (!empty($row['NomorAkun'])): ?>
-                                        <div class="small text-muted mt-1 font-monospace"><?= htmlspecialchars($row['NomorAkun']) ?></div>
-                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted fst-italic small">Tanpa SIM</span>
                                 <?php endif; ?>
@@ -186,6 +195,7 @@ try {
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <div class="modal-body p-4 text-start">
                         <input type="hidden" name="action_mutasi" value="simpan_mutasi">
                         <input type="hidden" name="no_form_pemeliharaan" value="<?= htmlspecialchars($row['NoFormPemeliharaan']) ?>">
@@ -209,20 +219,18 @@ try {
                             </div>
                         </div>
 
-                        <!-- SEARCHABLE SELECT2 SIM CARD -->
                         <div class="mb-3">
                             <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE SIM CARD BARU</label>
                             <select name="sim_id" class="form-select select2-searchable-sim" data-placeholder="-- Cari / Ketik SIM ID --" style="width: 100%;">
                                 <option value="">-- Cari / Ketik SIM ID --</option>
                                 <?php foreach ($list_sim_mutasi as $s): ?>
                                     <option value="<?= htmlspecialchars($s['SimId']); ?>" <?= (($row['SimId'] ?? '') === $s['SimId']) ? 'selected' : ''; ?>>
-                                        <?= htmlspecialchars($s['SimId']); ?><?= !empty($s['NomorAkun']) ? ' (' . htmlspecialchars($s['NomorAkun']) . ')' : ''; ?>
+                                        <?= htmlspecialchars($s['SimId']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
 
-                        <!-- SEARCHABLE SELECT2 IMEI MODEM -->
                         <div class="mb-3">
                             <label class="form-label text-uppercase text-muted fw-bold small mb-1">UPDATE IMEI MODEM BARU</label>
                             <select name="imei_modem" class="form-select select2-searchable-modem" data-placeholder="-- Cari / Ketik IMEI Modem --" style="width: 100%;">
