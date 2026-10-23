@@ -3,47 +3,54 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Query Data Monitoring Order Pemeliharaan
+if (!isset($conn)) {
+    require_once __DIR__ . '/../../config/database.php';
+}
+
+$user_role  = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
+$session_ap = $_SESSION['UnitAp'] ?? '';
+$session_up = $_SESSION['UnitUp'] ?? '';
+
 $data_mon_order = [];
 try {
-    $sql_mon = "SELECT p.*, n.NomorAkun 
+    $where_clauses = [];
+    $params_query = [];
+
+    if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+        if (!empty($session_up)) {
+            $where_clauses[] = "p.UnitUp = ?";
+            $params_query[] = $session_up;
+        } elseif (!empty($session_ap)) {
+            $where_clauses[] = "p.UnitAp = ?";
+            $params_query[] = $session_ap;
+        }
+    }
+
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    $sql_mon = "SELECT p.NoFormPemeliharaan, p.TglPemeliharaan, p.IdPel, p.NoRef, p.SimId, 
+                       p.ImeiModem, p.KondisiRelay, p.WaktuData, p.FotoPasang, p.FotoBarang
                 FROM frm_pemeliharaan p 
-                LEFT JOIN master_nomor n ON p.SimId = n.SimId 
-                ORDER BY p.WaktuData DESC";
-    $stmt_mon = $conn->query($sql_mon);
+                LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
+                $where_sql
+                ORDER BY p.WaktuData DESC LIMIT 100";
+    $stmt_mon = $conn->prepare($sql_mon);
+    $stmt_mon->execute($params_query);
     $data_mon_order = $stmt_mon->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Error handler
+    // Silent
 }
 ?>
 
 <style>
-    .table-compact thead th {
-        font-size: 0.75rem !important;
-        font-weight: 700 !important;
-        color: #6c757d !important;
-        padding: 0.6rem 0.35rem !important;
-        white-space: normal !important;
-    }
-    .table-compact tbody td {
-        padding: 0.5rem 0.35rem !important;
-        font-size: 0.81rem !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-    }
-    .table-compact .badge {
-        font-size: 0.7rem !important;
-        padding: 0.3em 0.45em !important;
-    }
-    .preview-img-box {
-        width: 100%;
-        height: 220px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-    }
+    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
+    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; word-break: break-word !important; }
+    .table-compact .badge { font-size: 0.7rem !important; padding: 0.3em 0.45em !important; }
+    .preview-img-box { width: 100%; height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; }
 </style>
+
+<!-- Iframe Tersembunyi untuk Download Tanpa Trigger Spinner -->
+<iframe id="iframeDownloadOrder" style="display: none;"></iframe>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
@@ -51,13 +58,17 @@ try {
             <h5 class="fw-bold text-primary mb-0">Monitoring Laporan Order Pemeliharaan</h5>
             <p class="text-muted small mb-0">Rekapitulasi status pengerjaan berita acara pemeliharaan.</p>
         </div>
-        <div class="input-group style-search" style="width: 260px;">
-            <span class="input-group-text bg-light border-end-0 rounded-start-3 text-muted"><i class="bi bi-search"></i></span>
-            <input type="text" id="searchMonOrder" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari data monitoring...">
+        <div class="d-flex gap-2">
+            <div class="input-group style-search" style="width: 240px;">
+                <span class="input-group-text bg-light border-end-0 rounded-start-3 text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" id="searchMonOrder" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari data monitoring...">
+            </div>
+            <button type="button" id="btnExportOrder" class="btn btn-outline-success rounded-3 fw-medium">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+            </button>
         </div>
     </div>
 
-    <!-- Container Tabel Pas Layar -->
     <div class="w-100">
         <table class="table table-hover align-middle mb-0 table-compact w-100" id="tableMonOrder">
             <thead class="table-light text-dark border-top border-bottom">
@@ -66,12 +77,12 @@ try {
                     <th style="width: 17%;">NO FORM PEMELIHARAAN</th>
                     <th style="width: 11%;">TGL PEMELIHARAAN</th>
                     <th style="width: 14%;">IDPEL / NO REF</th>
-                    <th style="width: 13%;">SIM ID / NO AKUN</th>
+                    <th style="width: 13%;">SIM ID</th>
                     <th style="width: 12%;">IMEI MODEM</th>
                     <th style="width: 9%;">KONDISI RELAY</th>
                     <th style="width: 8%;">STATUS DATA</th>
                     <th style="width: 10%;">WAKTU DATA</th>
-                    <th class="pe-2 text-center" style="width: 3%;">FOTO</th>
+                    <th class="pe-2 text-center" style="width: 6%;">DOKUMENTASI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
@@ -92,9 +103,6 @@ try {
                                     <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle font-monospace">
                                         <?= htmlspecialchars($row['SimId']) ?>
                                     </span>
-                                    <?php if (!empty($row['NomorAkun'])): ?>
-                                        <div class="small text-muted mt-1 font-monospace"><?= htmlspecialchars($row['NomorAkun']) ?></div>
-                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted fst-italic small">-</span>
                                 <?php endif; ?>
@@ -105,18 +113,15 @@ try {
                                     <?= htmlspecialchars($row['KondisiRelay'] ?? '-') ?>
                                 </span>
                             </td>
-                            <td>
-                                <span class="badge bg-success-subtle text-success">TERKIRIM</span>
-                            </td>
+                            <td><span class="badge bg-success-subtle text-success">TERKIRIM</span></td>
                             <td class="font-monospace text-secondary small"><?= htmlspecialchars($row['WaktuData'] ?? '-') ?></td>
                             <td class="pe-2 text-center">
                                 <?php if (!empty($row['FotoPasang']) || !empty($row['FotoBarang'])): ?>
-                                    <button type="button" class="btn btn-sm btn-outline-info p-1 lh-1 rounded-2" data-bs-toggle="modal" data-bs-target="#modalFotoMon<?= $idx ?>" title="Lihat Foto Dokumentasi">
-                                        <i class="bi bi-image"></i>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-2 px-2 py-1" data-bs-toggle="modal" data-bs-target="#modalFotoMon<?= $idx ?>" title="Lihat Foto Dokumentasi">
+                                        <i class="bi bi-image me-1"></i> Foto
                                     </button>
 
-                                    <!-- Pop-up Foto Dual (Foto Pasang & Foto Barang) -->
-                                    <div class="modal fade" id="modalFotoMon<?= $idx ?>" tabindex="-1">
+                                    <div class="modal fade" id="modalFotoMon<?= $idx ?>" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-dialog-centered modal-lg">
                                             <div class="modal-content border-0 rounded-4 shadow">
                                                 <div class="modal-header border-bottom py-3 px-4">
@@ -124,11 +129,10 @@ try {
                                                         <h6 class="modal-title fw-bold text-dark mb-0">Foto Hasil Pemeliharaan</h6>
                                                         <small class="text-muted font-monospace">No Form: <?= htmlspecialchars($row['NoFormPemeliharaan']) ?></small>
                                                     </div>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                 </div>
-                                                <div class="modal-body p-4">
+                                                <div class="modal-body p-4 text-start">
                                                     <div class="row g-3">
-                                                        <!-- Foto Pasang / Lapangan -->
                                                         <div class="col-md-6 text-center">
                                                             <label class="form-label text-muted fw-bold small text-uppercase mb-2"><i class="bi bi-camera me-1"></i>Foto Pemasangan / Lapangan</label>
                                                             <?php if (!empty($row['FotoPasang'])): ?>
@@ -140,7 +144,6 @@ try {
                                                             <?php endif; ?>
                                                         </div>
 
-                                                        <!-- Foto Fisik Barang / Perangkat -->
                                                         <div class="col-md-6 text-center">
                                                             <label class="form-label text-muted fw-bold small text-uppercase mb-2"><i class="bi bi-box-seam me-1"></i>Foto Fisik Perangkat / Barang</label>
                                                             <?php if (!empty($row['FotoBarang'])): ?>
@@ -173,6 +176,7 @@ try {
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+    // Pencarian tabel
     const searchMon = document.getElementById("searchMonOrder");
     if (searchMon) {
         searchMon.addEventListener("keyup", function() {
@@ -182,6 +186,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 const text = row.textContent.toLowerCase();
                 row.style.display = text.includes(filter) ? "" : "none";
             });
+        });
+    }
+
+    // Trigger unduh Excel via iframe
+    const btnExport = document.getElementById("btnExportOrder");
+    if (btnExport) {
+        btnExport.addEventListener("click", function(e) {
+            e.preventDefault();
+            document.getElementById("iframeDownloadOrder").src = "modules/pemeliharaan/export_excel.php?type=order";
         });
     }
 });

@@ -3,7 +3,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// 1. DYNAMIC HYBRID LOADER CSS/JS (SERVER OFFLINE & LOCALHOST)
 $root_dir = $_SERVER['DOCUMENT_ROOT'];
 
 $select2_css_path   = file_exists($root_dir . '/assets/css/select2.min.css') 
@@ -25,14 +24,16 @@ $select2_js_path    = file_exists($root_dir . '/assets/js/select2.min.js')
 $pesan_sukses = '';
 $pesan_error  = '';
 
-// 2. Fetch Master Data Lengkap untuk Dropdown
+$user_role  = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
+$session_ap = $_SESSION['UnitAp'] ?? '';
+$session_up = $_SESSION['UnitUp'] ?? '';
+
 $list_barang_full = [];
 $list_ap          = [];
 $list_idpel_pem   = [];
-$list_sim_card    = [];
-$list_modem       = [];
 
 try {
+    // Ambil data master_barang
     $stmt_brg = $conn->query("SELECT NoRef, SimId, ImeiModem FROM master_barang WHERE StatusData = 'AKTIF' AND NoRef IS NOT NULL AND NoRef != '' ORDER BY NoRef ASC");
     $list_barang_full = $stmt_brg->fetchAll(PDO::FETCH_ASSOC);
 
@@ -41,18 +42,14 @@ try {
 
     $stmt_idpel = $conn->query("SELECT DISTINCT IdPel FROM master_barang WHERE StatusData = 'AKTIF' AND IdPel IS NOT NULL AND IdPel != '' ORDER BY IdPel ASC");
     $list_idpel_pem = $stmt_idpel->fetchAll(PDO::FETCH_ASSOC);
-
-    $stmt_sim = $conn->query("SELECT SimId, NomorAkun FROM master_nomor WHERE StatusData = 'AKTIF' ORDER BY SimId ASC");
-    $list_sim_card = $stmt_sim->fetchAll(PDO::FETCH_ASSOC);
-
-    $stmt_modem = $conn->query("SELECT ImeiModem FROM master_modem WHERE StatusData = 'AKTIF' ORDER BY ImeiModem ASC");
-    $list_modem = $stmt_modem->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Silent catch
+    // Silent
 }
 
-// 3. Handling Form Submit (Simpan Data ke 3 Tabel)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+        die("Akses ditolak: Token CSRF tidak valid.");
+    }
     
     $input_petugas = !empty($_POST['kd_petugas']) ? strtoupper(trim($_POST['kd_petugas'])) : 'IPM.001';
     $input_relay   = !empty($_POST['kondisi_relay']) ? strtoupper(trim($_POST['kondisi_relay'])) : 'BERFUNGSI';
@@ -60,19 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $input_posisi  = !empty($_POST['posisi_pasang']) ? strtoupper(trim($_POST['posisi_pasang'])) : 'PANGKAL';
     $input_akun    = !empty($_SESSION['NamaAkun']) ? substr(trim($_SESSION['NamaAkun']), 0, 20) : 'superadmin';
 
-    // A. TAMBAH ORDER PEMELIHARAAN BARU
     if ($_POST['action'] === 'tambah_pemeliharaan') {
         try {
             $unit_ap  = !empty($_POST['unit_ap']) ? substr($_POST['unit_ap'], 0, 5) : '56610';
             $unit_up  = !empty($_POST['unit_up']) ? substr($_POST['unit_up'], 0, 5) : '56610';
-            $unit_upi = !empty($_POST['unit_upi']) ? substr($_POST['unit_upi'], 0, 2) : '56';
+            $unit_upi = '56';
 
-            // GENERASI ID KONSISTEN
             $base_id        = $unit_up . date('YmdHis');
             $no_form_header = substr($base_id, 0, 16) . "-F.G"; 
             $no_form_pem    = substr($base_id, 0, 16) . "-F.H"; 
 
-            // Upload Foto Pasang & Foto Barang
             $foto_pasang = null;
             if (isset($_FILES['foto_pasang']) && $_FILES['foto_pasang']['error'] === UPLOAD_ERR_OK) {
                 $foto_pasang = file_get_contents($_FILES['foto_pasang']['tmp_name']);
@@ -88,10 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $arr_imei   = $_POST['imei_modem'] ?? [];
             $id_pel_val = !empty($_POST['id_pel']) ? substr($_POST['id_pel'], 0, 12) : null;
 
-            $conn->exec("SET FOREIGN_KEY_CHECKS = 0");
             $conn->beginTransaction();
 
-            // 1. Insert Header (frm_order_har)
             $stmt_hdr_har = $conn->prepare("INSERT INTO frm_order_har 
                 (NoFormOrder, TglOrder, KdPetugas, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) 
                 VALUES (:no_order, :tgl, :kd_petugas, :nama_akun, :up, :ap, :upi, :status_data, NOW())");
@@ -107,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ':status_data' => $input_status
             ]);
 
-            // Prepare Statement
             $stmt_dtl_har = $conn->prepare("INSERT INTO frm_order_har_detil 
                 (NoFormOrder, NoRef, SimId, ImeiModem, IdPel) 
                 VALUES (:no_order, :no_ref, :sim_id, :imei, :id_pel)");
@@ -124,7 +115,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $sim_id_val  = !empty($arr_sim_id[$index]) ? substr($arr_sim_id[$index], 0, 25) : null;
                 $imei_val    = !empty($arr_imei[$index]) ? substr($arr_imei[$index], 0, 30) : null;
 
-                // 2. Insert Detail
                 $stmt_dtl_har->execute([
                     ':no_order' => $no_form_header,
                     ':no_ref'   => substr($clean_ref, 0, 30),
@@ -133,7 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     ':id_pel'   => $id_pel_val
                 ]);
 
-                // 3. Insert Pemeliharaan Fisik
                 $stmt_pemeliharaan->execute([
                     ':no_form_pem'  => $no_form_pem,
                     ':no_order'     => $no_form_header,
@@ -159,16 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             $conn->commit();
-            $conn->exec("SET FOREIGN_KEY_CHECKS = 1");
             $pesan_sukses = "Berhasil menyimpan order ($no_form_header) beserta $item_tersimpan item ke database!";
         } catch (PDOException $e) {
-            $conn->rollBack();
-            $conn->exec("SET FOREIGN_KEY_CHECKS = 1");
+            if ($conn->inTransaction()) $conn->rollBack();
             $pesan_error = "Gagal menyimpan data: " . $e->getMessage();
         }
     }
 
-    // B. EDIT DATA PEMELIHARAAN
     if ($_POST['action'] === 'edit_pemeliharaan') {
         try {
             $no_form_pem = $_POST['no_form_pemeliharaan'];
@@ -214,9 +200,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// 4. FETCH DATA UTAMA DENGAN QUERY INNER JOIN AMAN
 $data_pemeliharaan = [];
 try {
+    $where_clauses = [];
+    $params_query = [];
+
+    if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+        if (!empty($session_up)) {
+            $where_clauses[] = "p.UnitUp = ?";
+            $params_query[] = $session_up;
+        } elseif (!empty($session_ap)) {
+            $where_clauses[] = "p.UnitAp = ?";
+            $params_query[] = $session_ap;
+        }
+    }
+
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
     $sql_join = "SELECT 
                     p.NoFormPemeliharaan,
                     p.NoFormOrder,
@@ -240,9 +240,11 @@ try {
                     h.UnitAp
                 FROM frm_pemeliharaan p
                 LEFT JOIN frm_order_har h ON p.NoFormOrder = h.NoFormOrder
-                ORDER BY p.WaktuData DESC";
+                $where_sql
+                ORDER BY p.WaktuData DESC LIMIT 100";
 
-    $stmt_join = $conn->query($sql_join);
+    $stmt_join = $conn->prepare($sql_join);
+    $stmt_join->execute($params_query);
     $data_pemeliharaan = $stmt_join->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $pesan_error = "Error Query Database: " . $e->getMessage();
@@ -255,37 +257,15 @@ foreach ($data_pemeliharaan as $p) {
 }
 ?>
 
-<!-- LOAD CSS SELECT2 -->
 <link href="<?= $select2_css_path ?>" rel="stylesheet" />
 <link href="<?= $select2_theme_path ?>" rel="stylesheet" />
 
 <style>
-    .table-compact thead th {
-        font-size: 0.75rem !important;
-        font-weight: 700 !important;
-        color: #6c757d !important;
-        padding: 0.6rem 0.35rem !important;
-    }
-    .table-compact tbody td {
-        padding: 0.5rem 0.35rem !important;
-        font-size: 0.81rem !important;
-        word-break: break-word !important;
-    }
-    .table-compact .badge {
-        font-size: 0.7rem !important;
-        padding: 0.3em 0.45em !important;
-    }
-    .preview-img-box {
-        width: 100%;
-        height: 220px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-    }
-    .select2-container--open {
-        z-index: 99999 !important;
-    }
+    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
+    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; word-break: break-word !important; }
+    .table-compact .badge { font-size: 0.7rem !important; padding: 0.3em 0.45em !important; }
+    .preview-img-box { width: 100%; height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; }
+    .select2-container--open { z-index: 99999 !important; }
 </style>
 
 <?php if (!empty($pesan_sukses)): ?>
@@ -302,7 +282,6 @@ foreach ($data_pemeliharaan as $p) {
     </div>
 <?php endif; ?>
 
-<!-- RINGKASAN STATISTIK -->
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
@@ -332,7 +311,6 @@ foreach ($data_pemeliharaan as $p) {
     </div>
 </div>
 
-<!-- TABEL UTAMA ORDER PEMELIHARAAN -->
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
         <h5 class="fw-bold text-primary mb-0">Daftar Order Pemeliharaan</h5>
@@ -387,7 +365,6 @@ foreach ($data_pemeliharaan as $p) {
                             <td><span class="badge bg-primary-subtle text-primary"><?= htmlspecialchars($row['StatusData']) ?></span></td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
-                                    <!-- AKSI DETAIL (MATA) SAFE ENCODED -->
                                     <button type="button" class="btn btn-sm btn-outline-info btn-detail-pemeliharaan" 
                                             data-noform="<?= htmlspecialchars($row['NoFormPemeliharaan'] ?? '', ENT_QUOTES) ?>"
                                             data-noorder="<?= htmlspecialchars($row['NoFormOrder'] ?? '', ENT_QUOTES) ?>"
@@ -407,7 +384,6 @@ foreach ($data_pemeliharaan as $p) {
                                         <i class="bi bi-eye"></i>
                                     </button>
                                     
-                                    <!-- AKSI EDIT (PENSIL) SAFE ENCODED -->
                                     <button type="button" class="btn btn-sm btn-outline-primary btn-edit-pemeliharaan" 
                                             data-noform="<?= htmlspecialchars($row['NoFormPemeliharaan'] ?? '', ENT_QUOTES) ?>"
                                             data-tgl="<?= htmlspecialchars($row['TglPemeliharaan'] ?? '', ENT_QUOTES) ?>"
@@ -512,6 +488,7 @@ foreach ($data_pemeliharaan as $p) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-body p-4 text-start">
                     <input type="hidden" name="action" value="edit_pemeliharaan">
                     <input type="hidden" name="no_form_pemeliharaan" id="editNoFormPemeliharaan">
@@ -596,6 +573,7 @@ foreach ($data_pemeliharaan as $p) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                 <div class="modal-body p-4 text-start">
                     <input type="hidden" name="action" value="tambah_pemeliharaan">
 
@@ -610,14 +588,16 @@ foreach ($data_pemeliharaan as $p) {
                             <select name="unit_ap" id="selectUnitAp" class="form-select rounded-3" required>
                                 <option value="">-- Pilih Unit AP --</option>
                                 <?php foreach ($list_ap as $ap): ?>
-                                    <option value="<?= htmlspecialchars($ap['UnitAp']); ?>"><?= htmlspecialchars($ap['SingkatanNama']); ?> (<?= htmlspecialchars($ap['UnitAp']); ?>)</option>
+                                    <option value="<?= htmlspecialchars($ap['UnitAp']); ?>" <?= ($session_ap === $ap['UnitAp']) ? 'selected' : ''; ?>>
+                                        <?= htmlspecialchars($ap['SingkatanNama']); ?> (<?= htmlspecialchars($ap['UnitAp']); ?>)
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label text-uppercase text-muted fw-bold small mb-1">UNIT UP *</label>
-                            <select name="unit_up" id="selectUnitUp" class="form-select rounded-3" required disabled>
-                                <option value="">-- Pilih AP Dahulu --</option>
+                            <select name="unit_up" id="selectUnitUp" class="form-select rounded-3" required>
+                                <option value="">-- Pilih Unit UP --</option>
                             </select>
                         </div>
                     </div>
@@ -755,14 +735,12 @@ foreach ($data_pemeliharaan as $p) {
     </div>
 </div>
 
-<!-- LOAD JS JQUERY & SELECT2 -->
 <script src="<?= $jquery_js_path ?>"></script>
 <script src="<?= $select2_js_path ?>"></script>
 
 <script>
 $(document).ready(function() {
 
-    // 1. INSIALISASI SELECT2
     function initSelect2Elements(container) {
         container.find('.select2-searchable').select2({
             theme: 'bootstrap-5',
@@ -776,7 +754,6 @@ $(document).ready(function() {
         initSelect2Elements($(this));
     });
 
-    // 2. EVENT DETAIL (IKON MATA)
     $(document).on('click', '.btn-detail-pemeliharaan', function(e) {
         e.preventDefault();
         var btn = $(this);
@@ -812,7 +789,6 @@ $(document).ready(function() {
         modalDetail.show();
     });
 
-    // 3. EVENT EDIT (IKON PENSIL)
     $(document).on('click', '.btn-edit-pemeliharaan', function(e) {
         e.preventDefault();
         var btn = $(this);
@@ -830,7 +806,6 @@ $(document).ready(function() {
         modalEdit.show();
     });
 
-    // 4. DYNAMIC ROW TAMBAH BARANG & AUTO FILL
     $(document).on('change', '.select2-noref', function() {
         var selectedOption = $(this).find('option:selected');
         var simVal  = selectedOption.data('sim') || '';
@@ -842,26 +817,27 @@ $(document).ready(function() {
     });
 
     $("#btnTambahBarang").click(function() {
-        var $firstRow = $("#containerBarang .row-barang:first");
+        var $container = $("#containerBarang");
+        var $firstRow = $container.find(".row-barang:first");
+
         $firstRow.find('.select2-searchable').select2('destroy');
 
         var $newRow = $firstRow.clone();
         $newRow.find('select').val('');
         $newRow.find('input').val('');
 
-        $("#containerBarang").append($newRow);
+        $container.append($newRow);
         initSelect2Elements($('#modalTambahPemeliharaan'));
 
-        $newRow.find('.btn-hapus-baris').prop('disabled', false).click(function() {
-            $(this).closest('tr').remove();
+        $newRow.find('.btn-hapus-baris').prop('disabled', false).off('click').on('click', function() {
+            if ($("#containerBarang .row-barang").length > 1) {
+                $(this).closest('tr').remove();
+            }
         });
     });
 
-    // 5. CASCADE UNIT AP KE UNIT UP
-    $("#selectUnitAp").change(function() {
-        var unitApVal = $(this).val();
+    function loadUnitUp(unitApVal) {
         var $selectUp = $("#selectUnitUp");
-
         $selectUp.html('<option value="">-- Memuat Data UP... --</option>').prop("disabled", true);
 
         if (unitApVal !== "") {
@@ -871,10 +847,8 @@ $(document).ready(function() {
                     $selectUp.html('<option value="">-- Pilih Unit UP --</option>');
                     if (data.length > 0) {
                         $.each(data, function(i, item) {
-                            $selectUp.append($('<option>', {
-                                value: item.UnitUp,
-                                text: item.SingkatanNama + ' (' + item.UnitUp + ')'
-                            }));
+                            var selected = (item.UnitUp === '<?= $session_up; ?>') ? 'selected' : '';
+                            $selectUp.append($('<option value="' + item.UnitUp + '" ' + selected + '>' + item.SingkatanNama + ' (' + item.UnitUp + ')</option>'));
                         });
                         $selectUp.prop("disabled", false);
                     } else {
@@ -887,9 +861,16 @@ $(document).ready(function() {
         } else {
             $selectUp.html('<option value="">-- Pilih AP Dahulu --</option>');
         }
+    }
+
+    $("#selectUnitAp").change(function() {
+        loadUnitUp($(this).val());
     });
 
-    // 6. LIVE SEARCH TABEL
+    if ($("#selectUnitAp").val() !== "") {
+        loadUnitUp($("#selectUnitAp").val());
+    }
+
     $("#searchTable").on("keyup", function() {
         var value = $(this).val().toLowerCase();
         $("#tablePemeliharaan tbody tr").filter(function() {

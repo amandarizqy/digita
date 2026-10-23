@@ -15,7 +15,6 @@ if (!isset($conn)) {
 $pesan_sukses_eks = '';
 $pesan_error_eks  = '';
 
-// Handling Eksekusi Order
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
     if ($_POST['action_eksekusi'] === 'proses_order') {
         try {
@@ -64,12 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
     }
 }
 
-// Fetch Data Order
 $data_eksekusi = [];
 try {
-    $sql_eks = "SELECT p.*, n.NomorAkun 
+    // Membaca data langsung dari frm_pemeliharaan dan master_barang
+    $sql_eks = "SELECT p.*, b.SimId AS SimBarang, b.ImeiModem AS ImeiBarang 
                 FROM frm_pemeliharaan p 
-                LEFT JOIN master_nomor n ON p.SimId = n.SimId 
+                LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
                 ORDER BY p.WaktuData DESC";
     $stmt_eks = $conn->query($sql_eks);
     $data_eksekusi = $stmt_eks->fetchAll(PDO::FETCH_ASSOC);
@@ -146,7 +145,7 @@ foreach ($data_eksekusi as $d) {
                     <th class="py-3 text-nowrap">NO FORM / ORDER</th>
                     <th class="py-3 text-nowrap">TGL & PETUGAS</th>
                     <th class="py-3 text-nowrap">IDPEL / NO REF</th>
-                    <th class="py-3 text-nowrap">SIM ID / NO AKUN</th>
+                    <th class="py-3 text-nowrap">SIM ID</th>
                     <th class="py-3 text-nowrap">KONDISI RELAY</th>
                     <th class="py-3 text-nowrap">KOORDINAT GPS</th>
                     <th class="pe-3 py-3 text-center" style="width: 120px;">ACTION</th>
@@ -178,9 +177,6 @@ foreach ($data_eksekusi as $d) {
                                     <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle rounded-3 px-2 py-1 font-monospace">
                                         <?= htmlspecialchars($row['SimId']) ?>
                                     </span>
-                                    <?php if (!empty($row['NomorAkun'])): ?>
-                                        <div class="small text-muted mt-1 font-monospace"><i class="bi bi-telephone-fill me-1"></i><?= htmlspecialchars($row['NomorAkun']) ?></div>
-                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted fst-italic small">Tanpa SIM</span>
                                 <?php endif; ?>
@@ -208,7 +204,6 @@ foreach ($data_eksekusi as $d) {
                             </td>
                         </tr>
 
-                        <!-- Modal Form Eksekusi Order -->
                         <div class="modal fade" id="modalEksekusiOrder<?= $idx ?>" tabindex="-1">
                             <div class="modal-dialog modal-dialog-centered modal-lg">
                                 <div class="modal-content border-0 rounded-4 shadow">

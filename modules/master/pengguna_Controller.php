@@ -4,9 +4,12 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../config/database.php';
 
+// Pastikan BASE_URL aman dari trailing slash agar tidak terjadi error 404
+$base_url = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+
 // 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: /modules/auth/login.php");
+    header("Location: " . $base_url . "/login.php");
     exit;
 }
 
@@ -19,7 +22,7 @@ if ($user_role === 'AM.UI') {
     exit;
 }
 
-// PERBAIKAN UTAMA: Berikan izin penuh untuk SA.KP dan SF.UI
+// Berikan izin penuh hanya untuk SA.KP dan SF.UI
 if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
     echo "<script>
         alert('Akses Ditolak: Peran " . htmlspecialchars($user_role) . " tidak memiliki wewenang untuk membuka modul pengguna.');
@@ -31,61 +34,108 @@ if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
 $sub    = $_GET['filter'] ?? 'semua';
 $action = $_GET['action'] ?? 'index';
 
+// Generasi Token CSRF jika belum ada di session
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 // 3. Tambah Pengguna (POST - store)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
+    // Validasi CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Akses ditolak: Token CSRF tidak valid.");
+    }
+
     $nama_akun   = trim($_POST['NamaAkun'] ?? '');
     $email       = trim($_POST['AlamatEmail'] ?? '');
     $nama_user   = trim($_POST['NamaPengguna'] ?? '');
     $kontak      = trim($_POST['NomorKontak'] ?? '');
-    $kata_kunci  = trim($_POST['KataKunci'] ?? '');   // trim sama seperti login.php agar hash cocok saat login
+    $kata_kunci  = trim($_POST['KataKunci'] ?? '');
     $kode_hak    = $_POST['KodeHak'] ?? 'SF.AP';
     $unit_upi    = '56';
-    $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : null;
-    $unit_up     = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : null;
-    $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+    $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : ($_SESSION['UnitAp'] ?? null);
+    $unit_up     = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : ($_SESSION['UnitUp'] ?? null);
+    
+    // Perbaikan: Jika StatusData tidak dikirim form, set default ke 'AKTIF' agar akun baru bisa langsung login
+    $status_data = isset($_POST['StatusData']) ? ($_POST['StatusData'] === 'AKTIF' ? 'AKTIF' : 'TIDAK') : 'AKTIF';
+
+    // Validasi Tingkat Akses (Proteksi Privilege Escalation)
+    if ($kode_hak === 'SA.KP' && $user_role !== 'SA.KP') {
+        die("Akses ditolak: Anda tidak memiliki wewenang untuk membuat akun Super Admin (SA.KP).");
+    }
 
     if (!empty($nama_akun) && !empty($kata_kunci)) {
-        // Sandi disimpan sebagai hash (bcrypt), bukan teks biasa
         $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
 
-        $stmt = $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
-        $stmt->execute([$nama_akun, $email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data]);
+        try {
+            $stmt = $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([$nama_akun, $email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data]);
+        } catch (PDOException $e) {
+            error_log("Error Store Pengguna: " . $e->getMessage());
+            die("Gagal menyimpan data pengguna.");
+        }
     }
-    header("Location: index.php?page=master&sub=pengguna");
+    header("Location: index.php?page=master&sub=pengguna&msg=stored");
     exit;
 }
 
 // 4. Edit Pengguna (POST - update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
+    // Validasi CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Akses ditolak: Token CSRF tidak valid.");
+    }
+
     $nama_akun   = trim($_POST['NamaAkun'] ?? '');
     $email       = trim($_POST['AlamatEmail'] ?? '');
     $nama_user   = trim($_POST['NamaPengguna'] ?? '');
     $kontak      = trim($_POST['NomorKontak'] ?? '');
-    $kata_kunci  = trim($_POST['KataKunci'] ?? '');   // kosong = sandi tidak diubah
+    $kata_kunci  = trim($_POST['KataKunci'] ?? '');
     $kode_hak    = $_POST['KodeHak'] ?? 'SF.AP';
-    $unit_upi    = '56';
-    $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : null;
-    $unit_up     = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : null;
-    $status_data = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+    $status_data = isset($_POST['StatusData']) ? ($_POST['StatusData'] === 'AKTIF' ? 'AKTIF' : 'TIDAK') : 'AKTIF';
 
-    if (!empty($kata_kunci)) {
-        // Sandi baru diisi -> di-hash sebelum disimpan
-        $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
+    // Ambil data pengguna lama dari database
+    $stmt_old = $conn->prepare("SELECT * FROM master_pengguna WHERE NamaAkun = ?");
+    $stmt_old->execute([$nama_akun]);
+    $old_data = $stmt_old->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KataKunci = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
-        $stmt->execute([$email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
-    } else {
-        $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
-        $stmt->execute([$email, $nama_user, $kontak, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
+    if ($old_data) {
+        // Proteksi: Mencegah pengguna non-SA.KP mengedit akun SA.KP
+        if ($old_data['KodeHak'] === 'SA.KP' && $user_role !== 'SA.KP') {
+            die("Akses ditolak: Anda tidak memiliki wewenang untuk mengubah akun Super Admin.");
+        }
+
+        // Perbaikan Utama: Jika input UnitAp/UnitUp di form kosong, pertahankan nilai unit lama di DB (Jangan di-set NULL)
+        $unit_upi = '56';
+        $unit_ap  = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : $old_data['UnitAp'];
+        $unit_up  = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : $old_data['UnitUp'];
+
+        try {
+            if (!empty($kata_kunci)) {
+                $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KataKunci = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
+                $stmt->execute([$email, $nama_user, $kontak, $hash_kunci, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
+            } else {
+                $stmt = $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KodeHak = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?");
+                $stmt->execute([$email, $nama_user, $kontak, $kode_hak, $unit_upi, $unit_ap, $unit_up, $status_data, $nama_akun]);
+            }
+        } catch (PDOException $e) {
+            error_log("Error Update Pengguna: " . $e->getMessage());
+            die("Gagal memperbarui data pengguna.");
+        }
     }
 
-    header("Location: index.php?page=master&sub=pengguna");
+    header("Location: index.php?page=master&sub=pengguna&msg=updated");
     exit;
 }
 
-// 5. Toggle Status (GET - toggle_status)
-if ($action === 'toggle_status') {
-    $id = $_GET['id'] ?? null;
+// 5. Toggle Status (POST untuk keamanan CSRF)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle_status') {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Akses ditolak: Token CSRF tidak valid.");
+    }
+
+    $id = $_POST['id'] ?? null;
     if ($id) {
         $stmt = $conn->prepare("SELECT StatusData FROM master_pengguna WHERE NamaAkun = ?");
         $stmt->execute([$id]);
@@ -97,7 +147,7 @@ if ($action === 'toggle_status') {
             $update->execute([$status_baru, $id]);
         }
     }
-    header("Location: index.php?page=master&sub=pengguna");
+    header("Location: index.php?page=master&sub=pengguna&msg=toggled");
     exit;
 }
 

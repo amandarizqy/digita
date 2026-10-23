@@ -3,7 +3,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Load Koneksi Database (Aman di Server Intranet PLN maupun Localhost)
 $root_path = $_SERVER['DOCUMENT_ROOT'];
 if (!isset($conn)) {
     if (file_exists($root_path . '/config/database.php')) {
@@ -13,71 +12,44 @@ if (!isset($conn)) {
     }
 }
 
-// 1. Evaluasi Hak Akses Role berdasarkan Tabel Otoritas DIGITA
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $user_role = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
 $is_sa     = ($user_role === 'SA.KP');
 
-// Order Pemeliharaan -> Hanya TL.UP & SA.KP
 $akses_order    = ($is_sa || $user_role === 'TL.UP');
-
-// Mutasi Pemeliharaan -> Hanya SF.UP & SA.KP
 $akses_mutasi   = ($is_sa || $user_role === 'SF.UP');
 
-// Monitoring Order & Mutasi -> Semua Role Terdaftar
 $role_monitoring = ['SA.KP', 'MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'];
 $akses_mon_order  = in_array($user_role, $role_monitoring, true);
 $akses_mon_mutasi = in_array($user_role, $role_monitoring, true);
 
-// 2. Ambil parameter sub-halaman
 $sub = $_GET['sub'] ?? '';
 
-// Validasi & Proteksi URL jika Role tidak berhak
-if ($sub === 'order_pemeliharaan' && !$akses_order) {
-    $sub = '';
-}
-if ($sub === 'mutasi_pemeliharaan' && !$akses_mutasi) {
-    $sub = '';
-}
-if ($sub === 'monitoring_order' && !$akses_mon_order) {
-    $sub = '';
-}
-if ($sub === 'monitoring_mutasi' && !$akses_mon_mutasi) {
-    $sub = '';
-}
+if ($sub === 'order_pemeliharaan' && !$akses_order) $sub = '';
+if ($sub === 'mutasi_pemeliharaan' && !$akses_mutasi) $sub = '';
+if ($sub === 'monitoring_order' && !$akses_mon_order) $sub = '';
+if ($sub === 'monitoring_mutasi' && !$akses_mon_mutasi) $sub = '';
 
-// Default otomatis pilih tab pertama yang diizinkan untuk role tersebut
 if (empty($sub)) {
-    if ($akses_order) {
-        $sub = 'order_pemeliharaan';
-    } elseif ($akses_mutasi) {
-        $sub = 'mutasi_pemeliharaan';
-    } elseif ($akses_mon_order) {
-        $sub = 'monitoring_order';
-    } elseif ($akses_mon_mutasi) {
-        $sub = 'monitoring_mutasi';
-    }
+    if ($akses_order) $sub = 'order_pemeliharaan';
+    elseif ($akses_mutasi) $sub = 'mutasi_pemeliharaan';
+    elseif ($akses_mon_order) $sub = 'monitoring_order';
+    elseif ($akses_mon_mutasi) $sub = 'monitoring_mutasi';
 }
 
-// Daftar tab yang tampil sesuai hak akses (gaya sama dengan modul Master)
 $tab_pemeliharaan = [];
-if ($akses_order) {
-    $tab_pemeliharaan[] = ['key' => 'order_pemeliharaan',  'label' => 'Order Pemeliharaan',            'icon' => 'bi-tools'];
-}
-if ($akses_mutasi) {
-    $tab_pemeliharaan[] = ['key' => 'mutasi_pemeliharaan', 'label' => 'Mutasi Pemeliharaan',           'icon' => 'bi-arrow-left-right'];
-}
-if ($akses_mon_order) {
-    $tab_pemeliharaan[] = ['key' => 'monitoring_order',    'label' => 'Monitoring Order Pemeliharaan', 'icon' => 'bi-display'];
-}
-if ($akses_mon_mutasi) {
-    $tab_pemeliharaan[] = ['key' => 'monitoring_mutasi',   'label' => 'Monitoring Mutasi Pemeliharaan', 'icon' => 'bi-journal-check'];
-}
+if ($akses_order)      $tab_pemeliharaan[] = ['key' => 'order_pemeliharaan',  'label' => 'Order Pemeliharaan',            'icon' => 'bi-tools'];
+if ($akses_mutasi)     $tab_pemeliharaan[] = ['key' => 'mutasi_pemeliharaan', 'label' => 'Mutasi Pemeliharaan',           'icon' => 'bi-arrow-left-right'];
+if ($akses_mon_order)  $tab_pemeliharaan[] = ['key' => 'monitoring_order',    'label' => 'Monitoring Order Pemeliharaan', 'icon' => 'bi-display'];
+if ($akses_mon_mutasi) $tab_pemeliharaan[] = ['key' => 'monitoring_mutasi',   'label' => 'Monitoring Mutasi Pemeliharaan', 'icon' => 'bi-journal-check'];
 
 $page_title = "Modul Pemeliharaan S41 - DIGITA";
 ?>
 
 <div class="container-fluid px-2 py-2">
-    <!-- JUDUL HALAMAN -->
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
         <div>
             <h4 class="fw-bold text-dark mb-1">Modul Pemeliharaan S41</h4>
@@ -85,7 +57,6 @@ $page_title = "Modul Pemeliharaan S41 - DIGITA";
         </div>
     </div>
 
-    <!-- SUB MENU PEMELIHARAAN (menyamping rata kiri, gaya sama dengan tab Master) -->
     <div class="card border-0 shadow-sm rounded-4 p-2 mb-3 bg-white">
         <ul class="nav nav-pills d-flex flex-row align-items-center gap-2 mb-0 border-0">
             <?php foreach ($tab_pemeliharaan as $tab): ?>
@@ -100,7 +71,6 @@ $page_title = "Modul Pemeliharaan S41 - DIGITA";
         </ul>
     </div>
 
-    <!-- ROUTER SUB-HALAMAN -->
     <?php
     switch ($sub) {
         case 'mutasi_pemeliharaan':
