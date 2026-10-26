@@ -16,13 +16,17 @@ $maks_kirim   = 50;      // batas perangkat per sekali kirim
 $sumber_barang = 'vw_terpasang';
 $db_gateway    = 'smsd';
 $tiket_cfg = [   // sumber tiket: tabel, kolom kunci, label, perintah yang disarankan
-    'putus' => ['tabel' => 'trx_order_putus', 'pk' => 'TiketPutus', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF'],
-    'nyala' => ['tabel' => 'trx_order_nyala', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON'],
+    'putus' => ['tabel' => 'trx_order_putus', 'pk' => 'TiketPutus', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus'],
+    'nyala' => ['tabel' => 'trx_order_nyala', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala'],
 ];
 $sumber = (string) ($_POST['sumber'] ?? $_GET['sumber'] ?? 'putus');
 if (!isset($tiket_cfg[$sumber]) && $sumber !== 'barang') $sumber = 'putus';
 $saran_cmd = $tiket_cfg[$sumber]['saran'] ?? '';
 foreach ([$sumber_barang, $db_gateway] as $id) if (!preg_match('/^\w+$/', $id)) throw new RuntimeException('Nama view/database tidak valid.');
+
+/** Kondisi SQL status relay: nilai bisa 'ON'/'OFF' atau teks hasil balasan perangkat (mis. 'LISTRIK MENYALA - BERHASIL (RELAY NC)'). */
+$sql_relay_on  = "(b.StatusRelay = 'ON'  OR b.StatusRelay LIKE '%MENYALA%' OR b.StatusRelay LIKE '%RELAY NC%')";
+$sql_relay_off = "(b.StatusRelay = 'OFF' OR b.StatusRelay LIKE '%PADAM%' OR b.StatusRelay LIKE '%MATI%' OR b.StatusRelay LIKE '%RELAY NO%')";
 
 /** Pilihan perintah. 'bahaya' = berdampak langsung ke pelanggan (butuh konfirmasi tegas). */
 $daftar_perintah = [
@@ -30,6 +34,11 @@ $daftar_perintah = [
     'PLNON'     => ['label' => 'Nyalakan listrik', 'bahaya' => true],
     'PLNSTATUS' => ['label' => 'Cek status',       'bahaya' => false],
 ];
+
+// Pembatasan per tab: Tiket Putus tidak boleh PLNON, Tiket Nyala tidak boleh PLNOFF (tab Perangkat manual: semua perintah).
+// Dibuang dari daftar yang sama sehingga berlaku di dropdown sekaligus validasi saat POST.
+if ($sumber === 'putus') unset($daftar_perintah['PLNON']);
+elseif ($sumber === 'nyala') unset($daftar_perintah['PLNOFF']);
 
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['pg_csrf'];
@@ -50,6 +59,16 @@ if (!function_exists('pr_nomor')) {
         return preg_match('/^62[1-9]\d{7,12}$/', $n) ? '+' . $n : null;
     }
 
+    /** Status relay -> true (menyala/ON), false (padam/OFF), null (belum diketahui). */
+    function pr_relay_on($v): ?bool
+    {
+        $v = strtoupper(trim((string) $v));
+        if ($v === '') return null;
+        if ($v === 'OFF' || preg_match('/PADAM|MATI|RELAY NO\b/', $v)) return false;
+        if ($v === 'ON'  || preg_match('/MENYALA|RELAY NC\b/', $v))    return true;
+        return null;
+    }
+
     /** Antrekan satu SMS ke outbox gateway dengan Status 'Reserved' (diambil service Python). */
     function pr_antrekan_sms(PDO $conn, string $db, string $tujuan, string $teks, string $pembuat): void
     {
@@ -62,6 +81,8 @@ if (!function_exists('pr_nomor')) {
 $keyword = trim($_GET['keyword'] ?? '');
 $relay   = in_array($_GET['relay'] ?? '', ['ON', 'OFF'], true) ? $_GET['relay'] : '';
 $status  = in_array($_GET['status'] ?? 'AKTIF', ['AKTIF', 'TIDAK', 'SEMUA'], true) ? ($_GET['status'] ?? 'AKTIF') : 'AKTIF';   // status tiket (default AKTIF)
+// status tindakan (trx_tindakan_putus / trx_tindakan_nyala): BELUM = tiket macet (belum ada tindakan), default BELUM
+$tindakan = in_array($_GET['tindakan'] ?? 'BELUM', ['BELUM', 'SUDAH', 'SEMUA'], true) ? ($_GET['tindakan'] ?? 'BELUM') : 'BELUM';
 $limit   = (int) ($_GET['limit'] ?? 25);
 if (!in_array($limit, [10, 25, 50, 100], true)) $limit = 25;
 $hal     = max(1, (int) ($_GET['hal'] ?? 1));
@@ -100,35 +121,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st = $conn->prepare("SELECT b.NoRef AS kode, MIN(b.NomorBarang) AS nomor FROM `$sumber_barang` b
                                       WHERE b.NoRef IN (" . implode(',', $ph) . ") AND $scope GROUP BY b.NoRef");
                 $st->execute($p);
-                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], "digita:$akun:" . $r['kode']];
+                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], "digita:$akun:" . $r['kode'], 0];
             } else {
                 $c = $tiket_cfg[$sumber]; $pk = $c['pk'];
                 $scope = pg_scope($u, 't', 'Unit', $p);
                 // NoRef perangkat dicari dari view lewat IdPel + NomorBarang tiket (untuk penelusuran di monitoring)
-                $st = $conn->prepare("SELECT t.$pk AS kode, t.NomorBarang AS nomor, MIN(b.NoRef) AS NoRef
-                                      FROM `{$c['tabel']}` t LEFT JOIN `$sumber_barang` b ON b.IdPel = t.IdPel AND b.NomorBarang = t.NomorBarang
+                $st = $conn->prepare("SELECT t.$pk AS kode, t.NomorBarang AS nomor, MIN(b.NoRef) AS NoRef, MAX(a.$pk IS NOT NULL) AS sudah
+                                      FROM `{$c['tabel']}` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN `$sumber_barang` b ON b.IdPel = t.IdPel AND b.NomorBarang = t.NomorBarang
                                       WHERE t.$pk IN (" . implode(',', $ph) . ") AND $scope GROUP BY t.$pk, t.NomorBarang");
                 $st->execute($p);
                 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-                    $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], $r['NoRef'] === null ? null : "digita:$akun:" . $r['NoRef'] . ':' . $r['kode']];
+                    $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], $r['NoRef'] === null ? null : "digita:$akun:" . $r['NoRef'] . ':' . $r['kode'], (int) $r['sudah']];
                 }
             }
 
-            $ok = 0; $lewat = [];
+            $ok = 0; $ulang = 0; $lewat = [];
             $hilang = array_diff($targets, array_keys($daftar));
             if ($hilang) $lewat[] = pg_n(count($hilang)) . ' data di luar wilayah Anda';
 
             $conn->beginTransaction();
-            foreach ($daftar as [$label, $nomor, $creator]) {
+            foreach ($daftar as [$label, $nomor, $creator, $sudah]) {
                 $hp = pr_nomor($nomor ?? '');
                 if ($hp === null)      { $lewat[] = "$label tanpa nomor barang valid"; continue; }
                 if ($creator === null) { $lewat[] = "$label perangkatnya tidak ditemukan di data terpasang"; continue; }
                 pr_antrekan_sms($conn, $db_gateway, $hp, $cmd, mb_substr($creator, 0, 100));
                 $ok++;
+                if ($sudah) $ulang++;
             }
             $conn->commit();
 
-            if ($ok > 0) $pesan_sukses = 'Perintah <strong>' . pg_e($cmd) . '</strong> (' . pg_e($daftar_perintah[$cmd]['label']) . ') diantrekan untuk <strong>' . pg_n($ok) . '</strong> ' . ($sumber === 'barang' ? 'perangkat' : 'tiket') . '. Status pengiriman dapat dipantau di Monitoring Perintah.';
+            if ($ok > 0) $pesan_sukses = 'Perintah <strong>' . pg_e($cmd) . '</strong> (' . pg_e($daftar_perintah[$cmd]['label']) . ') diantrekan untuk <strong>' . pg_n($ok) . '</strong> ' . ($sumber === 'barang' ? 'perangkat' : 'tiket') . '. ' . ($ulang > 0 ? pg_n($ulang) . ' di antaranya <em>sudah punya tindakan</em> (dikirim ulang). ' : '') . 'Status pengiriman dapat dipantau di Monitoring Perintah.';
             if ($lewat)  $pesan_error  = 'Dilewati: ' . pg_e(implode('; ', array_slice($lewat, 0, 5))) . (count($lewat) > 5 ? '; …' : '') . '.';
             if ($ok === 0 && !$pesan_error) $pesan_error = 'Tidak ada perintah yang diantrekan.';
         } catch (PDOException $e) {
@@ -141,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error];
         header('Location: ' . pg_url('input_perintah', [
             'sumber' => $sumber === 'putus' ? '' : $sumber, 'status' => ($_POST['f_status'] ?? 'AKTIF') === 'AKTIF' ? '' : ($_POST['f_status'] ?? ''),
+            'tindakan' => ($_POST['f_tindakan'] ?? 'BELUM') === 'BELUM' ? '' : ($_POST['f_tindakan'] ?? ''),
             'keyword' => $_POST['f_keyword'] ?? '', 'relay' => $_POST['f_relay'] ?? '',
             'limit' => ($_POST['f_limit'] ?? '') == 25 ? '' : ($_POST['f_limit'] ?? ''), 'hal' => ($_POST['f_hal'] ?? 1) > 1 ? $_POST['f_hal'] : '',
         ]));
@@ -156,7 +179,7 @@ if ($unit_siap) {
     try {
         if ($sumber === 'barang') {
             $p = []; $scope = pg_scope($u, 'b', 'Unit', $p);
-            $st = $conn->prepare("SELECT COUNT(DISTINCT b.NoRef), COUNT(DISTINCT CASE WHEN b.StatusRelay = 'ON' THEN b.NoRef END), COUNT(DISTINCT CASE WHEN b.StatusRelay = 'OFF' THEN b.NoRef END)
+            $st = $conn->prepare("SELECT COUNT(DISTINCT b.NoRef), COUNT(DISTINCT CASE WHEN $sql_relay_on THEN b.NoRef END), COUNT(DISTINCT CASE WHEN $sql_relay_off THEN b.NoRef END)
                                   FROM `$sumber_barang` b WHERE $scope");
             $st->execute($p);
             [$ringkas['total'], $ringkas['a'], $ringkas['b']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
@@ -166,7 +189,7 @@ if ($unit_siap) {
                 $w[] = '(b.NoRef LIKE :k1 OR b.IdPel LIKE :k2 OR b.NomorBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR l.NamaPelanggan LIKE :k5)';
                 foreach (['k1', 'k2', 'k3', 'k4', 'k5'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
-            if ($relay !== '') { $w[] = 'b.StatusRelay = :rl'; $p[':rl'] = $relay; }
+            if ($relay !== '') $w[] = $relay === 'ON' ? $sql_relay_on : $sql_relay_off;
             $from = "FROM `$sumber_barang` b LEFT JOIN dil l ON l.IdPel = b.IdPel WHERE " . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(DISTINCT b.NoRef) $from");
@@ -180,26 +203,32 @@ if ($unit_siap) {
         } else {
             $c = $tiket_cfg[$sumber]; $pk = $c['pk']; $tb = $c['tabel'];
             $p = []; $scope = pg_scope($u, 't', 'Unit', $p);
-            $st = $conn->prepare("SELECT COUNT(*), SUM(t.StatusData = 'AKTIF'), SUM(t.StatusData = 'TIDAK') FROM `$tb` t WHERE $scope");
-            $st->execute($p);
+            // ringkasan mengikuti filter status tiket; a = belum ada tindakan, b = sudah ada tindakan
+            $pr = $p; $wr = [$scope];
+            if ($status !== 'SEMUA') { $wr[] = 't.StatusData = :st0'; $pr[':st0'] = $status; }
+            $st = $conn->prepare("SELECT COUNT(*), SUM(a.$pk IS NULL), SUM(a.$pk IS NOT NULL)
+                                  FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk WHERE " . implode(' AND ', $wr));
+            $st->execute($pr);
             [$ringkas['total'], $ringkas['a'], $ringkas['b']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
 
             $w = [$scope];
             if ($status !== 'SEMUA') { $w[] = 't.StatusData = :st'; $p[':st'] = $status; }
+            if ($tindakan === 'BELUM')     $w[] = "a.$pk IS NULL";
+            elseif ($tindakan === 'SUDAH') $w[] = "a.$pk IS NOT NULL";
             if ($keyword !== '') {
                 $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.NamaPelanggan LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
-            $from = "FROM `$tb` t LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '') . " WHERE " . implode(' AND ', $w);
+            $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '') . " WHERE " . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(DISTINCT t.$pk) $from");
             $st->execute($p);
             $total_data = (int) $st->fetchColumn();
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData"
+            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk AS AdaTindakan, a.SmsId, a.JenisTindakan, a.WaktuData AS WaktuTindakan"
                                  . ($sumber === 'putus' ? ", MIN(n.TiketNyala) AS TiketNyala" : '')
-                                 . " $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData
+                                 . " $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk, a.SmsId, a.JenisTindakan, a.WaktuData
                                    ORDER BY t.WaktuData DESC, t.$pk DESC LIMIT :lim OFFSET :off");
         }
         foreach ($p as $k => $v) $st->bindValue($k, $v);
