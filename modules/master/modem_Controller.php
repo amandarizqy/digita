@@ -182,7 +182,7 @@ $akses_provider = $akses_unit;
 $akses_modem    = true;
 $akses_pesan    = in_array($role, ['SA.KP', 'AM.UI'], true);
 
-$page_title = "Master Modem GSM - Digita S41";
+$page_title = "Master - Digitas S41";
 
 ob_start();
 ?>

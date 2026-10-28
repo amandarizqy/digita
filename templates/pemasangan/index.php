@@ -94,6 +94,12 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
     if ($sub === 'pengujian') {
         if ($view === 'detail') require_once __DIR__ . '/pengujian_detail.php';
         else require_once __DIR__ . '/pengujian_daftar.php';
+    } elseif ($sub === 'order_pasang') {
+        if ($view === 'detail') require_once __DIR__ . '/order_detail.php';
+        else require_once __DIR__ . '/order_daftar.php';
+    } elseif ($sub === 'mutasi_pasang') {
+        if ($view === 'detail') require_once __DIR__ . '/mutasi_detail.php';
+        else require_once __DIR__ . '/mutasi_daftar.php';
     } else {
         echo '<div class="card shadow-sm border-0"><div class="card-body p-5 text-center"><h5 class="text-muted"><i class="bi bi-tools fs-1 text-light d-block mb-3"></i> Tampilan '.strtoupper(str_replace('_', ' ', $sub)).'</h5></div></div>';
     }
@@ -143,11 +149,34 @@ $link_mon = $can_monitoring ? 'index.php?page=pemasangan&menu=monitoring&sub=sta
 })();
 
 // SWEETALERT POPUP SAAT BERHASIL MENYIMPAN FORMULIR PENGUJIAN
+// SWEETALERT POPUP SAAT BERHASIL MENYIMPAN PENGUJIAN
 <?php if (isset($_GET['status']) && $_GET['status'] === 'sukses'): ?>
 Swal.fire({
     icon: 'success',
     title: 'Pengujian Berhasil Disimpan!',
     text: 'Data hasil pengujian dan pairing SIM Card S41 telah tersimpan.',
+    confirmButtonColor: '#0d6efd',
+    confirmButtonText: 'Selesai'
+});
+<?php endif; ?>
+
+// [TAMBAHKAN INI] SWEETALERT POPUP SAAT BERHASIL MENERBITKAN ORDER PASANG
+<?php if (isset($_GET['status']) && $_GET['status'] === 'sukses_order'): ?>
+Swal.fire({
+    icon: 'success',
+    title: 'SPK Order Pasang Berhasil Diterbitkan!',
+    text: 'Surat Perintah Kerja telah aktif dan diteruskan ke Petugas Lapangan (SF.UP).',
+    confirmButtonColor: '#0d6efd',
+    confirmButtonText: 'Selesai'
+});
+<?php endif; ?>
+
+// SWEETALERT POPUP SAAT BERHASIL MENYIMPAN MUTASI PASANG
+<?php if (isset($_GET['status']) && $_GET['status'] === 'sukses_mutasi'): ?>
+Swal.fire({
+    icon: 'success',
+    title: 'Mutasi Pasang Berhasil Disimpan!',
+    text: 'Data pemasangan di lapangan telah dicatat dan Status Relay perangkat di master barang telah diaktifkan (ON).',
     confirmButtonColor: '#0d6efd',
     confirmButtonText: 'Selesai'
 });

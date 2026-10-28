@@ -2,9 +2,11 @@
 require_once __DIR__ . '/../../config/database.php';
 
 $kode_hak = $_SESSION['KodeHak'] ?? '';
-$can_pengujian     = in_array($kode_hak, ['SF.AP', 'SF.UP', 'SA.KP']);
-$can_order_pasang  = in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP']);
-$can_mutasi_pasang = in_array($kode_hak, ['SF.AP', 'SF.UP', 'SA.KP']);
+
+// PERUBAHAN HAK AKSES SESUAI MATRIKS BARU
+$can_pengujian     = ($kode_hak === 'SF.UP'); // Hanya SF.UP
+$can_order_pasang  = ($kode_hak === 'TL.UP'); // Hanya TL.UP
+$can_mutasi_pasang = ($kode_hak === 'SF.UP'); // Hanya SF.UP
 $can_monitoring    = in_array($kode_hak, ['MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SA.KP']);
 
 $can_pra_eksekusi = $can_pengujian;
@@ -25,24 +27,23 @@ if (!isset($_GET['menu'])) {
 $menu = $_GET['menu'] ?? 'pra_eksekusi'; 
 $sub  = $_GET['sub'] ?? 'pengujian';
 $view = $_GET['view'] ?? 'daftar'; 
+$unit_up = $_SESSION['UnitUp'] ?? '';
 
-// --- PENGAMBILAN DATA UNTUK PENGUJIAN ---
+// =================================================================
+// 1. MODUL PENGUJIAN (Dipertahankan 100% dari versi sebelumnya)
+// =================================================================
 if ($menu === 'pra_eksekusi' && $sub === 'pengujian') {
     
     // LOGIKA 3-LAYER AKSES DATA (Hierarki Aset)
     $filter_up = "";
     if (!empty($_SESSION['UnitUp'])) {
-        // UP hanya bisa melihat data di UP-nya sendiri
         $filter_up = " AND UnitUp = '" . $_SESSION['UnitUp'] . "'";
     } elseif (!empty($_SESSION['UnitAp'])) {
-        // AP bisa melihat data miliknya dan UP di bawahnya
         $filter_up = " AND UnitAp = '" . $_SESSION['UnitAp'] . "'"; 
     } elseif (!empty($_SESSION['UnitUpi'])) {
-        // UPI bisa melihat seluruh data AP & UP di bawahnya
         $filter_up = " AND UnitUpi = '" . $_SESSION['UnitUpi'] . "'"; 
     }
     
-    // Penyesuaian nama field (karena tabel nomor dan modem menggunakan awalan Kode)
     $filter_kode_up = str_replace('Unit', 'Kode', $filter_up);
 
     if ($view === 'daftar') {
@@ -73,7 +74,7 @@ if ($menu === 'pra_eksekusi' && $sub === 'pengujian') {
         $stmt_detil->execute([$no_form]);
         $items = $stmt_detil->fetchAll(PDO::FETCH_ASSOC);
 
-        // Ambil Data Sesuai Hierarki 3-Layer (Alat yang belum dipasang ke Pelanggan)
+        // Ambil Data Sesuai Hierarki 3-Layer 
         $stmt_alat = $conn->prepare("SELECT NoRef FROM master_barang WHERE StatusData = 'AKTIF' AND (IdPel IS NULL OR IdPel = '') $filter_up ORDER BY NoRef ASC");
         $stmt_alat->execute();
         $list_alat = $stmt_alat->fetchAll(PDO::FETCH_ASSOC);
@@ -89,6 +90,129 @@ if ($menu === 'pra_eksekusi' && $sub === 'pengujian') {
     }
 }
 
+// =================================================================
+// 2. MODUL ORDER PASANG (FPK & SPK oleh TL.UP)
+// =================================================================
+if ($menu === 'eksekusi' && $sub === 'order_pasang' && $can_order_pasang) {
+    
+    if ($view === 'daftar') {
+        $q = trim($_GET['q'] ?? '');
+        
+        // A. Ambil Daftar SPK (Order)
+        $sql_order = "SELECT o.NoFormOrder, o.TglOrder, o.NamaAkun, o.StatusData, o.WaktuData,
+                       (SELECT COUNT(NoFpk) FROM frm_order_detil d WHERE d.NoFormOrder = o.NoFormOrder) as TotalTarget
+                FROM frm_order o
+                WHERE o.UnitUp = :up AND (o.NoFormOrder LIKE :q)
+                ORDER BY o.WaktuData DESC";
+        $stmt_order = $conn->prepare($sql_order);
+        $stmt_order->execute([':up' => $unit_up, ':q' => "%$q%"]);
+        $list_order = $stmt_order->fetchAll(PDO::FETCH_ASSOC);
+
+        // B. Ambil Daftar FPK (Beserta status apakah sudah masuk Order/SPK)
+        $sql_fpk = "SELECT f.*, 
+                           (SELECT NoFormOrder FROM frm_order_detil d WHERE d.NoFpk = f.NoFpk LIMIT 1) as TerikatOrder
+                    FROM frm_pk f 
+                    WHERE f.UnitUp = :up AND (f.NoFpk LIKE :q OR f.IdPel LIKE :q)
+                    ORDER BY f.WaktuData DESC";
+        $stmt_fpk = $conn->prepare($sql_fpk);
+        $stmt_fpk->execute([':up' => $unit_up, ':q' => "%$q%"]);
+        $list_fpk = $stmt_fpk->fetchAll(PDO::FETCH_ASSOC);
+
+        // C. Ambil Data Pelanggan untuk Dropdown Modal FPK (Belum dipasang & Belum di-FPK-kan)
+        $stmt_pelanggan = $conn->prepare("
+            SELECT IdPel, Peringkat, TotalTagihan, SkalaPrioritas FROM hasil_prioritas 
+            WHERE UnitUp = ? 
+              AND IdPel NOT IN (SELECT IdPel FROM master_barang WHERE IdPel IS NOT NULL AND IdPel != '')
+              AND IdPel NOT IN (SELECT IdPel FROM frm_pk)
+            ORDER BY SkalaPrioritas DESC, Peringkat ASC
+        ");
+        $stmt_pelanggan->execute([$unit_up]);
+        $list_pelanggan = $stmt_pelanggan->fetchAll(PDO::FETCH_ASSOC);
+
+        // D. Ambil Data Alat untuk Dropdown Modal FPK (Sudah Uji & Belum di-FPK-kan)
+        $stmt_alat = $conn->prepare("
+            SELECT NoRef, ImeiModem, SimId FROM master_barang 
+            WHERE UnitUp = ? AND StatusData = 'AKTIF' AND SimId IS NOT NULL AND SimId != '' 
+              AND (IdPel IS NULL OR IdPel = '')
+              AND NoRef NOT IN (SELECT NomorBarang FROM frm_pk)
+            ORDER BY NoRef ASC
+        ");
+        $stmt_alat->execute([$unit_up]);
+        $list_alat = $stmt_alat->fetchAll(PDO::FETCH_ASSOC);
+
+    } elseif ($view === 'baru') {
+        header("Location: modules/pemasangan/proses_order.php?action=create_draft");
+        exit;
+        
+    } elseif ($view === 'detail') {
+        $no_form = $_GET['no_form'] ?? '';
+        
+        $stmt_head = $conn->prepare("SELECT * FROM frm_order WHERE NoFormOrder = ? AND UnitUp = ?");
+        $stmt_head->execute([$no_form, $unit_up]);
+        $formulir = $stmt_head->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$formulir) die("Formulir Order tidak ditemukan atau bukan milik Unit Anda.");
+
+        // Ambil FPK yang ada di dalam Order ini
+        $stmt_detil = $conn->prepare("SELECT od.NoFpk, pk.IdPel, pk.NomorBarang as NoRef FROM frm_order_detil od JOIN frm_pk pk ON od.NoFpk = pk.NoFpk WHERE od.NoFormOrder = ?");
+        $stmt_detil->execute([$no_form]);
+        $items = $stmt_detil->fetchAll(PDO::FETCH_ASSOC);
+
+        // Ambil FPK yang masih 'Nganggur' (Belum masuk Order manapun)
+        $stmt_fpk_bebas = $conn->prepare("
+            SELECT NoFpk, IdPel, NomorBarang as NoRef 
+            FROM frm_pk 
+            WHERE UnitUp = ? 
+              AND NoFpk NOT IN (SELECT NoFpk FROM frm_order_detil)
+        ");
+        $stmt_fpk_bebas->execute([$unit_up]);
+        $list_fpk_bebas = $stmt_fpk_bebas->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+
+// =================================================================
+// 3. MODUL MUTASI PASANG (Eksekusi Lapangan untuk SF.UP)
+// =================================================================
+else if ($menu === 'eksekusi' && $sub === 'mutasi_pasang' && $can_mutasi_pasang) {
+    
+    if ($view === 'daftar') {
+        $q = trim($_GET['q'] ?? '');
+        // Tampilkan semua SPK milik Unit ini tanpa memedulikan status untuk sementara
+        $sql = "SELECT o.NoFormOrder, o.TglOrder, o.NamaAkun, o.StatusData, o.WaktuData,
+                       (SELECT COUNT(NoFpk) FROM frm_order_detil d WHERE d.NoFormOrder = o.NoFormOrder) as TotalTarget,
+                       (SELECT COUNT(d.NoFpk) FROM frm_order_detil d 
+                        JOIN frm_pasang p ON d.NoFormOrder = p.NoFormOrder 
+                        JOIN frm_pk pk ON d.NoFpk = pk.NoFpk AND p.NoRef = pk.NomorBarang
+                        WHERE d.NoFormOrder = o.NoFormOrder AND p.StatusData = 'AKTIF') as TotalSelesai
+                FROM frm_order o
+                WHERE o.UnitUp = :up AND (o.NoFormOrder LIKE :q)
+                ORDER BY o.WaktuData DESC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([':up' => $unit_up, ':q' => "%$q%"]);
+        $list_mutasi = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } elseif ($view === 'detail') {
+        $no_form = $_GET['no_form'] ?? '';
+        
+        $stmt_head = $conn->prepare("SELECT * FROM frm_order WHERE NoFormOrder = ? AND UnitUp = ?");
+        $stmt_head->execute([$no_form, $unit_up]);
+        $formulir = $stmt_head->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$formulir) die("Surat Perintah Kerja (Order) tidak ditemukan atau bukan milik Unit Anda.");
+
+        $stmt_detil = $conn->prepare("
+            SELECT od.NoFpk, pk.IdPel, pk.NomorBarang as NoRef, pk.SimId, pk.ImeiModem,
+                   p.NoFormPasang, p.TglPasang, p.PosisiPasang, p.Longitude, p.Latitude, p.StatusData as StatusPasang
+            FROM frm_order_detil od
+            JOIN frm_pk pk ON od.NoFpk = pk.NoFpk
+            LEFT JOIN frm_pasang p ON od.NoFormOrder = p.NoFormOrder AND pk.NomorBarang = p.NoRef
+            WHERE od.NoFormOrder = ?
+        ");
+        $stmt_detil->execute([$no_form]);
+        $items = $stmt_detil->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+
+// Render Template Utama
 $page_title = "Pemasangan S41 - Digita";
 require_once __DIR__ . '/../../templates/pemasangan/index.php';
 ?>

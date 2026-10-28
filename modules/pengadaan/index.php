@@ -71,7 +71,7 @@ if ($menu === 'kartu' && !in_array($kode_hak, ['TL.AP', 'TL.UP', 'SA.KP'])) {
 }
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$page_title = "Pengadaan & Stok - Digita S41";
+$page_title = "Pengadaan & Stok - Digitas S41";
 
 // Jika menu Kartu
 if ($menu === 'kartu') {

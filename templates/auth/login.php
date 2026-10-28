@@ -16,8 +16,8 @@
             <div class="card card-login p-4 shadow">
                 <div class="text-center mb-4">
                     <img src="../../assets/img/logo2.png" alt="Logo DIGITA" class="img-fluid mb-3" style="max-height: 70px;">
-                    <h4 class="fw-bold text-dark mb-1">DIGITALISASI ASET SHUNTRIP</h4>
-                    <span class="text-muted small">Manajemen Mutu & Siklus Aset PLN</span>
+                    <h4 class="fw-bold text-dark mb-1">DIGITALISASI TATA KELOLA ASET SHUNTRIP</h4>
+                    <span class="text-muted small">Life Cycle Asset Management Framework</span>
                 </div>
 
                 <!-- Menampilkan pesan error dari file logic login.php -->
