@@ -1,93 +1,99 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// Ekspor Excel laporan pemeliharaan: ?type=order|mutasi[&q=pencarian]
+// Wajib login, hanya role monitoring, dan hanya data unit milik pengguna (aturan sama dengan halaman monitoring).
+session_start();
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../functions/pemeliharaan_helper.php';
+
+if (!isset($_SESSION['NamaAkun'])) {
+    http_response_code(401);
+    exit('Silakan login terlebih dahulu.');
+}
+if (!ph_akses_monitoring()) {
+    http_response_code(403);
+    exit('Anda tidak memiliki akses ekspor laporan pemeliharaan.');
 }
 
-$root_path = $_SERVER['DOCUMENT_ROOT'];
-if (!isset($conn)) {
-    if (file_exists($root_path . '/config/database.php')) {
-        require_once $root_path . '/config/database.php';
+// type hanya boleh 'order' atau 'mutasi' (nilai lain -> 'order'); tidak pernah dipakai mentah di header/nama file
+$type = (($_GET['type'] ?? 'order') === 'mutasi') ? 'mutasi' : 'order';
+
+[$sc, $sp]   = ph_scope('p');             // batas unit (gagal-tertutup bila akun tanpa unit)
+[$cari, $cp] = ph_cari_sql();             // ikut pencarian yang sedang aktif di layar
+
+try {
+    if ($type === 'mutasi') {
+        $sql = "SELECT p.NoFormPemeliharaan, p.TglPemeliharaan, p.IdPel, p.NoRef, p.SimId, p.ImeiModem, p.WaktuData,
+                       d.SimId AS SimAwal, d.ImeiModem AS ImeiAwal,
+                       (d.NoRef IS NOT NULL AND (NOT (p.SimId <=> d.SimId) OR NOT (p.ImeiModem <=> d.ImeiModem))) AS Termutasi
+                FROM frm_pemeliharaan p
+                LEFT JOIN frm_order_har_detil d ON d.NoFormOrder = p.NoFormOrder AND d.NoRef = p.NoRef
+                WHERE 1=1 $sc $cari ORDER BY p.WaktuData DESC, p.NoFormPemeliharaan DESC";
     } else {
-        require_once __DIR__ . '/../../config/database.php';
+        $sql = "SELECT p.NoFormPemeliharaan, p.NoFormOrder, p.TglPemeliharaan, p.KdPetugas, p.IdPel, p.NoRef, p.SimId, p.ImeiModem,
+                       p.KondisiRelay, p.PosisiPasang, p.Latitude, p.Longitude, p.StatusData, p.WaktuData
+                FROM frm_pemeliharaan p
+                WHERE 1=1 $sc $cari ORDER BY p.WaktuData DESC, p.NoFormPemeliharaan DESC";
     }
+    $stmt = $conn->prepare($sql);
+    $stmt->execute(array_merge($sp, $cp));
+} catch (PDOException $e) {
+    error_log('pemeliharaan export: ' . $e->getMessage());
+    http_response_code(500);
+    exit('Gagal membuat laporan. Hubungi administrator.');
 }
 
-$type = $_GET['type'] ?? 'order';
-$filename = "Laporan_Pemeliharaan_" . ucfirst($type) . "_" . date('Ymd_His') . ".xls";
+$filename = 'Laporan_Pemeliharaan_' . ucfirst($type) . '_' . date('Ymd_His') . '.xls';
+header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('X-Content-Type-Options: nosniff');
 
-header("Content-Type: application/vnd.ms-excel");
-header("Content-Disposition: attachment; filename=\"$filename\"");
+$teks = "style=\"mso-number-format:'\\@';\"";     // paksa kolom kode tampil sebagai teks (tidak jadi 1.2E+15 dsb.)
+echo "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"></head><body>\n";
+echo '<h2>REKAPITULASI LAPORAN ' . ($type === 'mutasi' ? 'MUTASI ' : '') . "PEMELIHARAAN S41 - DIGITA</h2>\n";
+echo "<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\"><thead><tr style=\"background-color:#e9ecef;font-weight:bold;\">";
 
-$user_role  = $_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST';
-$session_ap = $_SESSION['UnitAp'] ?? '';
-$session_up = $_SESSION['UnitUp'] ?? '';
-
-$where_clauses = [];
-$params_query = [];
-
-if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
-    if (!empty($session_up)) {
-        $where_clauses[] = "p.UnitUp = ?";
-        $params_query[] = $session_up;
-    } elseif (!empty($session_ap)) {
-        $where_clauses[] = "p.UnitAp = ?";
-        $params_query[] = $session_ap;
-    }
+if ($type === 'mutasi') {
+    $kepala = ['No', 'No Form Pemeliharaan', 'Tgl Pemeliharaan', 'ID Pelanggan', 'No Ref', 'SIM Awal', 'SIM Sekarang', 'IMEI Awal', 'IMEI Sekarang', 'Status Mutasi', 'Waktu Data'];
+} else {
+    $kepala = ['No', 'No Form Pemeliharaan', 'No Form Order', 'Tgl Pemeliharaan', 'Kode Petugas', 'ID Pelanggan', 'No Ref', 'SIM ID', 'IMEI Modem', 'Kondisi Relay', 'Posisi Pasang', 'Koordinat GPS', 'Status', 'Waktu Data'];
 }
+foreach ($kepala as $k) {
+    echo '<th>' . ph_xl($k) . '</th>';
+}
+echo "</tr></thead><tbody>\n";
 
-$where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
-
-// Query join master_barang
-$sql = "SELECT p.NoFormPemeliharaan, p.NoFormOrder, p.TglPemeliharaan, p.KdPetugas, p.IdPel, p.NoRef, 
-               p.SimId, p.ImeiModem, p.KondisiRelay, p.PosisiPasang, p.Latitude, p.Longitude, p.StatusData, p.WaktuData
-        FROM frm_pemeliharaan p 
-        LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
-        $where_sql 
-        ORDER BY p.WaktuData DESC";
-
-$stmt = $conn->prepare($sql);
-$stmt->execute($params_query);
-$data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-?>
-
-<h2>REKAPITULASI LAPORAN PEMELIHARAAN S41 - DIGITA</h2>
-<table border="1" cellpadding="5" cellspacing="0">
-    <thead>
-        <tr style="background-color: #e9ecef; font-weight: bold;">
-            <th>No</th>
-            <th>No Form Pemeliharaan</th>
-            <th>No Form Order</th>
-            <th>Tgl Pemeliharaan</th>
-            <th>Kode Petugas</th>
-            <th>ID Pelanggan</th>
-            <th>No Ref Perangkat</th>
-            <th>SIM ID</th>
-            <th>IMEI Modem</th>
-            <th>Kondisi Relay</th>
-            <th>Posisi Pasang</th>
-            <th>Koordinat GPS</th>
-            <th>Status Data</th>
-            <th>Waktu Input</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($data as $idx => $row): ?>
-        <tr>
-            <td><?= $idx + 1 ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['NoFormPemeliharaan']) ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['NoFormOrder'] ?? '-') ?></td>
-            <td><?= htmlspecialchars($row['TglPemeliharaan']) ?></td>
-            <td><?= htmlspecialchars($row['KdPetugas']) ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['IdPel']) ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['NoRef']) ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['SimId'] ?? '-') ?></td>
-            <td style="mso-number-format:'\@';"><?= htmlspecialchars($row['ImeiModem'] ?? '-') ?></td>
-            <td><?= htmlspecialchars($row['KondisiRelay']) ?></td>
-            <td><?= htmlspecialchars($row['PosisiPasang']) ?></td>
-            <td><?= htmlspecialchars(($row['Latitude'] ?? '') . ', ' . ($row['Longitude'] ?? '')) ?></td>
-            <td><?= htmlspecialchars($row['StatusData']) ?></td>
-            <td><?= htmlspecialchars($row['WaktuData']) ?></td>
-        </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
+$no = 0;
+while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    $no++;
+    echo '<tr><td>' . $no . '</td>';
+    if ($type === 'mutasi') {
+        $mut = !empty($r['Termutasi']);
+        echo "<td $teks>" . ph_xl($r['NoFormPemeliharaan']) . '</td>'
+           . '<td>' . ph_xl($r['TglPemeliharaan']) . '</td>'
+           . "<td $teks>" . ph_xl($r['IdPel']) . '</td>'
+           . "<td $teks>" . ph_xl($r['NoRef']) . '</td>'
+           . "<td $teks>" . ph_xl($r['SimAwal'] ?? '-') . '</td>'
+           . "<td $teks>" . ph_xl($r['SimId'] ?? '-') . '</td>'
+           . "<td $teks>" . ph_xl($r['ImeiAwal'] ?? '-') . '</td>'
+           . "<td $teks>" . ph_xl($r['ImeiModem'] ?? '-') . '</td>'
+           . '<td>' . ($mut ? 'TERMUTASI' : 'BELUM DIMUTASI') . '</td>'
+           . '<td>' . ph_xl($r['WaktuData']) . '</td>';
+    } else {
+        $gps = (($r['Latitude'] ?? '') !== '' && ($r['Longitude'] ?? '') !== '') ? $r['Latitude'] . ', ' . $r['Longitude'] : '-';
+        echo "<td $teks>" . ph_xl($r['NoFormPemeliharaan']) . '</td>'
+           . "<td $teks>" . ph_xl($r['NoFormOrder'] ?? '-') . '</td>'
+           . '<td>' . ph_xl($r['TglPemeliharaan']) . '</td>'
+           . '<td>' . ph_xl($r['KdPetugas']) . '</td>'
+           . "<td $teks>" . ph_xl($r['IdPel']) . '</td>'
+           . "<td $teks>" . ph_xl($r['NoRef']) . '</td>'
+           . "<td $teks>" . ph_xl($r['SimId'] ?? '-') . '</td>'
+           . "<td $teks>" . ph_xl($r['ImeiModem'] ?? '-') . '</td>'
+           . '<td>' . ph_xl($r['KondisiRelay'] ?? '-') . '</td>'
+           . '<td>' . ph_xl($r['PosisiPasang'] ?? '-') . '</td>'
+           . '<td>' . ph_xl($gps) . '</td>'
+           . '<td>' . (($r['StatusData'] ?? '') === 'AKTIF' ? 'SELESAI' : 'PENDING') . '</td>'
+           . '<td>' . ph_xl($r['WaktuData']) . '</td>';
+    }
+    echo "</tr>\n";
+}
+echo "</tbody></table></body></html>";

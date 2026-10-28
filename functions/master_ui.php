@@ -48,7 +48,7 @@ function ms_tone(string $tone): array
     return $map[$tone] ?? $map['primary'];
 }
 
-/** Skrip "Akses ditolak" (SweetAlert2) + dialog konfirmasi [data-confirm]. */
+/** Skrip "Akses ditolak" (SweetAlert2) + dialog konfirmasi [data-confirm] (untuk link GET maupun tombol di dalam form POST). */
 function ms_skrip_akses(): string
 {
     static $done = false;
@@ -66,7 +66,8 @@ function ms_skrip_akses(): string
     }
 })();
 
-// Dialog konfirmasi untuk tombol aktif/nonaktif: teks diambil dari atribut data-confirm
+// Dialog konfirmasi: teks dari atribut data-confirm.
+// Elemen berupa link (href) -> buka link; berupa tombol di dalam <form> -> kirim form.
 document.addEventListener('click', function (e) {
     var a = e.target.closest('[data-confirm]');
     if (!a) {
@@ -76,11 +77,20 @@ document.addEventListener('click', function (e) {
 
     var pesan = a.getAttribute('data-confirm') || 'Lanjutkan?';
     var href  = a.getAttribute('href');
+    var form  = a.closest('form');
     var nonaktif = /^nonaktifkan/i.test(pesan);
+
+    function lanjut() {
+        if (href) {
+            window.location.href = href;
+        } else if (form) {
+            form.submit();
+        }
+    }
 
     // Cadangan kalau SweetAlert2 belum termuat
     if (!window.Swal) {
-        if (confirm(pesan) && href) { window.location.href = href; }
+        if (confirm(pesan)) { lanjut(); }
         return;
     }
 
@@ -97,8 +107,8 @@ document.addEventListener('click', function (e) {
         focusCancel: true,
         customClass: { popup: 'rounded-4' }
     }).then(function (hasil) {
-        if (hasil.isConfirmed && href) {
-            window.location.href = href;
+        if (hasil.isConfirmed) {
+            lanjut();
         }
     });
 });
