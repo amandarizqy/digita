@@ -17,19 +17,19 @@ $sub_ini = 'monitoring_mutasi';
 $data_mon_mutasi = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 $pesan_error = '';
+
 try {
-    // Pembanding: SIM/IMEI saat order dibuat (frm_order_har_detil). Bila berbeda dengan yang terpasang sekarang -> TERMUTASI.
+    // Kueri disesuaikan dengan kolom yang valid pada frm_ba dan frm_ba_detil
     [$data_mon_mutasi, $total_hasil, $hal, $total_hal, $q] = ph_daftar(
         $conn,
-        "p.NoFormPemeliharaan, p.TglPemeliharaan, p.IdPel, p.NoRef, p.SimId, p.ImeiModem, p.WaktuData,
-         d.SimId AS SimAwal, d.ImeiModem AS ImeiAwal,
-         (d.NoRef IS NOT NULL AND (NOT (p.SimId <=> d.SimId) OR NOT (p.ImeiModem <=> d.ImeiModem))) AS Termutasi",
-        "frm_pemeliharaan p
-         LEFT JOIN frm_order_har_detil d ON d.NoFormOrder = p.NoFormOrder AND d.NoRef = p.NoRef"
+        "b.NoFba, b.NoFpk, b.TglFba, b.IdPel, bd.NoRef, bd.SimId, bd.ImeiModem, bd.StatusPekerjaan, b.WaktuData",
+        "frm_ba b 
+         JOIN frm_ba_detil bd ON b.NoFba = bd.NoFba",
+        "AND b.JenisPekerjaan = 'PEMELIHARAAN'"
     );
 } catch (PDOException $e) {
-    error_log('pemeliharaan monitoring_mutasi: ' . $e->getMessage());
-    $pesan_error = 'Gagal memuat data monitoring mutasi. Hubungi administrator.';
+    // Menangkap pesan error agar tidak langsung Fatal Error di layar
+    $pesan_error = 'Gagal memuat data monitoring mutasi: ' . $e->getMessage();
 }
 ?>
 
@@ -40,14 +40,14 @@ try {
 </style>
 
 <?php if ($pesan_error): ?>
-    <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
+    <div class="alert alert-danger rounded-3 mx-3 mt-3 shadow-sm"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
 <?php endif; ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 px-2 pt-2">
         <div>
             <h5 class="fw-bold text-primary mb-0">Monitoring Laporan Mutasi Pemeliharaan</h5>
-            <p class="text-muted small mb-0">Perbandingan SIM &amp; modem saat order dibuat dengan yang terpasang sekarang.</p>
+            <p class="text-muted small mb-0">Rekapitulasi riwayat bongkar dan pasang perangkat pada pemeliharaan S41.</p>
         </div>
         <div class="d-flex gap-2">
             <?= ph_kotak_cari($sub_ini, $q) ?>
@@ -60,48 +60,40 @@ try {
             <thead class="table-light text-dark border-top border-bottom">
                 <tr>
                     <th class="ps-2 text-center" style="width:3%;">#</th>
-                    <th style="width:17%;">NO FORM PEMELIHARAAN</th>
-                    <th style="width:10%;">TGL PEMELIHARAAN</th>
-                    <th style="width:14%;">IDPEL / NO REF</th>
-                    <th style="width:18%;">SIM ID (AWAL &rarr; SEKARANG)</th>
-                    <th style="width:18%;">IMEI MODEM (AWAL &rarr; SEKARANG)</th>
-                    <th style="width:10%;">STATUS MUTASI</th>
+                    <th style="width:18%;">NO FBA / PK</th>
+                    <th style="width:11%;">TGL BA</th>
+                    <th style="width:16%;">IDPEL / NO REF</th>
+                    <th style="width:15%;">SIM ID</th>
+                    <th style="width:15%;">IMEI MODEM</th>
+                    <th style="width:12%;">STATUS PEKERJAAN</th>
                     <th class="pe-2" style="width:10%;">WAKTU DATA</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_mon_mutasi)): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-4"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada laporan mutasi pemeliharaan.' ?></td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada laporan mutasi pemeliharaan.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_mon_mutasi as $idx => $row): ?>
-                        <?php $mut = !empty($row['Termutasi']); ?>
                         <tr class="border-bottom">
                             <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
-                            <td class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFormPemeliharaan']) ?></td>
-                            <td class="text-secondary"><?= ph_e($row['TglPemeliharaan']) ?></td>
-                            <td><div class="fw-bold text-dark">IDPEL: <?= ph_e($row['IdPel']) ?></div><div class="small text-muted">REF: <?= ph_e($row['NoRef']) ?></div></td>
-                            <td class="font-monospace">
-                                <?php if ($mut && ($row['SimAwal'] ?? '') !== ($row['SimId'] ?? '')): ?>
-                                    <span class="text-muted text-decoration-line-through small"><?= ph_e($row['SimAwal'] ?: '-') ?></span><br>
-                                    <span class="fw-bold"><?= ph_e($row['SimId'] ?: '-') ?></span>
-                                <?php else: ?>
-                                    <?= ph_e($row['SimId'] ?: '-') ?>
-                                <?php endif; ?>
-                            </td>
-                            <td class="font-monospace">
-                                <?php if ($mut && ($row['ImeiAwal'] ?? '') !== ($row['ImeiModem'] ?? '')): ?>
-                                    <span class="text-muted text-decoration-line-through small"><?= ph_e($row['ImeiAwal'] ?: '-') ?></span><br>
-                                    <span class="fw-bold"><?= ph_e($row['ImeiModem'] ?: '-') ?></span>
-                                <?php else: ?>
-                                    <?= ph_e($row['ImeiModem'] ?: '-') ?>
-                                <?php endif; ?>
-                            </td>
                             <td>
-                                <?php if ($mut): ?>
-                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">TERMUTASI</span>
+                                <div class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFba']) ?></div>
+                                <div class="small text-primary font-monospace">PK: <?= ph_e($row['NoFpk'] ?? '-') ?></div>
+                            </td>
+                            <td class="text-secondary"><?= ph_e($row['TglFba']) ?></td>
+                            <td><div class="fw-bold text-dark">IDPEL: <?= ph_e($row['IdPel']) ?></div><div class="small text-muted">REF: <?= ph_e($row['NoRef'] ?? '-') ?></div></td>
+                            <td>
+                                <?php if (!empty($row['SimId'])): ?>
+                                    <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle font-monospace"><?= ph_e($row['SimId']) ?></span>
                                 <?php else: ?>
-                                    <span class="badge bg-secondary-subtle text-secondary">BELUM DIMUTASI</span>
+                                    <span class="text-muted fst-italic small">-</span>
                                 <?php endif; ?>
+                            </td>
+                            <td class="font-monospace text-muted"><?= ph_e($row['ImeiModem'] ?? '-') ?></td>
+                            <td>
+                                <span class="badge bg-<?= ($row['StatusPekerjaan'] ?? '') === 'PASANG' ? 'success' : 'danger' ?>-subtle text-<?= ($row['StatusPekerjaan'] ?? '') === 'PASANG' ? 'success' : 'danger' ?>">
+                                    <?= ph_e($row['StatusPekerjaan'] ?? '-') ?>
+                                </span>
                             </td>
                             <td class="pe-2 font-monospace text-secondary small"><?= ph_e($row['WaktuData'] ?? '-') ?></td>
                         </tr>
