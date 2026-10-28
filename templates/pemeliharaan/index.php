@@ -48,7 +48,7 @@ if (empty($sub)) {
     }
 }
 
-$page_title = "Modul Pemeliharaan S41 - DIGITA";
+$page_title = "Pemeliharaan - Digita S41";
 ?>
 
 <style>
