@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../config/database.php';
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $kode_hak = $_SESSION['KodeHak'] ?? '';
-if (!in_array($kode_hak, ['SF.AP', 'SF.UP', 'SA.KP'])) die("Akses Ditolak.");
+if (!in_array($kode_hak, ['SF.UP', 'SA.KP'])) die("Akses Ditolak.");
 
 $action    = $_GET['action'] ?? '';
 $unit_up   = $_SESSION['UnitUp'] ?? '56610';
