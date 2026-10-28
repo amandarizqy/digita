@@ -232,7 +232,7 @@ foreach ($modems as $m) {
 }
 $persentase_aktif = ($total_modem > 0) ? round(($total_modem_aktif / $total_modem) * 100) : 0;
 
-$page_title = "Master Modem GSM - Digita S41";
+$page_title = "Master - Digitas S41";
 
 ob_start();
 require_once __DIR__ . '/../../templates/master/nomor_server.html';

@@ -41,6 +41,7 @@ function pg_menu(): array
                 'input_dil'       => ['DIL', 'bi-journal-text'],
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
+                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
                 'input_perintah'  => ['Perintah', 'bi-terminal'],
             ],
         ],
@@ -48,6 +49,7 @@ function pg_menu(): array
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
+                'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
                 'monitor_perintah'  => ['Perintah', 'bi-terminal'],
                 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],

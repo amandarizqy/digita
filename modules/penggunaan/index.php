@@ -33,10 +33,12 @@ switch ($action) {
     case 'input_dil':          include __DIR__ . '/input_dil.php'; break;
     case 'input_saldo':        include __DIR__ . '/input_saldo.php'; break;
     case 'input_pelunasan':    include __DIR__ . '/input_pelunasan.php'; break;
+    case 'isi_pulsa':          include __DIR__ . '/isi_pulsa.php'; break;
     case 'input_perintah':     include __DIR__ . '/input_perintah.php'; break;
     // MONITORING
     case 'monitor_dil':        include __DIR__ . '/monitor_dil.php'; break;
     case 'monitor_pelunasan':  include __DIR__ . '/monitor_pelunasan.php'; break;
+    case 'monitor_isi_pulsa':      include __DIR__ . '/monitor_isi_pulsa.php'; break;
     case 'monitor_perintah':   include __DIR__ . '/monitor_perintah.php'; break;
     case 'monitor_status_barang': include __DIR__ . '/monitor_status_barang.php'; break;
     default:
