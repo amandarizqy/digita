@@ -168,7 +168,6 @@ function pr_menu(): array
                 'hasil_survey'      => ['Survey SR', 'bi-clipboard-data'],
                 'hasil_risiko'      => ['Level Risiko', 'bi-shield-check'],
                 'hasil_prioritas'   => ['Skala Prioritas', 'bi-list-stars'],
-                ''
             ],
         ],
     ];
