@@ -102,7 +102,7 @@ foreach ($perintah as $p) {
 }
 $persentase_aktif = ($total_perintah > 0) ? round(($total_aktif / $total_perintah) * 100) : 0;
 
-$page_title = "Master Perintah Baku - Digitas S41";
+$page_title = "Master Perintah Baku - Digitas";
 
 ob_start();
 require_once __DIR__ . '/../../templates/master/pesan.html';

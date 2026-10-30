@@ -182,7 +182,7 @@ $akses_provider = $akses_unit;
 $akses_modem    = true;
 $akses_pesan    = in_array($role, ['SA.KP', 'AM.UI'], true);
 
-$page_title = "Master - Digitas S41";
+$page_title = "Master - Digitas";
 
 ob_start();
 ?>

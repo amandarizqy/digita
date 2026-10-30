@@ -213,6 +213,6 @@ else if ($menu === 'eksekusi' && $sub === 'mutasi_pasang' && $can_mutasi_pasang)
 }
 
 // Render Template Utama
-$page_title = "Pemasangan - Digitas S41";
+$page_title = "Pemasangan - Digitas";
 require_once __DIR__ . '/../../templates/pemasangan/index.php';
 ?>

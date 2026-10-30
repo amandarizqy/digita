@@ -15,7 +15,7 @@ $view = $_GET['view'] ?? 'daftar';
 ob_start();
 
 if ($view === 'baru') {
-    $page_title = "Buat Draft Pengiriman S41 - Digita";
+    $page_title = "Buat Draft Pengiriman S41 - Digitas";
     
     // Tarik referensi data unit AP & UP untuk dropdown tujuan
     $stmt_ap = $conn->query("SELECT UnitAp, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF'");

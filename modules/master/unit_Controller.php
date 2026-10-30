@@ -150,7 +150,7 @@ $persentase_aktif = ($total_unit > 0) ? round(($total_aktif / $total_unit) * 100
 $list_upi = $conn->query("SELECT UnitUpi, SingkatanNama FROM master_upi WHERE StatusData = 'AKTIF' ORDER BY UnitUpi ASC")->fetchAll(PDO::FETCH_ASSOC);
 $list_ap  = $conn->query("SELECT UnitAp, SingkatanNama FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-$page_title = "Master Unit - Digitas S41";
+$page_title = "Master Unit - Digitas";
 
 ob_start();
 require_once __DIR__ . '/../../templates/master/unit.html';

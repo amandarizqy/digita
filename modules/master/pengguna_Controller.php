@@ -179,7 +179,7 @@ foreach ($users as $pg) {
 }
 $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
 
-$page_title = "Master Pengguna - Digitas S41";
+$page_title = "Master Pengguna - Digitas";
 
 // RENDER DENGAN BASE LAYOUT LENGKAP
 ob_start();

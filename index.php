@@ -58,7 +58,7 @@ if (!array_key_exists($page, $pages)) {
     $page = 'dashboard';
 }
 
-$page_title = $pages[$page] . ' - Digitas S41';
+$page_title = $pages[$page] . ' - Digitas';
 
 // Cek apakah file ada di folder modules atau templates
 $module_file   = __DIR__ . "/modules/$page/index.php"; 

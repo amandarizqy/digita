@@ -43,7 +43,7 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
 ob_start();
 
 if ($view === 'detail' && isset($_GET['no_form'])) {
-    $page_title = "Inspeksi & Penerimaan Barang - Digita";
+    $page_title = "Inspeksi & Penerimaan Barang - Digitas";
     $no_pengiriman = $_GET['no_form'];
     
     // Ambil Header Pengiriman beserta status relasionalnya

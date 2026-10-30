@@ -86,7 +86,7 @@ foreach ($providers as $p) {
 }
 $persentase_aktif = ($total_operator > 0) ? round(($total_aktif / $total_operator) * 100) : 0;
 
-$page_title = "Master Provider - Digitas S41";
+$page_title = "Master Provider - Digitas";
 
 // RENDER DENGAN BASE LAYOUT LENGKAP
 ob_start();
