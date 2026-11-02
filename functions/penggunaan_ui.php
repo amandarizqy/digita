@@ -41,6 +41,7 @@ function pg_menu(): array
                 'input_dil'       => ['DIL', 'bi-journal-text'],
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
+                'upload_tul'      => ['Upload TUL', 'bi-type'],
                 'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
                 'input_perintah'  => ['Perintah', 'bi-terminal'],
             ],
@@ -50,6 +51,7 @@ function pg_menu(): array
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
+                'monitor_tul'       => ['TUL', 'bi-type'],
                 'monitor_perintah'  => ['Perintah', 'bi-terminal'],
                 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
@@ -198,4 +200,44 @@ function pg_scope(array $u, string $alias, string $awalan, array &$p): string
     if ($u['ap'] !== '') { $w[] = "$alias.{$awalan}Ap = :s_ap"; $p[':s_ap'] = $u['ap']; }
     if ($u['up'] !== '') { $w[] = "$alias.{$awalan}Up = :s_up"; $p[':s_up'] = $u['up']; }
     return implode(' AND ', $w);
+}
+
+/**
+ * Pilihan wilayah tujuan unggahan: AP di bawah UPI akun, lalu UP di bawah tiap AP.
+ * Bila akun terikat ke AP / UP, pilihan dibatasi ke unit itu saja. Melempar PDOException bila query gagal.
+ * @param array $u hasil pg_unit_akun()
+ * @return array ['nama_upi' => string, 'opsi_ap' => [kodeAp => nama], 'opsi_up_ap' => [kodeAp => [kodeUp => nama]],
+ *                'peta' => [ {kode, nama, ups: [ {kode, nama} ]} ]  (untuk JS dropdown bertingkat) ]
+ */
+function pg_opsi_wilayah(PDO $conn, array $u): array
+{
+    $st = $conn->prepare("SELECT COALESCE(NULLIF(SingkatanNama, ''), UnitUpi) FROM master_upi WHERE UnitUpi = ?");
+    $st->execute([$u['upi']]);
+    $hasil = ['nama_upi' => (string) ($st->fetchColumn() ?: $u['upi']), 'opsi_ap' => [], 'opsi_up_ap' => [], 'peta' => []];
+
+    $sql = "SELECT UnitAp, COALESCE(NULLIF(SingkatanNama, ''), UnitAp) AS Nama FROM master_ap WHERE UnitUpi = :upi AND StatusData = 'AKTIF'";
+    $prm = [':upi' => $u['upi']];
+    if ($u['ap'] !== '') { $sql .= " AND UnitAp = :ap"; $prm[':ap'] = $u['ap']; }
+    $st = $conn->prepare($sql . " ORDER BY UnitAp");
+    $st->execute($prm);
+    $hasil['opsi_ap'] = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+
+    if ($hasil['opsi_ap']) {
+        $kode_ap = array_map('strval', array_keys($hasil['opsi_ap']));
+        $ph  = implode(',', array_fill(0, count($kode_ap), '?'));
+        $sql = "SELECT UnitAp, UnitUp, COALESCE(NULLIF(SingkatanNama, ''), UnitUp) AS Nama FROM master_up WHERE UnitAp IN ($ph) AND StatusData = 'AKTIF'";
+        $prm = $kode_ap;
+        if ($u['up'] !== '') { $sql .= " AND UnitUp = ?"; $prm[] = $u['up']; }
+        $st = $conn->prepare($sql . " ORDER BY UnitUp");
+        $st->execute($prm);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $hasil['opsi_up_ap'][(string) $r['UnitAp']][(string) $r['UnitUp']] = $r['Nama'];
+        }
+    }
+    foreach ($hasil['opsi_ap'] as $kode => $nama) {
+        $ups = [];
+        foreach ($hasil['opsi_up_ap'][(string) $kode] ?? [] as $k_up => $n_up) $ups[] = ['kode' => (string) $k_up, 'nama' => $n_up];
+        $hasil['peta'][] = ['kode' => (string) $kode, 'nama' => $nama, 'ups' => $ups];
+    }
+    return $hasil;
 }
