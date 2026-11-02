@@ -22,12 +22,14 @@ if (!function_exists('pga_matriks')) {
             'input_dil'         => $input,      // DIL
             'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
+            'upload_tul'        => $input,      // Upload TUL
             'isi_pulsa'         => $isi_pulsa,      // Isi Pulsa
             'input_perintah'    => $input,      // Perintah
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL
             'monitor_pelunasan' => $tanpa_vd,   // Pelunasan
             'monitor_isi_pulsa' => $tanpa_vd,   // Isi Pulsa
+            'monitor_tul'       => $tanpa_vd,   // TUL
             'monitor_perintah'  => $tanpa_vd,   // Perintah
             'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
         ];

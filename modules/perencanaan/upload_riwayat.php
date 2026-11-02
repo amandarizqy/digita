@@ -215,16 +215,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi),
                           WaktuData = VALUES(WaktuData)";
                 $conn->beginTransaction();
-                foreach (array_chunk(array_values($baris), $riwayat_chunk) as $paket) {
-                    $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
-                    $param = [];
-                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $namaAkunInput, $tujuanUp, $tujuanAp, $tujuanUpi);
-                    $stmt->execute($param);
-                }
-
-                // d0. DIL: daftarkan setiap IdPel di file (StatusData otomatis 'AKTIF'). Dilakukan SEBELUM
-                //     kategorisasi_risiko agar aman bila ada foreign key ke dil. INSERT IGNORE: pelanggan yang sudah
-                //     ada di DIL tidak diubah (status AKTIF/TIDAK dan nama yang sudah ada dipertahankan).
+                // d0. DIL DULU: daftarkan setiap IdPel di file (StatusData otomatis 'AKTIF'). Wajib dilakukan SEBELUM
+                //     insert ke pelunasan_ap2t dan kategorisasi_risiko, karena kedua tabel itu punya foreign key
+                //     IdPel -> dil.IdPel. INSERT IGNORE: pelanggan yang sudah ada di DIL tidak diubah
+                //     (status AKTIF/TIDAK dan nama yang sudah ada dipertahankan).
                 //     NamaPelanggan tidak ada di file riwayat -> kosong; lengkapi lewat Penggunaan > Input DIL.
                 $idpel_unik = array_values(array_unique(array_column($baris, 0)));
                 foreach (array_chunk($idpel_unik, $riwayat_chunk) as $paket) {
@@ -232,6 +226,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . implode(',', array_fill(0, count($paket), "(?, '', 'AKTIF', NOW())")));
                     $stmt->execute($paket);
                     $dilBaru += $stmt->rowCount();
+                }
+
+                // c1. pelunasan_ap2t (IdPel sudah pasti ada di DIL)
+                foreach (array_chunk(array_values($baris), $riwayat_chunk) as $paket) {
+                    $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
+                    $param = [];
+                    foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $namaAkunInput, $tujuanUp, $tujuanAp, $tujuanUpi);
+                    $stmt->execute($param);
                 }
 
                 // d. kategorisasi_risiko: tambah (IdPel, Periode) yang belum ada. Yang sudah ada TIDAK diubah
