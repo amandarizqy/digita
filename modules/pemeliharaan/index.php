@@ -3,21 +3,18 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Koneksi selalu dari folder proyek ini (bukan dari DOCUMENT_ROOT, supaya tidak salah database)
 if (!isset($conn)) {
     require_once __DIR__ . '/../../config/database.php';
 }
 require_once __DIR__ . '/../../functions/pemeliharaan_helper.php';
 
-// 1. Hak akses per sub-halaman
 $boleh = [
-    'order_pemeliharaan'  => ph_akses_order(),        // TL.UP & SA.KP
-    'mutasi_pemeliharaan' => ph_akses_mutasi(),       // SF.UP & SA.KP
-    'monitoring_order'    => ph_akses_monitoring(),   // semua role terdaftar
+    'order_pemeliharaan'  => ph_akses_order(),
+    'mutasi_pemeliharaan' => ph_akses_mutasi(),
+    'monitoring_order'    => ph_akses_monitoring(),
     'monitoring_mutasi'   => ph_akses_monitoring(),
 ];
 
-// 2. Struktur menu: menu utama -> sub-halaman
 $struktur = [
     'eksekusi' => [
         'label' => 'Eksekusi', 'icon' => 'bi-tools',
@@ -35,7 +32,6 @@ $struktur = [
     ],
 ];
 
-// Hanya tampilkan yang boleh diakses
 foreach ($struktur as $kunci_menu => $m) {
     foreach ($m['sub'] as $kunci_sub => $info) {
         if (empty($boleh[$kunci_sub])) {
@@ -47,7 +43,6 @@ foreach ($struktur as $kunci_menu => $m) {
     }
 }
 
-// 3. Tentukan menu & sub yang aktif (nilai tidak sah / tidak berhak -> halaman pertama yang diizinkan)
 $sub  = (string) ($_GET['sub'] ?? '');
 $menu = (string) ($_GET['menu'] ?? '');
 if ($sub !== '') {
@@ -71,13 +66,12 @@ if ($menu !== '' && !isset($struktur[$menu]['sub'][$sub])) {
 <div class="container-fluid px-3 py-2">
     <div class="mb-3">
         <h4 class="fw-bold text-dark mb-1">Modul Pemeliharaan S41</h4>
-        <p class="text-muted small mb-0">Kelola eksekusi order, mutasi pemeliharaan, serta monitoring laporan pemeliharaan perangkat.</p>
+        <p class="text-muted small mb-0">Kelola FPK, Order Perintah Kerja, Eksekusi Lapangan (Mutasi), dan Monitoring Perangkat S41.</p>
     </div>
 
     <?php if (!$struktur): ?>
         <div class="alert alert-warning">Peran Anda tidak memiliki akses ke sub-menu Pemeliharaan.</div>
     <?php else: ?>
-        <!-- 1. MENU UTAMA -->
         <div class="card border-0 shadow-sm rounded-4 p-2 mb-3 bg-white">
             <ul class="nav nav-pills d-flex flex-row align-items-center gap-2 mb-0 border-0">
                 <?php foreach ($struktur as $kunci_menu => $m): ?>
@@ -92,7 +86,6 @@ if ($menu !== '' && !isset($struktur[$menu]['sub'][$sub])) {
             </ul>
         </div>
 
-        <!-- 2. SUB ENTITAS -->
         <div class="d-flex align-items-center flex-wrap gap-2 mb-3 px-1">
             <span class="sub-entity-label text-uppercase me-1">SUB ENTITAS:</span>
             <?php foreach ($struktur[$menu]['sub'] as $kunci_sub => $info): ?>
@@ -104,7 +97,6 @@ if ($menu !== '' && !isset($struktur[$menu]['sub'][$sub])) {
             <?php endforeach; ?>
         </div>
 
-        <!-- 3. ISI SUB-HALAMAN (nama file berasal dari daftar tetap di atas, bukan dari input) -->
         <?php include __DIR__ . '/' . $struktur[$menu]['sub'][$sub][2]; ?>
     <?php endif; ?>
 </div>

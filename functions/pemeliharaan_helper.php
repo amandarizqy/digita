@@ -1,6 +1,6 @@
 <?php
 // functions/pemeliharaan_helper.php
-// Fungsi bersama modul Pemeliharaan & Helper Paginasi: pembatasan unit, validasi input, foto, nomor form, paginasi.
+// Fungsi bersama modul Pemeliharaan (skema: frm_order, frm_pk, frm_pk_detil, frm_ba, frm_ba_detil, master_barang).
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -8,11 +8,11 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/csrf.php';
 
-const PH_PETUGAS = ['IPM.001', 'IPM.002'];          // daftar petugas (satu tempat; dipakai form & validasi)
-const PH_RELAY   = ['BERFUNGSI', 'TIDAK BERFUNGSI'];
-const PH_POSISI  = ['PANGKAL', 'TENGAH', 'UJUNG'];
+const PH_PETUGAS = ['IPM.001', 'IPM.002'];          
+const PH_LAMPU   = ['MENYALA' => 'MENYALA (BERFUNGSI)', 'TIDAK' => 'TIDAK (PERLU MUTASI)'];  
+const PH_POSISI  = ['PANGKAL', 'TENGAH', 'UJUNG'];  
 const PH_STATUS  = ['AKTIF', 'TIDAK'];
-const PH_FOTO_MAKS_BYTE = 5 * 1024 * 1024;           // 5 MB per foto
+const PH_FOTO_MAKS_BYTE = 5 * 1024 * 1024;           // 5 MB
 const PH_PER_HALAMAN = 25;
 
 function ph_e($v): string
@@ -22,23 +22,16 @@ function ph_e($v): string
 
 function ph_role(): string
 {
-    return (string) ($_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? 'GUEST');
+    return strtoupper(trim((string) ($_SESSION['KodeHak'] ?? $_SESSION['Role'] ?? $_SESSION['level'] ?? 'GUEST')));
 }
 
-/** Role yang membaca seluruh data (tanpa batas unit). */
 function ph_role_semua_unit(): bool
 {
     $r = ph_role();
     $akh = substr($r, -3);
-    return $r === 'SA.KP' || $akh === '.UI' || $akh === '.VD';
+    return $r === 'SA.KP' || $r === 'SA' || $akh === '.UI' || $akh === '.VD' || strpos($r, 'ADMIN') !== false;
 }
 
-/**
- * Potongan WHERE pembatas unit sesuai role pengguna.
- * .AP -> hanya UP3-nya, .UP -> hanya ULP-nya. Role tingkat UI / SA.KP / vendor -> semua.
- * Bila akun tingkat AP/UP belum punya unit di session -> tidak melihat apa pun (aman).
- * @return array [sql (diawali " AND ..." atau ''), params]
- */
 function ph_scope(string $alias = 'p'): array
 {
     if (ph_role_semua_unit()) {
@@ -54,16 +47,6 @@ function ph_scope(string $alias = 'p'): array
         return [" AND $alias.UnitUp = ?", [$up]];
     }
     return [' AND 1=0', []];
-}
-
-/** Ambil satu baris frm_pemeliharaan (tanpa BLOB) bila ada DAN berada dalam unit pengguna. */
-function ph_ambil_baris(PDO $conn, string $no_form): ?array
-{
-    [$sc, $sp] = ph_scope('p');
-    $st = $conn->prepare("SELECT p.NoFormPemeliharaan, p.NoFormOrder, p.NoRef, p.SimId, p.ImeiModem, p.UnitAp, p.UnitUp FROM frm_pemeliharaan p WHERE p.NoFormPemeliharaan = ?" . $sc);
-    $st->execute(array_merge([$no_form], $sp));
-    $r = $st->fetch(PDO::FETCH_ASSOC);
-    return $r ?: null;
 }
 
 /* ---------- Pesan sekali tampil (Post/Redirect/Get) ---------- */
@@ -98,19 +81,12 @@ function ph_redirect(string $sub, string $tipe, string $pesan): void
     exit;
 }
 
-/** Menu utama (eksekusi / monitoring) untuk sebuah sub-halaman. */
 function ph_menu_dari_sub(string $sub): string
 {
     return strpos($sub, 'monitoring_') === 0 ? 'monitoring' : 'eksekusi';
 }
 
 /* ---------- Validasi ---------- */
-function ph_pilih(string $nilai, array $boleh, string $nama): array
-{
-    $v = strtoupper(trim($nilai));
-    return in_array($v, $boleh, true) ? [$v, null] : [null, "$nama tidak valid."];
-}
-
 function ph_tanggal($v): ?string
 {
     $v = trim((string) $v);
@@ -118,7 +94,6 @@ function ph_tanggal($v): ?string
     return ($d && $d->format('Y-m-d') === $v) ? $v : null;
 }
 
-/** @return array [lat|null, long|null, error|null]  (keduanya diisi atau keduanya kosong) */
 function ph_koordinat($lat, $long): array
 {
     $lat  = str_replace(',', '.', trim((string) $lat));
@@ -130,15 +105,11 @@ function ph_koordinat($lat, $long): array
         return [null, null, 'Latitude dan longitude harus diisi berpasangan.'];
     }
     if (!is_numeric($lat) || !is_numeric($long) || abs((float) $lat) > 90 || abs((float) $long) > 180) {
-        return [null, null, 'Koordinat tidak valid (latitude -90..90, longitude -180..180).'];
+        return [null, null, 'Koordinat tidak valid.'];
     }
     return [substr($lat, 0, 50), substr($long, 0, 50), null];
 }
 
-/**
- * Baca & validasi satu file foto dari $_FILES.
- * @return array [blob|null, error|null]  (tidak ada file -> [null, null])
- */
 function ph_foto_baca(string $field): array
 {
     if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
@@ -146,10 +117,10 @@ function ph_foto_baca(string $field): array
     }
     $f = $_FILES[$field];
     if ($f['error'] !== UPLOAD_ERR_OK) {
-        return [null, 'Unggah foto gagal (kode ' . (int) $f['error'] . '). Pastikan ukuran foto tidak melebihi batas server.'];
+        return [null, 'Unggah foto gagal.'];
     }
     if ($f['size'] > PH_FOTO_MAKS_BYTE) {
-        return [null, 'Ukuran foto maksimal ' . (PH_FOTO_MAKS_BYTE / 1048576) . ' MB.'];
+        return [null, 'Ukuran foto maksimal 5 MB.'];
     }
     $mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);
     if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
@@ -158,32 +129,19 @@ function ph_foto_baca(string $field): array
     return [file_get_contents($f['tmp_name']), null];
 }
 
-/* ---------- Nomor form ---------- */
-function ph_nomor_dasar(PDO $conn, string $unit_up, int $jumlah): array
+/** Pesan error untuk pengguna: RuntimeException apa adanya; error database hanya dirinci untuk SA.KP. */
+function ph_pesan_error(Throwable $e): string
 {
-    $unit = trim($unit_up);
-    if (!preg_match('/^[A-Za-z0-9]{5}$/', $unit)) {
-        throw new RuntimeException('Kode ULP tidak valid untuk nomor form.');
+    if ($e instanceof RuntimeException) {
+        return $e->getMessage();
     }
-    $tgl = date('Ymd');
-    $maks = 0;
-    foreach ([['frm_order_har', 'NoFormOrder', '-F.G'], ['frm_pemeliharaan', 'NoFormPemeliharaan', '-F.H']] as [$tabel, $kolom, $akhir]) {
-        $st = $conn->prepare("SELECT MAX(SUBSTR($kolom, 6, 3)) FROM $tabel WHERE $kolom LIKE ?");
-        $st->execute([$unit . '___' . $tgl . $akhir]);
-        $v = $st->fetchColumn();
-        if ($v !== false && $v !== null && ctype_digit((string) $v)) {
-            $maks = max($maks, (int) $v);
-        }
-    }
+    return ph_role() === 'SA.KP' ? 'Kesalahan database: ' . $e->getMessage() : 'Kesalahan database.';
+}
 
-    if ($maks + $jumlah > 999) {
-        throw new RuntimeException('Nomor urut harian untuk ULP ini sudah habis (maksimal 999 per hari).');
-    }
-    $hasil = [];
-    for ($i = 1; $i <= $jumlah; $i++) {
-        $hasil[] = $unit . str_pad((string) ($maks + $i), 3, '0', STR_PAD_LEFT) . $tgl;
-    }
-    return $hasil;
+/** Nilai aman untuk sel Excel (HTML .xls): escape HTML; sel nomor diberi style teks di export_excel.php */
+function ph_xl($v): string
+{
+    return htmlspecialchars((string) ($v ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
 function ph_duplikat(Throwable $e): bool
@@ -193,29 +151,163 @@ function ph_duplikat(Throwable $e): bool
         && (stripos($e->getMessage(), 'duplicate') !== false || stripos($e->getMessage(), 'unique') !== false);
 }
 
-/* ---------- Pencarian + paginasi sisi server ---------- */
-function ph_cari_sql(): array
+function ph_modem_punya_nama(PDO $conn): bool
 {
-    $q = trim((string) ($_GET['q'] ?? ''));
-    if ($q === '') {
-        return ['', []];
+    static $ada = null;
+    if ($ada === null) {
+        try {
+            $conn->query('SELECT Nama FROM master_modem LIMIT 0');
+            $ada = true;
+        } catch (Throwable $e) {
+            $ada = false;
+        }
     }
-    $like  = '%' . addcslashes($q, '%_\\') . '%';
-    $kolom = ['p.NoFormPemeliharaan', 'p.NoFormOrder', 'p.IdPel', 'p.NoRef', 'p.SimId', 'p.ImeiModem', 'p.KdPetugas', 'p.Keterangan'];
-    return [' AND (' . implode(' LIKE ? OR ', $kolom) . ' LIKE ?)', array_fill(0, count($kolom), $like)];
+    return $ada;
+}
+
+function ph_sql_nama_modem(PDO $conn, string $alias = 'mm'): string
+{
+    return ph_modem_punya_nama($conn) ? "$alias.Nama" : 'NULL';
+}
+
+function ph_label_modem($imei, $nama): string
+{
+    $imei = trim((string) $imei);
+    $nama = trim((string) $nama);
+    return $nama !== '' ? "$nama — $imei" : $imei;
+}
+
+function ph_nomor_sim(PDO $conn, $sim_id): ?string
+{
+    static $cache = [];
+    $sim_id = trim((string) ($sim_id ?? ''));
+    if ($sim_id === '') return null;
+    if (!array_key_exists($sim_id, $cache)) {
+        try {
+            $st = $conn->prepare('SELECT NomorAkun FROM master_nomor WHERE SimId = ? LIMIT 1');
+            $st->execute([$sim_id]);
+            $v = trim((string) $st->fetchColumn());
+            $cache[$sim_id] = $v !== '' ? substr($v, 0, 15) : null;
+        } catch (Throwable $e) {
+            $cache[$sim_id] = null;
+        }
+    }
+    return $cache[$sim_id];
+}
+
+const PH_DIL_KOLOM_NAMA = ['Nama', 'NamaPelanggan', 'NamaPel', 'NamaPlg'];
+function ph_nama_pelanggan(PDO $conn, $id_pel): ?string
+{
+    static $cache = [];
+    $id_pel = trim((string) ($id_pel ?? ''));
+    if ($id_pel === '') return null;
+    if (!array_key_exists($id_pel, $cache)) {
+        $cache[$id_pel] = null;
+        foreach (PH_DIL_KOLOM_NAMA as $kol) {
+            try {
+                $st = $conn->prepare("SELECT `$kol` FROM dil WHERE IdPel = ? LIMIT 1");
+                $st->execute([$id_pel]);
+                $v = trim((string) $st->fetchColumn());
+                if ($v !== '') {
+                    $cache[$id_pel] = $v;
+                    break;
+                }
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+    }
+    return $cache[$id_pel];
+}
+
+function ph_no_form(PDO $conn, string $tabel, string $kolom, string $unit_up, string $tgl, string $akhiran): string
+{
+    $unit_up = trim($unit_up);
+    if (!preg_match('/^[A-Za-z0-9]{5}$/', $unit_up)) {
+        throw new RuntimeException('Kode UP pelanggan tidak valid.');
+    }
+    $tgl8 = date('Ymd', strtotime($tgl));
+    $st = $conn->prepare("SELECT MAX(CAST(SUBSTR(`$kolom`, 6, 3) AS UNSIGNED)) FROM `$tabel` WHERE `$kolom` LIKE ?");
+    $st->execute([$unit_up . '___' . $tgl8 . $akhiran]);
+    $n = (int) $st->fetchColumn() + 1;
+    return $unit_up . str_pad((string) $n, 3, '0', STR_PAD_LEFT) . $tgl8 . $akhiran;
+}
+
+function ph_barang_pelanggan(PDO $conn, string $id_pel): array
+{
+    [$sc, $sp] = ph_scope('mb');
+    $st = $conn->prepare("SELECT mb.NoRef, mb.SimId, mb.ImeiModem, mb.UnitUp, mb.UnitAp, mb.UnitUpi
+                          FROM master_barang mb
+                          WHERE mb.IdPel = ? AND mb.StatusData = 'AKTIF'" . $sc . " ORDER BY mb.NoRef ASC LIMIT 1");
+    $st->execute(array_merge([$id_pel], $sp));
+    $b = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$b) {
+        throw new RuntimeException("ID Pelanggan $id_pel tidak memiliki perangkat aktif di unit Anda.");
+    }
+    return $b;
 }
 
 /**
- * Fungsi Paginasi Dinamis
- * Menerima parameter $order_by opsional agar tidak crash jika tabel tidak memiliki kolom NoFormPemeliharaan.
+ * UTAMA: Membuat FPK dengan langsung menyertakan string literal 'PEMELIHARAAN' dan 'TIDAK'.
  */
-function ph_daftar(PDO $conn, string $select, string $from, string $where = '', array $params = [], string $order_by = 'p.WaktuData DESC'): array
+function ph_buat_pk(PDO $conn, array $p, array $b): string
 {
-    [$sc, $sp] = ph_scope('p');
+    $up  = trim((string) ($b['UnitUp'] ?? ''));
+    $ap  = trim((string) ($b['UnitAp'] ?? ''));
+    $upi = trim((string) ($b['UnitUpi'] ?? ''));
+    if ($up === '' || $ap === '' || $upi === '') {
+        throw new RuntimeException('Kode unit pada master barang belum lengkap.');
+    }
+    $no_fpk = ph_no_form($conn, 'frm_pk', 'NoFpk', $up, $p['tgl'], '-F.F');
+
+    // Menggunakan string langsung 'PEMELIHARAAN' dan 'TIDAK' di dalam query SQL
+    $stIns = $conn->prepare("INSERT INTO frm_pk 
+        (NoFpk, TglFpk, JenisPk, IdPel, LongDil, LatDil, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
+        VALUES (?, ?, 'PEMELIHARAAN', ?, ?, ?, ?, ?, ?, ?, 'TIDAK', NOW())");
+    
+    $stIns->execute([
+        $no_fpk, 
+        $p['tgl'], 
+        $p['id_pel'], 
+        $p['long'], 
+        $p['lat'], 
+        $p['nama_akun'], 
+        $up, 
+        $ap, 
+        $upi
+    ]);
+
+    $nomor = ph_nomor_sim($conn, $b['SimId'] ?? '');
+    $conn->prepare("INSERT INTO frm_pk_detil (NoFpk, StatusBarang, NoRef, SimId, ImeiModem, NomorBarang, NomorModem) VALUES (?, 'DIL', ?, ?, ?, ?, ?)")
+         ->execute([$no_fpk, $b['NoRef'], $b['SimId'], $b['ImeiModem'], $nomor, $nomor]);
+
+    return $no_fpk;
+}
+
+function ph_kolom_cari(PDO $conn, bool $ada_pk = true, bool $ada_order = false, array $kolom_perangkat = ['bd.NoRef', 'bd.SimId', 'bd.ImeiModem']): array
+{
+    $k = [$ada_pk ? 'p.NoFpk' : 'b.NoFpk', 'b.NoFba', $ada_pk ? 'p.IdPel' : 'b.IdPel', 'b.KdPetugas'];
+    if ($ada_order) $k[] = 'o.NoFormOrder';
+    $k = array_merge($k, $kolom_perangkat);
+    if (ph_modem_punya_nama($conn)) $k[] = 'mm.Nama';
+    return $k;
+}
+
+function ph_cari_sql(array $kolom): array
+{
+    $q = trim((string) ($_GET['q'] ?? ''));
+    if ($q === '' || !$kolom) return ['', []];
+    $like = '%' . addcslashes($q, '%_\\') . '%';
+    return [' AND (' . implode(' LIKE ? OR ', $kolom) . ' LIKE ?)', array_fill(0, count($kolom), $like)];
+}
+
+function ph_daftar(PDO $conn, string $select, string $from, string $where, array $params, array $opt): array
+{
+    [$sc, $sp] = ph_scope($opt['alias']);
     $where .= $sc;
     $params = array_merge($params, $sp);
 
-    [$cari_sql, $cari_par] = ph_cari_sql();
+    [$cari_sql, $cari_par] = ph_cari_sql($opt['cari'] ?? []);
     $where .= $cari_sql;
     $params = array_merge($params, $cari_par);
     $q = trim((string) ($_GET['q'] ?? ''));
@@ -228,18 +320,18 @@ function ph_daftar(PDO $conn, string $select, string $from, string $where = '', 
     $hal = min(max(1, (int) ($_GET['p'] ?? 1)), $total_hal);
     $off = ($hal - 1) * PH_PER_HALAMAN;
 
-    $st = $conn->prepare("SELECT $select FROM $from WHERE 1=1 $where ORDER BY $order_by LIMIT " . PH_PER_HALAMAN . " OFFSET $off");
+    $st = $conn->prepare("SELECT $select FROM $from WHERE 1=1 $where ORDER BY {$opt['urut']} LIMIT " . PH_PER_HALAMAN . " OFFSET $off");
     $st->execute($params);
     return [$st->fetchAll(PDO::FETCH_ASSOC), $total, $hal, $total_hal, $q];
 }
 
-function ph_kotak_cari(string $sub, string $q, string $placeholder = 'Cari no form, idpel, no ref, SIM, IMEI...'): string
+function ph_kotak_cari(string $sub, string $q, string $placeholder = 'Cari no form, idpel, no ref...'): string
 {
-    return '<form method="GET" action="index.php" class="input-group" style="width:300px;">'
-        . '<input type="hidden" name="page" value="pemeliharaan"><input type="hidden" name="sub" value="' . ph_e($sub) . '">'
+    return '<form method="GET" action="index.php" class="input-group" style="width:320px;">'
+        . '<input type="hidden" name="page" value="pemeliharaan"><input type="hidden" name="menu" value="' . ph_e(ph_menu_dari_sub($sub)) . '"><input type="hidden" name="sub" value="' . ph_e($sub) . '">'
         . '<input type="text" name="q" value="' . ph_e($q) . '" class="form-control bg-light small" placeholder="' . ph_e($placeholder) . '">'
         . '<button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>'
-        . ($q !== '' ? '<a class="btn btn-outline-secondary" href="index.php?page=pemeliharaan&sub=' . ph_e(urlencode($sub)) . '" title="Hapus pencarian"><i class="bi bi-x-lg"></i></a>' : '')
+        . ($q !== '' ? '<a class="btn btn-outline-secondary" href="index.php?page=pemeliharaan&menu=' . ph_e(ph_menu_dari_sub($sub)) . '&sub=' . ph_e(urlencode($sub)) . '"><i class="bi bi-x-lg"></i></a>' : '')
         . '</form>';
 }
 
@@ -248,7 +340,7 @@ function ph_pager(string $sub, int $total, int $hal, int $total_hal, string $q):
     $mulai = $total > 0 ? ($hal - 1) * PH_PER_HALAMAN + 1 : 0;
     $akhir = min($hal * PH_PER_HALAMAN, $total);
     $url = function (int $p) use ($sub, $q) {
-        return 'index.php?page=pemeliharaan&sub=' . urlencode($sub) . '&p=' . $p . ($q !== '' ? '&q=' . urlencode($q) : '');
+        return 'index.php?page=pemeliharaan&menu=' . ph_menu_dari_sub($sub) . '&sub=' . urlencode($sub) . '&p=' . $p . ($q !== '' ? '&q=' . urlencode($q) : '');
     };
     $h = '<div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 px-2 pt-3">'
         . '<div class="small text-muted">Menampilkan <b>' . $mulai . '</b> - <b>' . $akhir . '</b> dari <b>' . $total . '</b> data</div>';
@@ -257,15 +349,8 @@ function ph_pager(string $sub, int $total, int $hal, int $total_hal, string $q):
         $h .= '<li class="page-item ' . ($hal <= 1 ? 'disabled' : '') . '"><a class="page-link rounded-3" href="' . ph_e($url($hal - 1)) . '">&laquo;</a></li>';
         $dari = max(1, $hal - 2);
         $ke   = min($total_hal, $hal + 2);
-        if ($dari > 1) {
-            $h .= '<li class="page-item"><a class="page-link rounded-3" href="' . ph_e($url(1)) . '">1</a></li>' . ($dari > 2 ? '<li class="page-item disabled"><span class="page-link">…</span></li>' : '');
-        }
         for ($i = $dari; $i <= $ke; $i++) {
             $h .= '<li class="page-item ' . ($i === $hal ? 'active' : '') . '"><a class="page-link rounded-3" href="' . ph_e($url($i)) . '">' . $i . '</a></li>';
-        }
-        if ($ke < $total_hal) {
-            $h .= ($ke < $total_hal - 1 ? '<li class="page-item disabled"><span class="page-link">…</span></li>' : '')
-                . '<li class="page-item"><a class="page-link rounded-3" href="' . ph_e($url($total_hal)) . '">' . $total_hal . '</a></li>';
         }
         $h .= '<li class="page-item ' . ($hal >= $total_hal ? 'disabled' : '') . '"><a class="page-link rounded-3" href="' . ph_e($url($hal + 1)) . '">&raquo;</a></li>';
         $h .= '</ul></nav>';
@@ -273,24 +358,12 @@ function ph_pager(string $sub, int $total, int $hal, int $total_hal, string $q):
     return $h . '</div>';
 }
 
-/** 
- * Fungsi Badge Relay yang mengenali penamaan status dari master_barang
- */
 function ph_badge_relay($relay): string
 {
     $relay = strtoupper(trim((string) $relay));
-    
-    // Mengecek jika string berisi kata BERFUNGSI, MENYALA, atau NC (Normal Closed)
-    if ($relay === 'BERFUNGSI' || strpos($relay, 'MENYALA') !== false || strpos($relay, 'NC') !== false) {
-        return '<span class="badge bg-success-subtle text-success">BERFUNGSI</span>';
-    }
-    
-    // Mengecek jika string berisi TIDAK BERFUNGSI atau PADAM
-    if ($relay === 'TIDAK BERFUNGSI' || strpos($relay, 'PADAM') !== false) {
-        return '<span class="badge bg-danger-subtle text-danger">TIDAK BERFUNGSI</span>';
-    }
-    
-    return '<span class="badge bg-secondary-subtle text-secondary">BELUM DIISI</span>';
+    if ($relay === '') return '<span class="badge bg-secondary-subtle text-secondary">BELUM</span>';
+    if ($relay === 'TIDAK' || strpos($relay, 'TIDAK') !== false) return '<span class="badge bg-danger-subtle text-danger">TIDAK BERFUNGSI</span>';
+    return '<span class="badge bg-success-subtle text-success">BERFUNGSI</span>';
 }
 
 function ph_badge_status($status): string
@@ -300,36 +373,6 @@ function ph_badge_status($status): string
         : '<span class="badge bg-warning-subtle text-warning-emphasis">PENDING</span>';
 }
 
-/* ---------- Hak akses per sub-menu ---------- */
-function ph_akses_order(): bool
-{
-    return in_array(ph_role(), ['SA.KP', 'TL.UP'], true);
-}
-
-function ph_akses_mutasi(): bool
-{
-    return in_array(ph_role(), ['SA.KP', 'SF.UP'], true);
-}
-
-function ph_akses_monitoring(): bool
-{
-    return in_array(ph_role(), ['SA.KP', 'MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'], true);
-}
-
-function ph_tombol_export(string $type, string $q): string
-{
-    $url = BASE_URL . '/modules/pemeliharaan/export_excel.php?type=' . urlencode($type) . ($q !== '' ? '&q=' . urlencode($q) : '');
-    return '<iframe id="ph-unduh" style="display:none" title="unduh"></iframe>'
-         . '<button type="button" class="btn btn-outline-success rounded-3 fw-medium" data-url="' . ph_e($url) . '" '
-         . 'onclick="document.getElementById(\'ph-unduh\').src=this.dataset.url">'
-         . '<i class="bi bi-file-earmark-excel me-1"></i> Export Excel</button>';
-}
-
-function ph_xl($v): string
-{
-    $v = (string) ($v ?? '');
-    if ($v !== '' && strpos("=+-@\t\r", $v[0]) !== false) {
-        $v = "'" . $v;
-    }
-    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
-}
+function ph_akses_order(): bool { return in_array(ph_role(), ['SA.KP', 'TL.UP'], true); }
+function ph_akses_mutasi(): bool { return in_array(ph_role(), ['SA.KP', 'SF.UP'], true); }
+function ph_akses_monitoring(): bool { return true; }

@@ -1,5 +1,4 @@
 <?php
-// Sub-menu: Monitoring Order Pemeliharaan (hanya baca)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -9,97 +8,107 @@ if (!isset($conn)) {
 require_once __DIR__ . '/../../functions/pemeliharaan_helper.php';
 
 if (!ph_akses_monitoring()) {
-    echo '<div class="alert alert-warning">Anda tidak memiliki akses ke Monitoring.</div>';
+    echo '<div class="alert alert-warning">Akses ditolak.</div>';
     return;
 }
 
 $sub_ini = 'monitoring_order';
 $data_mon_order = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
-$pesan_error = '';
 
 try {
-    // Mengambil data monitoring order pemeliharaan dari relasi frm_pk, frm_ba, dan frm_ba_detil
+    $nama_sql = ph_sql_nama_modem($conn);
     [$data_mon_order, $total_hasil, $hal, $total_hal, $q] = ph_daftar(
         $conn,
-        "p.NoFpk, b.NoFba, p.TglFpk, b.KdPetugas, p.IdPel, bd.NoRef, bd.SimId, bd.ImeiModem,
-         bd.LampuIndikator AS KondisiRelay, p.StatusData, p.WaktuData",
-        "frm_pk p 
-         LEFT JOIN frm_ba b ON p.NoFpk = b.NoFpk 
-         LEFT JOIN frm_ba_detil bd ON b.NoFba = bd.NoFba",
-        "AND p.JenisPK = 'PEMELIHARAAN'"
+        "o.NoFormOrder, p.NoFpk, b.NoFba, p.TglFpk, COALESCE(b.KdPetugas, o.KdPetugas) AS KdPetugas, p.IdPel, pd.NoRef,
+         COALESCE(bd.SimId, mb.SimId) AS SimId, COALESCE(bd.ImeiModem, mb.ImeiModem) AS ImeiModem, $nama_sql AS NamaModem,
+         COALESCE(bd.NomorBarang, pd.NomorBarang) AS KontakS41, bd.LampuIndikator AS KondisiRelay, COALESCE(b.StatusData, p.StatusData) AS StatusData,
+         (bd.FotoTerpasang IS NOT NULL) AS AdaFotoPasang, (bd.FotoBarang IS NOT NULL) AS AdaFotoBarang",
+        "frm_pk p
+         LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
+         LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
+         LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
+         LEFT JOIN master_barang mb ON mb.NoRef = pd.NoRef
+         LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
+         LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
+         LEFT JOIN master_modem mm ON mm.ImeiModem = COALESCE(bd.ImeiModem, mb.ImeiModem)",
+        "AND p.JenisPk = 'PEMELIHARAAN'",
+        [],
+        ['alias' => 'p', 'urut' => 'p.WaktuData DESC, p.NoFpk DESC',
+         'cari' => ph_kolom_cari($conn, true, true, ['pd.NoRef', 'COALESCE(bd.SimId, mb.SimId)', 'COALESCE(bd.ImeiModem, mb.ImeiModem)'])]
     );
-} catch (PDOException $e) {
-    error_log('pemeliharaan monitoring_order: ' . $e->getMessage());
-    $pesan_error = 'Gagal memuat data monitoring. Hubungi administrator.';
-}
+} catch (PDOException $e) {}
+
+$url_cetak = BASE_URL . '/modules/pemeliharaan/cetak_ba.php';
+$url_foto  = BASE_URL . '/modules/pemeliharaan/foto.php';
+$url_cetak_order = BASE_URL . '/modules/pemeliharaan/cetak_order.php';
+$url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=order';
 ?>
-
-<style>
-    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; white-space: normal !important; }
-    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; white-space: normal !important; word-break: break-word !important; }
-    .table-compact .badge { font-size: 0.7rem !important; padding: 0.3em 0.45em !important; }
-</style>
-
-<?php if ($pesan_error): ?>
-    <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
-<?php endif; ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 px-2 pt-2">
         <div>
             <h5 class="fw-bold text-primary mb-0">Monitoring Laporan Order Pemeliharaan</h5>
-            <p class="text-muted small mb-0">Rekapitulasi status pengerjaan perintah kerja pemeliharaan perangkat S41.</p>
+            <p class="text-muted small mb-0">Rekapitulasi FPK, Order, dan Berita Acara pemeliharaan.</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <?= ph_kotak_cari($sub_ini, $q) ?>
-            <?= ph_tombol_export('order', $q) ?>
+            <a href="<?= ph_e($url_cetak_laporan) ?>" target="_blank" class="btn btn-outline-primary fw-bold px-3 rounded-3 shadow-sm">
+                <i class="bi bi-printer me-1"></i> Cetak Laporan PDF
+            </a>
         </div>
     </div>
 
     <div class="w-100 table-responsive">
-        <table class="table table-hover align-middle mb-0 table-compact w-100" id="tableMonOrder">
+        <table class="table table-hover align-middle mb-0 w-100">
             <thead class="table-light text-dark border-top border-bottom">
                 <tr>
                     <th class="ps-2 text-center" style="width:3%;">#</th>
-                    <th style="width:18%;">NO PK / NO BA</th>
-                    <th style="width:11%;">TGL PK</th>
-                    <th style="width:16%;">IDPEL / NO REF</th>
-                    <th style="width:13%;">SIM ID</th>
-                    <th style="width:13%;">IMEI MODEM</th>
+                    <th style="width:17%;">NO ORDER / FPK / BA</th>
+                    <th style="width:10%;">TGL FPK</th>
+                    <th style="width:15%;">IDPEL / NO REF</th>
+                    <th style="width:12%;">SIM ID</th>
+                    <th style="width:15%;">MODEM</th>
                     <th style="width:10%;">INDIKATOR</th>
-                    <th style="width:8%;">STATUS</th>
-                    <th class="pe-2" style="width:12%;">WAKTU DATA</th>
+                    <th style="width:7%;">STATUS</th>
+                    <th class="text-center" style="width:11%;">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_mon_order)): ?>
-                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada data monitoring pemeliharaan. Silakan buat order atau PK terlebih dahulu.' ?></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5">Belum ada data monitoring pemeliharaan.</td></tr>
                 <?php else: ?>
                     <?php foreach ($data_mon_order as $idx => $row): ?>
                         <tr class="border-bottom">
                             <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
                             <td>
+                                <div class="small text-secondary font-monospace">ORDER: <?= ph_e($row['NoFormOrder'] ?? '-') ?>
+                                    <?php if (!empty($row['NoFormOrder'])): ?>
+                                        <a href="<?= ph_e($url_cetak_order . '?no_order=' . urlencode($row['NoFormOrder'])) ?>" target="_blank" class="ms-1 text-decoration-none"><i class="bi bi-printer"></i></a>
+                                    <?php endif; ?>
+                                </div>
                                 <div class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFpk']) ?></div>
                                 <div class="small text-primary font-monospace">BA: <?= ph_e($row['NoFba'] ?? '-') ?></div>
                             </td>
-                            <td class="text-secondary"><?= ph_e($row['TglFpk']) ?></td>
-                            <td><div class="fw-bold text-dark">IDPEL: <?= ph_e($row['IdPel']) ?></div><div class="small text-muted">REF: <?= ph_e($row['NoRef'] ?? '-') ?></div></td>
-                            <td>
-                                <?php if (!empty($row['SimId'])): ?>
-                                    <span class="badge bg-info bg-opacity-10 text-info-emphasis border border-info-subtle font-monospace"><?= ph_e($row['SimId']) ?></span>
+                            <td><?= ph_e($row['TglFpk']) ?></td>
+                            <td>IDPEL: <?= ph_e($row['IdPel']) ?><br><small class="text-muted">REF: <?= ph_e($row['NoRef'] ?? '-') ?></small></td>
+                            <td><span class="badge bg-info bg-opacity-10 text-info font-monospace"><?= ph_e($row['SimId'] ?? '-') ?></span></td>
+                            <td class="font-monospace text-muted"><?= ph_e($row['ImeiModem'] ?? '-') ?></td>
+                            <td><?= ph_badge_relay($row['KondisiRelay']) ?></td>
+                            <td><?= ph_badge_status($row['StatusData']) ?></td>
+                            <td class="pe-2 text-center">
+                                <?php if (!empty($row['NoFba'])): ?>
+                                    <a href="<?= ph_e($url_cetak . '?no_fba=' . urlencode($row['NoFba'])) ?>" target="_blank" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1" title="Cetak BA"><i class="bi bi-printer-fill"></i></a>
+                                    <?php if (!empty($row['AdaFotoPasang']) || !empty($row['AdaFotoBarang'])): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-3 px-2 py-1 btn-lihat-foto" title="Lihat foto"
+                                                data-nofba="<?= ph_e($row['NoFba']) ?>" data-pasang="<?= !empty($row['AdaFotoPasang']) ? '1' : '0' ?>" data-barang="<?= !empty($row['AdaFotoBarang']) ? '1' : '0' ?>">
+                                            <i class="bi bi-images"></i>
+                                        </button>
+                                    <?php endif; ?>
                                 <?php else: ?>
-                                    <span class="text-muted fst-italic small">-</span>
+                                    <span class="text-muted small">Belum BA</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="font-monospace text-muted"><?= ph_e($row['ImeiModem'] ?? '-') ?></td>
-                            <td>
-                                <span class="badge bg-<?= ($row['KondisiRelay'] ?? '') === 'MENYALA' ? 'success' : 'danger' ?>-subtle text-<?= ($row['KondisiRelay'] ?? '') === 'MENYALA' ? 'success' : 'danger' ?>">
-                                    <?= ph_e($row['KondisiRelay'] ?? '-') ?>
-                                </span>
-                            </td>
-                            <td><?= ph_badge_status($row['StatusData']) ?></td>
-                            <td class="pe-2 font-monospace text-secondary small"><?= ph_e($row['WaktuData'] ?? '-') ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -108,3 +117,59 @@ try {
     </div>
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>
+
+<!-- MODAL FOTO: kedua foto (terpasang & barang) tampil berdampingan -->
+<div class="modal fade" id="modalFoto" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-images me-2 text-primary"></i>Foto Berita Acara <span id="fotoNoBa" class="font-monospace small text-muted"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6 text-center">
+                        <div class="fw-bold small text-uppercase text-muted mb-2">Foto Terpasang (Lapangan)</div>
+                        <div id="fotoPasangBox" class="border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height:260px;"></div>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <div class="fw-bold small text-uppercase text-muted mb-2">Foto Barang (Perangkat)</div>
+                        <div id="fotoBarangBox" class="border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height:260px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var urlFoto = <?= json_encode($url_foto) ?>;
+    var modalEl = document.getElementById("modalFoto");
+    if (!modalEl || !window.bootstrap) { return; }
+    var modal = new bootstrap.Modal(modalEl);
+    function isi(boxId, ada, jenis, no) {
+        var box = document.getElementById(boxId);
+        box.innerHTML = "";
+        if (ada) {
+            var a = document.createElement("a");
+            a.href = urlFoto + "?jenis=" + jenis + "&no=" + encodeURIComponent(no);
+            a.target = "_blank"; a.rel = "noopener";
+            var img = document.createElement("img");
+            img.src = a.href; img.alt = jenis; img.className = "img-fluid rounded-3";
+            img.style.maxHeight = "420px";
+            a.appendChild(img); box.appendChild(a);
+        } else {
+            box.innerHTML = '<span class="text-muted small fst-italic">Belum ada foto</span>';
+        }
+    }
+    document.querySelectorAll(".btn-lihat-foto").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var d = this.dataset;
+            document.getElementById("fotoNoBa").textContent = d.nofba;
+            isi("fotoPasangBox", d.pasang === "1", "pasang", d.nofba);
+            isi("fotoBarangBox", d.barang === "1", "barang", d.nofba);
+            modal.show();
+        });
+    });
+});
+</script>

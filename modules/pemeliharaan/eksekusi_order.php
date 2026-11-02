@@ -15,61 +15,80 @@ if (!isset($conn)) {
 $pesan_sukses_eks = '';
 $pesan_error_eks  = '';
 
+// --- 1. PROSES SIMPAN EKSEKUSI ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_eksekusi'])) {
     if ($_POST['action_eksekusi'] === 'proses_order') {
         try {
-            $no_form_pem   = $_POST['no_form_pemeliharaan'];
+            $no_fba        = $_POST['no_form_pemeliharaan']; // NoFba sebagai identifier utama
             $kondisi_relay = $_POST['kondisi_relay'];
             $posisi_pasang = $_POST['posisi_pasang'];
             $longitude     = $_POST['longitude'] ?? null;
             $latitude      = $_POST['latitude'] ?? null;
             $status_data   = $_POST['status_data'] ?? 'AKTIF';
+            $nama_akun     = $_SESSION['NamaAkun'] ?? 'PETUGAS LAPANGAN';
 
+            $conn->beginTransaction();
+
+            // A. Siapkan query untuk tabel detail (frm_ba_detil)
             $sql_foto = "";
-            $params = [
+            $params_detil = [
                 ':relay'     => $kondisi_relay,
                 ':posisi'    => $posisi_pasang,
                 ':long'      => $longitude,
                 ':lat'       => $latitude,
-                ':status'    => $status_data,
-                ':nama_akun' => $_SESSION['NamaAkun'] ?? 'PETUGAS LAPANGAN',
-                ':no_form'   => $no_form_pem
+                ':no_fba'    => $no_fba
             ];
 
             if (isset($_FILES['foto_pasang']) && $_FILES['foto_pasang']['error'] === UPLOAD_ERR_OK) {
                 $sql_foto .= ", FotoPasang = :foto_pasang";
-                $params[':foto_pasang'] = file_get_contents($_FILES['foto_pasang']['tmp_name']);
+                $params_detil[':foto_pasang'] = file_get_contents($_FILES['foto_pasang']['tmp_name']);
             }
             if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] === UPLOAD_ERR_OK) {
                 $sql_foto .= ", FotoBarang = :foto_barang";
-                $params[':foto_barang'] = file_get_contents($_FILES['foto_barang']['tmp_name']);
+                $params_detil[':foto_barang'] = file_get_contents($_FILES['foto_barang']['tmp_name']);
             }
 
-            $stmt = $conn->prepare("UPDATE frm_pemeliharaan SET 
-                KondisiRelay = :relay, 
+            // Update frm_ba_detil
+            $stmt_detil = $conn->prepare("UPDATE frm_ba_detil SET 
+                LampuIndikator = :relay, 
                 PosisiPasang = :posisi, 
-                Longitude = :long, 
-                Latitude = :lat, 
-                StatusData = :status, 
-                NamaAkun = :nama_akun $sql_foto, 
-                WaktuData = NOW() 
-                WHERE NoFormPemeliharaan = :no_form");
+                `Long` = :long, 
+                Lat = :lat 
+                $sql_foto 
+                WHERE NoFba = :no_fba AND StatusPekerjaan = 'PASANG'");
+            $stmt_detil->execute($params_detil);
 
-            $stmt->execute($params);
-            $pesan_sukses_eks = "Eksekusi Order ($no_form_pem) berhasil diperbarui dan disimpan!";
+            // B. Update master formulir (frm_ba)
+            $stmt_ba = $conn->prepare("UPDATE frm_ba SET 
+                StatusData = :status, 
+                NamaAkun = :nama_akun, 
+                WaktuData = NOW() 
+                WHERE NoFba = :no_fba");
+            $stmt_ba->execute([
+                ':status' => $status_data,
+                ':nama_akun' => $nama_akun,
+                ':no_fba' => $no_fba
+            ]);
+
+            $conn->commit();
+            $pesan_sukses_eks = "Eksekusi Order (BA: $no_fba) berhasil diperbarui dan disimpan!";
         } catch (PDOException $e) {
+            if ($conn->inTransaction()) $conn->rollBack();
             $pesan_error_eks = "Gagal memproses eksekusi order: " . $e->getMessage();
         }
     }
 }
 
+// --- 2. AMBIL DATA ORDER UNTUK DITAMPILKAN ---
 $data_eksekusi = [];
 try {
-    // Membaca data langsung dari frm_pemeliharaan dan master_barang
-    $sql_eks = "SELECT p.*, b.SimId AS SimBarang, b.ImeiModem AS ImeiBarang 
-                FROM frm_pemeliharaan p 
-                LEFT JOIN master_barang b ON p.NoRef = b.NoRef 
-                ORDER BY p.WaktuData DESC";
+    $sql_eks = "SELECT b.NoFba AS NoFormPemeliharaan, b.NoFpk AS NoFormOrder, b.TglFba AS TglPemeliharaan, 
+                       b.KdPetugas, b.IdPel, bd.NoRef, bd.SimId, bd.ImeiModem, 
+                       bd.LampuIndikator AS KondisiRelay, bd.PosisiPasang, bd.Long AS Longitude, bd.Lat AS Latitude, b.StatusData 
+                FROM frm_ba b 
+                JOIN frm_ba_detil bd ON b.NoFba = bd.NoFba 
+                WHERE b.JenisPekerjaan = 'PEMELIHARAAN' AND bd.StatusPekerjaan = 'PASANG'
+                ORDER BY b.WaktuData DESC";
     $stmt_eks = $conn->query($sql_eks);
     $data_eksekusi = $stmt_eks->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -79,32 +98,32 @@ try {
 $total_order = count($data_eksekusi);
 $total_selesai = 0;
 foreach ($data_eksekusi as $d) {
-    if (($d['KondisiRelay'] ?? '') === 'BERFUNGSI') $total_selesai++;
+    if (($d['KondisiRelay'] ?? '') === 'MENYALA' || ($d['KondisiRelay'] ?? '') === 'BERFUNGSI') $total_selesai++;
 }
 ?>
 
 <?php if (!empty($pesan_sukses_eks)): ?>
-    <div class="alert alert-success alert-dismissible fade show rounded-3" role="alert">
+    <div class="alert alert-success alert-dismissible fade show rounded-3 mx-3 mt-3" role="alert">
         <i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($pesan_sukses_eks) ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>
 
 <?php if (!empty($pesan_error_eks)): ?>
-    <div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+    <div class="alert alert-danger alert-dismissible fade show rounded-3 mx-3 mt-3" role="alert">
         <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($pesan_error_eks) ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 mx-2 mt-1">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
             <div class="d-flex align-items-center justify-content-between">
                 <div>
                     <div class="text-uppercase text-muted fw-bold small mb-1">TOTAL ORDER PEMELIHARAAN</div>
                     <div class="h2 fw-bold mb-0 text-dark"><?= $total_order ?> <span class="fs-6 fw-normal text-muted">Order</span></div>
-                    <div class="small text-muted mt-1">Daftar penugasan pemeriksaan relay S41</div>
+                    <div class="small text-muted mt-1">Daftar penugasan dari SPV/Admin</div>
                 </div>
                 <div class="p-3 bg-primary bg-opacity-10 text-primary rounded-4 fs-2">
                     <i class="bi bi-tools"></i>
@@ -128,12 +147,12 @@ foreach ($data_eksekusi as $d) {
     </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
+<div class="card border-0 shadow-sm rounded-4 bg-white p-3 mx-3">
     <div class="d-flex justify-content-between align-items-center mb-3 px-2 pt-2">
         <h5 class="fw-bold text-primary mb-0">Daftar Eksekusi Order Pemeliharaan</h5>
         <div class="input-group style-search" style="width: 280px;">
             <span class="input-group-text bg-light border-end-0 rounded-start-3 text-muted"><i class="bi bi-search"></i></span>
-            <input type="text" id="searchEksekusi" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari no order, idpel, petugas...">
+            <input type="text" id="searchEksekusi" class="form-control bg-light border-start-0 rounded-end-3 text-muted small" placeholder="Cari no BA, idpel, petugas...">
         </div>
     </div>
 
@@ -142,7 +161,7 @@ foreach ($data_eksekusi as $d) {
             <thead class="table-light text-dark fw-bold text-uppercase small border-top border-bottom">
                 <tr>
                     <th class="ps-3 py-3" style="width: 40px;">#</th>
-                    <th class="py-3 text-nowrap">NO FORM / ORDER</th>
+                    <th class="py-3 text-nowrap">NO BA / PK</th>
                     <th class="py-3 text-nowrap">TGL & PETUGAS</th>
                     <th class="py-3 text-nowrap">IDPEL / NO REF</th>
                     <th class="py-3 text-nowrap">SIM ID</th>
@@ -161,7 +180,7 @@ foreach ($data_eksekusi as $d) {
                             <td class="fw-bold text-dark text-nowrap">
                                 <?= htmlspecialchars($row['NoFormPemeliharaan']) ?>
                                 <?php if (!empty($row['NoFormOrder'])): ?>
-                                    <div class="small text-primary font-monospace">Order: <?= htmlspecialchars($row['NoFormOrder']) ?></div>
+                                    <div class="small text-primary font-monospace">PK: <?= htmlspecialchars($row['NoFormOrder']) ?></div>
                                 <?php endif; ?>
                             </td>
                             <td class="text-nowrap">
@@ -182,7 +201,7 @@ foreach ($data_eksekusi as $d) {
                                 <?php endif; ?>
                             </td>
                             <td class="text-nowrap">
-                                <?php if (($row['KondisiRelay'] ?? '') === 'BERFUNGSI'): ?>
+                                <?php if (($row['KondisiRelay'] ?? '') === 'MENYALA' || ($row['KondisiRelay'] ?? '') === 'BERFUNGSI'): ?>
                                     <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle rounded-2 px-2 py-1"><i class="bi bi-check-lg me-1"></i>BERFUNGSI</span>
                                 <?php else: ?>
                                     <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle rounded-2 px-2 py-1"><i class="bi bi-x-lg me-1"></i>TIDAK BERFUNGSI</span>
@@ -204,6 +223,7 @@ foreach ($data_eksekusi as $d) {
                             </td>
                         </tr>
 
+                        <!-- MODAL EKSEKUSI -->
                         <div class="modal fade" id="modalEksekusiOrder<?= $idx ?>" tabindex="-1">
                             <div class="modal-dialog modal-dialog-centered modal-lg">
                                 <div class="modal-content border-0 rounded-4 shadow">
@@ -218,7 +238,7 @@ foreach ($data_eksekusi as $d) {
 
                                             <div class="alert alert-light border rounded-3 mb-3 p-3">
                                                 <div class="row g-2 small">
-                                                    <div class="col-md-6"><strong>NO FORM:</strong> <?= htmlspecialchars($row['NoFormPemeliharaan']) ?></div>
+                                                    <div class="col-md-6"><strong>NO BA:</strong> <?= htmlspecialchars($row['NoFormPemeliharaan']) ?></div>
                                                     <div class="col-md-6"><strong>ID PELANGGAN:</strong> <?= htmlspecialchars($row['IdPel']) ?></div>
                                                     <div class="col-md-6"><strong>PETUGAS:</strong> <?= htmlspecialchars($row['KdPetugas']) ?></div>
                                                     <div class="col-md-6"><strong>NO REF S41:</strong> <?= htmlspecialchars($row['NoRef']) ?></div>
@@ -229,8 +249,8 @@ foreach ($data_eksekusi as $d) {
                                                 <div class="col-md-6 mb-3">
                                                     <label class="form-label text-uppercase text-muted fw-bold small mb-1">HASIL KONDISI RELAY *</label>
                                                     <select name="kondisi_relay" class="form-select rounded-3" required>
-                                                        <option value="BERFUNGSI" <?= ($row['KondisiRelay'] ?? '') === 'BERFUNGSI' ? 'selected' : '' ?>>BERFUNGSI (NORMAL)</option>
-                                                        <option value="TIDAK BERFUNGSI" <?= ($row['KondisiRelay'] ?? '') === 'TIDAK BERFUNGSI' ? 'selected' : '' ?>>TIDAK BERFUNGSI (PERLU REPARASI/MUTASI)</option>
+                                                        <option value="MENYALA" <?= (($row['KondisiRelay'] ?? '') === 'MENYALA' || ($row['KondisiRelay'] ?? '') === 'BERFUNGSI') ? 'selected' : '' ?>>BERFUNGSI (NORMAL)</option>
+                                                        <option value="TIDAK" <?= (($row['KondisiRelay'] ?? '') === 'TIDAK' || ($row['KondisiRelay'] ?? '') === 'TIDAK BERFUNGSI') ? 'selected' : '' ?>>TIDAK BERFUNGSI (PERLU MUTASI)</option>
                                                     </select>
                                                 </div>
                                                 <div class="col-md-6 mb-3">
