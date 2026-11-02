@@ -5,9 +5,12 @@
 // dalam 1 transaksi, dan kunci unik (NoTul) yang sudah ada otomatis DIPERBARUI, bukan dobel.
 //
 // Struktur tul_601:
-//   NoTul VARCHAR(30) PK | WaktuCetak DATETIME | IdPel CHAR(12) FK->dil | ThBlRekAwal CHAR(6) | ThBlRekAkhir CHAR(6)
+//   NoTul VARCHAR(30) PK | WaktuCetak DATETIME | IdPel CHAR(12) FK->master_barang.IdPel | ThBlRekAwal CHAR(6) | ThBlRekAkhir CHAR(6)
 //   Lembar INT | RpTag INT | StandBaca INT | TglBaca DATE | NomorPengirim VARCHAR(20) | NamaAkun VARCHAR(20)
 //   UnitUp | UnitAp | UnitUpi | StatusData ENUM('AKTIF','TIDAK') | WaktuData TIMESTAMP
+//
+// CATATAN FK: IdPel hanya boleh berisi pelanggan yang sudah punya perangkat terpasang (ada di master_barang.IdPel).
+//   IdPel yang belum ada di master_barang DITOLAK dengan alasan jelas (bukan ditambahkan ke DIL).
 //
 // WILAYAH TUJUAN: sama seperti upload riwayat — UPI dari akun, AP & UP dipilih pengguna sebelum mengunggah.
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
@@ -135,7 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $t0 = microtime(true);
         $baris = [];            // dedup per NoTul: [no_excel, NoTul, WaktuCetak, IdPel, Awal, Akhir, Lembar, RpTag, Stand, TglBaca]
         $nama_dil = [];         // IdPel => NamaPelanggan (dari file) untuk melengkapi DIL
-        $dilBaru = 0;
+        $tanpaBarang = 0;       // baris ditolak: IdPel belum ada di master_barang
+        $idTanpaBarang = [];    // IdPel unik yang belum ada di master_barang
         $dibaca = $tolak = $duplikat = $bentrok = 0;
         $peta = null;
 
@@ -213,19 +217,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // c1. DIL DULU: tul_601.IdPel punya foreign key ke dil.IdPel. Pelanggan baru masuk dengan status AKTIF;
-                //     pelanggan lama tidak diubah (status dipertahankan), namanya hanya dilengkapi bila masih kosong.
+                // c1. FK tul_601.IdPel -> master_barang.IdPel: hanya IdPel yang sudah punya perangkat terpasang yang boleh masuk.
+                $ada_barang = [];
                 $idpel_unik = array_values(array_unique(array_column($baris, 3)));
                 foreach (array_chunk($idpel_unik, $tul_chunk) as $paket) {
-                    $st = $conn->prepare('SELECT COUNT(*) FROM dil WHERE IdPel IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
+                    $st = $conn->prepare('SELECT DISTINCT IdPel FROM master_barang WHERE IdPel IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
                     $st->execute($paket);
-                    $dilBaru += count($paket) - (int) $st->fetchColumn();
+                    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $idp) $ada_barang[(string) $idp] = true;
+                }
+                foreach ($baris as $notul => $b) {
+                    if (isset($ada_barang[$b[3]])) continue;
+                    unset($baris[$notul]);
+                    $tanpaBarang++; $tolak++; $idTanpaBarang[$b[3]] = true;
+                    if (count($ditolak) < 50) $ditolak[] = [$b[0], $b[3], $b[1], 'IdPel belum terpasang perangkat (tidak ada di master_barang)'];
+                }
 
-                    $param = [];
-                    foreach ($paket as $id) array_push($param, $id, $nama_dil[$id] ?? '');
-                    $conn->prepare("INSERT INTO dil (IdPel, NamaPelanggan, StatusData, WaktuData) VALUES "
-                        . implode(',', array_fill(0, count($paket), "(?, ?, 'AKTIF', NOW())"))
-                        . " ON DUPLICATE KEY UPDATE NamaPelanggan = IF(NamaPelanggan IS NULL OR NamaPelanggan = '', VALUES(NamaPelanggan), NamaPelanggan)")
+                // c1b. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong (tidak menambah pelanggan baru).
+                $nama_pakai = array_intersect_key($nama_dil, $ada_barang);
+                foreach (array_chunk($nama_pakai, $tul_chunk, true) as $paket) {
+                    $case = $param = [];
+                    foreach ($paket as $id => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $id, $nm); }
+                    $in = implode(',', array_fill(0, count($paket), '?'));
+                    foreach (array_keys($paket) as $id) $param[] = (string) $id;
+                    $conn->prepare("UPDATE dil SET NamaPelanggan = CASE IdPel " . implode(' ', $case) . " END WHERE IdPel IN ($in) AND (NamaPelanggan IS NULL OR NamaPelanggan = '')")
                          ->execute($param);
                 }
 
@@ -246,12 +260,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak, 'bentrok' => $bentrok,
-                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'dil_baru' => $dilBaru, 'wilayah' => $label_tujuan];
+                      'tanpa_barang' => $tanpaBarang, 'id_tanpa_barang' => count($idTanpaBarang),
+                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'wilayah' => $label_tujuan];
             if ($baris) {
-                $pesan_sukses = 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris TUL VI-01 untuk wilayah ' . $label_tujuan . '; '
-                              . number_format($dilBaru, 0, ',', '.') . ' pelanggan baru ditambahkan ke DIL (status AKTIF).';
+                $pesan_sukses = 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris TUL VI-01 untuk wilayah ' . $label_tujuan . '.'
+                              . ($tanpaBarang ? ' ' . number_format($tanpaBarang, 0, ',', '.') . ' baris dilewati karena IdPel belum terpasang perangkat (lihat tabel Baris Ditolak).' : '');
             } else {
-                $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
+                $pesan_error = $tanpaBarang
+                    ? 'Tidak ada baris yang bisa disimpan: ' . number_format($tanpaBarang, 0, ',', '.') . ' baris ditolak karena IdPel belum terpasang perangkat (tidak ada di master_barang).'
+                    : 'Tidak ada baris valid yang bisa disimpan.';
             }
         } catch (Throwable $e) {
             if ($conn->inTransaction()) $conn->rollBack();

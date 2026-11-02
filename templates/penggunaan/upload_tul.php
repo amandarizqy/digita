@@ -1,280 +1,207 @@
 <?php
-// modules/penggunaan/upload_tul.php
-// Unggah XLSX "Daftar TUL VI-01 yang belum lunas" (laporan AP2T) -> tabel tul_601.
-// Pola sama dengan perencanaan/upload_riwayat.php: file dibaca streaming, disimpan per 500 baris
-// dalam 1 transaksi, dan kunci unik (NoTul) yang sudah ada otomatis DIPERBARUI, bukan dobel.
-//
-// Struktur tul_601:
-//   NoTul VARCHAR(30) PK | WaktuCetak DATETIME | IdPel CHAR(12) FK->master_barang.IdPel | ThBlRekAwal CHAR(6) | ThBlRekAkhir CHAR(6)
-//   Lembar INT | RpTag INT | StandBaca INT | TglBaca DATE | NomorPengirim VARCHAR(20) | NamaAkun VARCHAR(20)
-//   UnitUp | UnitAp | UnitUpi | StatusData ENUM('AKTIF','TIDAK') | WaktuData TIMESTAMP
-//
-// CATATAN FK: IdPel hanya boleh berisi pelanggan yang sudah punya perangkat terpasang (ada di master_barang.IdPel).
-//   IdPel yang belum ada di master_barang DITOLAK dengan alasan jelas (bukan ditambahkan ke DIL).
-//
-// WILAYAH TUJUAN: sama seperti upload riwayat — UPI dari akun, AP & UP dipilih pengguna sebelum mengunggah.
-require_once __DIR__ . '/../../functions/xlsx_reader.php';
+// templates/penggunaan/upload_tul.php  -  Input: Unggah TUL VI-01 (XLSX)
+// Variabel dari modules/penggunaan/upload_tul.php:
+//   $pesan_sukses, $pesan_error, $hasil, $ditolak, $csrf, $unit_siap, $nama_upi, $opsi_ap, $peta_unit, $sel_ap, $sel_up
 
-$tul_chunk = 500;
+echo pg_header([
+    'title'    => 'Upload TUL VI-01',
+    'subtitle' => 'Unggah file Excel (.xlsx) daftar pelanggan yang sudah dicetak TUL VI-01 tetapi belum lunas.',
+    'action'   => 'upload_tul',
+    'buttons'  => [['label' => 'Lihat Data TUL', 'icon' => 'bi-display', 'href' => pg_url('monitor_tul'), 'class' => 'btn btn-outline-primary btn-sm px-3 rounded-2']],
+]);
 
-// ---- PETA KOLOM: field => alias judul kolom Excel (huruf kecil, tanpa spasi/titik/tanda baca). Ubah di sini bila perlu.
-$tul_peta_wajib = [
-    'notul'  => ['nomertulvi01', 'nomortulvi01', 'nomertul', 'nomortul', 'notul'],             // -> NoTul
-    'cetak'  => ['tglpencetakantulvi01', 'tglpencetakan', 'waktucetak'],                       // -> WaktuCetak
-    'idpel'  => ['idpelanggan', 'idpel'],                                                      // -> IdPel
-    'awal'   => ['bulanrekeningawal', 'thblrekawal'],                                          // -> ThBlRekAwal
-    'akhir'  => ['bulanrekeningakhir', 'thblrekakhir'],                                        // -> ThBlRekAkhir
-    'lembar' => ['jumlahlembar', 'lembar'],                                                    // -> Lembar
-    'rptag'  => ['rptagihan', 'rptag'],                                                        // -> RpTag
+if ($pesan_sukses) echo pg_alert('success', pg_e($pesan_sukses) . ' <a href="' . pg_e(pg_url('monitor_tul')) . '" class="alert-link">Lihat datanya &rarr;</a>');
+if ($pesan_error)  echo pg_alert('danger', pg_e($pesan_error));
+if (!$unit_siap)   echo pg_alert('warning', 'Unit UPI akun Anda belum tersedia, unggah dinonaktifkan. Lengkapi UnitUpi di Master Pengguna.');
+
+if ($hasil):
+    $kpi_unggah = [
+        ['Baris Dibaca', pg_n($hasil['dibaca']), pg_e($hasil['nama']) . ' · ' . $hasil['durasi'] . ' detik', 'bi-file-earmark-spreadsheet', 'primary'],
+        ['Tersimpan', pg_n($hasil['tersimpan']), 'Baru atau diperbarui', 'bi-check2-circle', 'success'],
+        ['Duplikat di File', pg_n($hasil['duplikat']), 'Nomer Tul sama, dipakai baris terakhir', 'bi-files', $hasil['duplikat'] > 0 ? 'warning' : 'secondary'],
+        ['Ditolak', pg_n($hasil['ditolak']), $hasil['bentrok'] > 0 ? pg_n($hasil['bentrok']) . ' bentrok dengan wilayah lain' : 'Format data tidak valid', 'bi-x-octagon', $hasil['ditolak'] > 0 ? 'danger' : 'secondary'],
+    ]; ?>
+<div class="row g-3 mb-4">
+    <?php foreach ($kpi_unggah as [$lbl, $val, $ket, $ikon, $warna]): ?>
+    <div class="col-md-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 py-3 px-4 bg-white h-100">
+            <div class="d-flex justify-content-between align-items-start">
+                <span class="text-muted fw-bold text-uppercase" style="font-size:.75rem;letter-spacing:.5px;"><?= pg_e($lbl) ?></span>
+                <i class="bi <?= pg_e($ikon) ?> text-<?= $warna ?>"></i>
+            </div>
+            <h3 class="fw-bold mt-1 mb-0 fs-4 text-<?= $warna === 'secondary' ? 'dark' : $warna ?>"><?= pg_e($val) ?></h3>
+            <span class="text-muted small"><?= $ket ?></span>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<div class="mb-4">
+    <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+        <div class="card-header bg-white py-3 px-4 border-bottom">
+            <span class="fw-bold text-primary fs-6">Unggah File Excel</span>
+        </div>
+        <form method="POST" action="<?= pg_e(pg_url('upload_tul')) ?>" enctype="multipart/form-data" id="formUnggah">
+            <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
+            <div class="card-body px-4 py-4">
+                <!-- WILAYAH TUJUAN: UPI (akun) -> AP -> UP -->
+                <div class="fw-bold small text-uppercase text-secondary mb-2" style="letter-spacing:.5px;"><i class="bi bi-geo-alt me-1"></i> Wilayah Tujuan Data</div>
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small text-muted mb-1">Unit UPI</label>
+                        <input type="text" class="form-control bg-light" value="<?= pg_e($nama_upi ?: '-') ?>" readonly>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="unit_ap" class="form-label small text-muted mb-1">Unit AP <span class="text-danger">*</span></label>
+                        <select name="unit_ap" id="unit_ap" class="form-select" required <?= $unit_siap ? '' : 'disabled' ?>>
+                            <option value="">— Pilih Unit AP —</option>
+                            <?php foreach ($opsi_ap as $kode_ap => $nama_ap_opt): ?>
+                                <option value="<?= pg_e((string) $kode_ap) ?>" <?= (string) $kode_ap === (string) $sel_ap ? 'selected' : '' ?>><?= pg_e($nama_ap_opt) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="unit_up" class="form-label small text-muted mb-1">Unit UP <span class="text-danger">*</span></label>
+                        <select name="unit_up" id="unit_up" class="form-select" required disabled>
+                            <option value="">— Pilih AP dahulu —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-text mb-4 mt-n2"><i class="bi bi-info-circle me-1"></i>Seluruh baris pada file akan disimpan dengan unit AP &amp; UP yang dipilih di atas.</div>
+
+                <label for="file_xlsx" class="form-label fw-bold small text-uppercase text-secondary" style="letter-spacing:.5px;">File .xlsx</label>
+                <input type="file" name="file_xlsx" id="file_xlsx" class="form-control form-control-lg" accept=".xlsx" required <?= $unit_siap ? '' : 'disabled' ?>>
+                <div class="form-text">Sheet pertama dibaca. Batas server: <?= pg_e(ini_get('upload_max_filesize')) ?> per file.</div>
+            </div>
+            <div class="card-footer bg-white border-top py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i> Nomer Tul yang sudah ada akan diperbarui, bukan digandakan.</span>
+                <button type="submit" class="btn btn-primary btn-sm px-4 shadow-sm rounded-2" id="btnUnggah" <?= $unit_siap ? '' : 'disabled' ?>>
+                    <i class="bi bi-cloud-arrow-up me-1"></i> Unggah &amp; Proses
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if (!empty($ditolak)): ?>
+<div class="card border-0 shadow-sm rounded-4 bg-white mb-4">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-primary fs-6">Baris Ditolak</span>
+        <span class="text-muted small">Menampilkan <?= count($ditolak) ?> dari <?= pg_n($hasil['ditolak'] ?? count($ditolak)) ?> baris</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
+                <tr><th class="ps-4" style="width:110px;">Baris Excel</th><th>Nomer Tul</th><th>Nilai Id Pelanggan</th><th class="pe-4">Alasan</th></tr>
+            </thead>
+            <tbody>
+                <?php foreach ($ditolak as [$no, $idp, $notul, $alasan]): ?>
+                <tr>
+                    <td class="ps-4 font-monospace"><?= (int) $no ?></td>
+                    <td class="font-monospace small"><?= pg_e($notul ?: '(kosong)') ?></td>
+                    <td class="font-monospace small"><?= pg_e($idp ?: '(kosong)') ?></td>
+                    <td class="pe-4"><span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-50"><i class="bi bi-x-circle me-1"></i><?= pg_e($alasan) ?></span></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- CONTOH FORMAT EXCEL -->
+<?php
+$contoh_kolom = ['No.', 'Tgl Pencetakan Tul VI-01', 'Nomer Tul VI-01', 'Id Pelanggan', 'No Kontrak', 'No RBM', 'Nama Pelanggan', 'Alamat', 'Bulan Rekening Awal', 'Bulan Rekening Akhir', 'Jumlah Lembar', 'Rp. Tagihan', 'Tgl Pelaksanaan Putus', 'Stand Pemutusan', 'Nama Petugas Putus'];
+$contoh_wajib = ['Tgl Pencetakan Tul VI-01', 'Nomer Tul VI-01', 'Id Pelanggan', 'Bulan Rekening Awal', 'Bulan Rekening Akhir', 'Jumlah Lembar', 'Rp. Tagihan'];
+$contoh_opsi  = ['Nama Pelanggan', 'Tgl Pelaksanaan Putus', 'Stand Pemutusan'];
+$contoh_baris = [
+    [1, '2026-10-21 08:13:40', '2026-10-21/TULVI-01/926', '546104009013', 'FF4009015', 'AAAAABJ01995', 'HJ MAESAROH A', 'JL KH HASYIM ASHARI RT1/12', '202610', '202610', 1, 53132, '', '', ''],
+    [2, '2026-10-21 08:13:40', '2026-10-21/TULVI-01/954', '566100607577', '060757', 'AAAAABJ02364', 'ASPOL BANDARA SOETTA', 'JL IRIGASI SIPON BENTENG BETAWI', '202610', '202610', 1, 83129, '', '', ''],
+    [3, '2026-10-24 13:05:33', '2026-10-24/TULVI-01/1', '546100001689', 'FF0001684', 'AAAGGAK06890', 'KES DIM 0506', 'JL DAAN MOGOT 33 SUKARASA', '202607', '202610', 4, 44300340, '', '', ''],
 ];
-$tul_peta_opsi = [                                                                             // boleh tidak ada di file
-    'nama'   => ['namapelanggan', 'nama'],                                                     // -> dil.NamaPelanggan (bila masih kosong)
-    'stand'  => ['standpemutusan', 'standbaca'],                                               // -> StandBaca
-    'tglput' => ['tglpelaksanaanputus', 'tglbaca'],                                            // -> TglBaca
-];
-$tul_nama = ['notul' => 'Nomer Tul VI-01', 'cetak' => 'Tgl Pencetakan Tul VI-01', 'idpel' => 'Id Pelanggan',
-             'awal' => 'Bulan Rekening Awal', 'akhir' => 'Bulan Rekening Akhir', 'lembar' => 'Jumlah Lembar', 'rptag' => 'Rp. Tagihan'];
-$tul_int_max = 2147483647;   // batas INT(11) bertanda; lebih dari ini membuat seluruh batch gagal di MySQL strict
+?>
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-bold text-primary fs-6"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Contoh Format Excel</span>
+        <span class="text-muted small">Laporan AP2T apa adanya (kop surat boleh ada) · sheet pertama · .xlsx · <i class="bi bi-arrow-left-right"></i> geser tabel untuk melihat semua kolom</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle mb-0 small text-nowrap">
+            <thead>
+                <tr>
+                    <?php foreach ($contoh_kolom as $k):
+                        $wajib = in_array($k, $contoh_wajib, true); $opsi = in_array($k, $contoh_opsi, true); ?>
+                        <th class="px-2 py-2 <?= $wajib ? 'bg-primary bg-opacity-10 text-primary' : ($opsi ? 'bg-info bg-opacity-10 text-info-emphasis' : 'table-light text-secondary') ?>"><?= pg_e($k) ?><?= $wajib ? ' *' : '' ?></th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($contoh_baris as $b): ?>
+                <tr>
+                    <?php foreach ($b as $i => $v):
+                        $wajib = in_array($contoh_kolom[$i], $contoh_wajib, true); $opsi = in_array($contoh_kolom[$i], $contoh_opsi, true); ?>
+                        <td class="px-2 font-monospace <?= is_int($v) ? 'text-end' : '' ?> <?= $wajib ? 'bg-primary bg-opacity-10 fw-semibold' : ($opsi ? 'bg-info bg-opacity-10' : 'text-muted') ?>"><?= pg_e((string) $v) ?></td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body px-4 py-3 border-top">
+        <div class="row g-3 small">
+            <div class="col-md-6">
+                <div class="fw-bold text-primary mb-1">* Kolom wajib</div>
+                <ul class="mb-0 ps-3 text-muted">
+                    <li><strong>Nomer Tul VI-01</strong>: kunci data, maksimal 30 karakter</li>
+                    <li><strong>Tgl Pencetakan Tul VI-01</strong>: contoh <span class="font-monospace">2026-10-21 08:13:40</span></li>
+                    <li><strong>Id Pelanggan</strong>: 12 digit angka (format ilmiah seperti 5,46E+11 tetap terbaca)</li>
+                    <li><strong>Bulan Rekening Awal / Akhir</strong>: YYYYMM, awal tidak boleh lebih besar dari akhir</li>
+                    <li><strong>Jumlah Lembar</strong> (minimal 1) dan <strong>Rp. Tagihan</strong>: angka</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <div class="fw-bold text-info-emphasis mb-1">Kolom opsional &amp; catatan</div>
+                <ul class="mb-0 ps-3 text-muted">
+                    <li><strong>Nama Pelanggan</strong> melengkapi DIL hanya bila nama di DIL masih kosong.</li>
+                    <li><strong>Stand Pemutusan</strong> &rarr; Stand Baca dan <strong>Tgl Pelaksanaan Putus</strong> &rarr; Tgl Baca; bila kosong, nilai lama tidak ditimpa.</li>
+                    <li>Baris <em>TOTAL</em> di akhir laporan dilewati otomatis; kolom lain diabaikan; huruf besar/kecil judul tidak berpengaruh.</li>
+                    <li>Pelanggan yang belum ada di DIL ditambahkan otomatis (AKTIF). Status TUL lama tidak berubah saat diunggah ulang.</li>
+                    <li>UnitUpi dari akun yang login; UnitAp dan UnitUp sesuai pilihan Wilayah Tujuan.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
 
-// ---- Normalisasi nilai ------------------------------------------------------------
-if (!function_exists('tul_header')) {
-    function tul_header($v): string { return preg_replace('/[^a-z0-9]/', '', strtolower((string) $v)); }
+<script>
+(function () {
+    var peta  = <?= json_encode($peta_unit, JSON_UNESCAPED_UNICODE) ?>;   // [{kode, nama, ups:[{kode, nama}]}]
+    var upAwal = <?= json_encode((string) $sel_up) ?>;
+    var ap = document.getElementById('unit_ap'), up = document.getElementById('unit_up');
 
-    function tul_idpel($v): ?string
-    {
-        $v = trim((string) $v);
-        if (preg_match('/^\d+(\.0+)?$/', $v))                  $v = preg_replace('/\.0+$/', '', $v);
-        elseif (preg_match('/^\d+(\.\d+)?[eE]\+?\d+$/', $v))   $v = sprintf('%.0f', (float) $v);   // angka ilmiah dari Excel
-        else return null;
-        if (strlen($v) === 11) $v = '0' . $v;                  // nol di depan hilang oleh Excel
-        return preg_match('/^\d{12}$/', $v) ? $v : null;
+    function isiUp(pilih) {
+        up.innerHTML = '';
+        var o = document.createElement('option');
+        o.value = '';
+        o.textContent = ap.value ? '— Pilih Unit UP —' : '— Pilih AP dahulu —';
+        up.appendChild(o);
+        var item = peta.filter(function (x) { return x.kode === ap.value; })[0];
+        (item ? item.ups : []).forEach(function (u) {
+            var op = document.createElement('option');
+            op.value = u.kode; op.textContent = u.nama;
+            if (pilih && pilih === u.kode) op.selected = true;
+            up.appendChild(op);
+        });
+        up.disabled = !ap.value || !item || item.ups.length === 0;
     }
+    ap.addEventListener('change', function () { isiUp(''); });
+    isiUp(upAwal);   // pertahankan pilihan setelah submit yang gagal validasi
 
-    function tul_bulan($v): ?string
-    {
-        $v = preg_replace('/\.0+$/', '', trim((string) $v));
-        return preg_match('/^(19|20)\d{2}(0[1-9]|1[0-2])$/', $v) ? $v : null;
-    }
-
-    /** null = kosong, false = tidak valid, string = 'Y-m-d H:i:s'. Terima 'Y-m-d H:i:s', 'd/m/Y H:i', YYYYMMDD, serial Excel. */
-    function tul_waktu($v)
-    {
-        $v = trim((string) $v);
-        if ($v === '') return null;
-        $jam = '(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?';
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})' . $jam . '/', $v, $m)) { $y = $m[1]; $b = $m[2]; $t = $m[3]; $h = $m[4] ?? 0; $i = $m[5] ?? 0; $s = $m[6] ?? 0; }
-        elseif (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})' . $jam . '$#', $v, $m)) { $t = $m[1]; $b = $m[2]; $y = $m[3]; $h = $m[4] ?? 0; $i = $m[5] ?? 0; $s = $m[6] ?? 0; }
-        elseif (preg_match('/^(\d{4})(\d{2})(\d{2})(\.0+)?$/', $v, $m)) { $y = $m[1]; $b = $m[2]; $t = $m[3]; $h = $i = $s = 0; }
-        elseif (is_numeric($v) && $v > 20000 && $v < 80000) {            // tanggal serial Excel (pecahan = jam)
-            $detik = (int) round(((float) $v - 25569) * 86400);
-            return gmdate('Y-m-d H:i:s', $detik);
-        } else return false;
-        if (!checkdate((int) $b, (int) $t, (int) $y) || (int) $h > 23 || (int) $i > 59 || (int) $s > 59) return false;
-        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $y, $b, $t, $h, $i, $s);
-    }
-
-    /** Bilangan bulat >= 0. null = kosong / bukan angka. */
-    function tul_int($v): ?int
-    {
-        $v = trim((string) $v);
-        if ($v === '' || !is_numeric($v) || (float) $v < 0) return null;
-        return (int) round((float) $v);
-    }
-}
-
-// ---- 1. Unit akun yang login (UPI) + pilihan wilayah tujuan (AP -> UP) ------------------
-$pesan_sukses = $pesan_error = '';
-$hasil   = null;     // ringkasan setelah unggah
-$ditolak = [];       // contoh baris ditolak (maks 50): [no, idpel, notul, alasan]
-
-if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
-$csrf = $_SESSION['pg_csrf'];
-
-$u         = pg_unit_akun($conn);
-$unitUpi   = $u['upi'];
-$unit_siap = $unitUpi !== '';
-
-$nama_upi   = $unitUpi;
-$opsi_ap    = [];   // [kode => SingkatanNama]
-$peta_unit  = [];   // untuk JS dropdown bertingkat
-$opsi_up_ap = [];   // [kodeAp => [kodeUp => nama]] untuk validasi server
-$sel_ap = trim((string) ($_POST['unit_ap'] ?? ''));
-$sel_up = trim((string) ($_POST['unit_up'] ?? ''));
-
-if ($unit_siap) {
-    try {
-        $w = pg_opsi_wilayah($conn, $u);
-        $nama_upi = $w['nama_upi']; $opsi_ap = $w['opsi_ap']; $opsi_up_ap = $w['opsi_up_ap']; $peta_unit = $w['peta'];
-    } catch (PDOException $e) {
-        $pesan_error = 'Gagal memuat daftar unit: ' . $e->getMessage();
-        $unit_siap = false;
-    }
-}
-
-// ---- 2. Proses unggah -----------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $f = $_FILES['file_xlsx'] ?? null;
-
-    if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
-        $pesan_error = 'Sesi formulir tidak valid. Muat ulang halaman lalu coba lagi.';
-    } elseif (!$unit_siap) {
-        $pesan_error = $pesan_error ?: 'Akun Anda belum memiliki Unit UPI di master pengguna.';
-    } elseif (!isset($opsi_ap[$sel_ap]) || !isset($opsi_up_ap[$sel_ap][$sel_up])) {
-        $pesan_error = 'Pilih Unit AP dan Unit UP tujuan terlebih dahulu (UP harus berada di bawah AP yang dipilih).';
-    } elseif ($f === null || in_array($f['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
-        $pesan_error = 'File melebihi batas server (upload_max_filesize ' . ini_get('upload_max_filesize') . ', post_max_size ' . ini_get('post_max_size') . ').';
-    } elseif ($f['error'] !== UPLOAD_ERR_OK) {
-        $pesan_error = 'Pilih file .xlsx terlebih dahulu.';
-    } elseif (strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) !== 'xlsx' || file_get_contents($f['tmp_name'], false, null, 0, 2) !== 'PK') {
-        $pesan_error = 'Format file harus .xlsx (Excel).';
-    } else {
-        // Unit yang disimpan pada setiap baris: UPI akun + AP & UP pilihan (sudah divalidasi di atas)
-        $tujuanUpi = $unitUpi;
-        $tujuanAp  = (string) $sel_ap;
-        $tujuanUp  = (string) $sel_up;
-        $label_tujuan = $nama_upi . ' › ' . $opsi_ap[$sel_ap] . ' › ' . $opsi_up_ap[$sel_ap][$sel_up];
-
-        set_time_limit(300);
-        $t0 = microtime(true);
-        $baris = [];            // dedup per NoTul: [no_excel, NoTul, WaktuCetak, IdPel, Awal, Akhir, Lembar, RpTag, Stand, TglBaca]
-        $nama_dil = [];         // IdPel => NamaPelanggan (dari file) untuk melengkapi DIL
-        $tanpaBarang = 0;       // baris ditolak: IdPel belum ada di master_barang
-        $idTanpaBarang = [];    // IdPel unik yang belum ada di master_barang
-        $dibaca = $tolak = $duplikat = $bentrok = 0;
-        $peta = null;
-
-        try {
-            foreach (xlsx_baris($f['tmp_name']) as $no => $sel) {
-                // a. cari baris judul kolom (laporan AP2T punya kop surat + judul 2 tingkat; yang dipakai baris berisi "Id Pelanggan")
-                if ($peta === null) {
-                    if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
-                    $kol = [];
-                    foreach ($sel as $huruf => $nilai) $kol[tul_header($nilai)] = $huruf;
-                    if (!isset($kol['idpelanggan']) && !isset($kol['idpel'])) continue;
-
-                    $peta = [];
-                    foreach ($tul_peta_wajib + $tul_peta_opsi as $field => $alias) {
-                        foreach ($alias as $a) if (isset($kol[$a])) { $peta[$field] = $kol[$a]; break; }
-                    }
-                    $kurang = array_diff(array_keys($tul_peta_wajib), array_keys($peta));
-                    if ($kurang) throw new RuntimeException('Kolom wajib tidak ditemukan: ' . implode(', ', array_map(fn($k) => $tul_nama[$k], $kurang)) . '.');
-                    continue;
-                }
-
-                // b. baris data
-                if (trim(implode('', $sel)) === '') continue;
-                if (strtoupper(trim((string) reset($sel))) === 'TOTAL') continue;   // baris jumlah di akhir laporan
-                $dibaca++;
-                $g = fn($field) => isset($peta[$field]) ? ($sel[$peta[$field]] ?? '') : '';
-
-                $notul = trim((string) $g('notul'));
-                $id    = tul_idpel($g('idpel'));
-                $cetak = tul_waktu($g('cetak'));
-                $awal  = tul_bulan($g('awal'));
-                $akhir = tul_bulan($g('akhir'));
-                $lbr   = tul_int($g('lembar'));
-                $tag   = tul_int($g('rptag'));
-                $stand = tul_int($g('stand'));                  // opsional: tidak valid / kosong -> NULL
-                $tglp  = tul_waktu($g('tglput'));               // opsional
-                $tglp  = is_string($tglp) ? substr($tglp, 0, 10) : null;
-
-                $alasan = ($notul === '' || mb_strlen($notul) > 30) ? 'Nomer Tul kosong atau lebih dari 30 karakter'
-                        : ($id === null ? 'IdPel harus 12 digit angka'
-                        : (!is_string($cetak) ? 'Tgl Pencetakan kosong / tidak valid'
-                        : ($awal === null ? 'Bulan Rekening Awal harus format YYYYMM'
-                        : ($akhir === null ? 'Bulan Rekening Akhir harus format YYYYMM'
-                        : ($awal > $akhir ? 'Bulan Rekening Awal lebih besar dari Akhir'
-                        : ($lbr === null || $lbr < 1 ? 'Jumlah Lembar kosong / bukan angka'
-                        : ($tag === null ? 'Rp. Tagihan kosong / bukan angka'
-                        : (max($lbr, $tag, (int) $stand) > $tul_int_max ? 'Angka melebihi batas kolom (INT)' : null))))))));
-                if ($alasan !== null) {
-                    $tolak++;
-                    if (count($ditolak) < 50) $ditolak[] = [$no, (string) $g('idpel'), $notul, $alasan];
-                    continue;
-                }
-
-                if (isset($baris[$notul])) $duplikat++;          // baris terakhir yang dipakai
-                $baris[$notul] = [$no, $notul, $cetak, $id, $awal, $akhir, $lbr, $tag, $stand, $tglp];
-                $nm = trim(preg_replace('/\s+/', ' ', (string) $g('nama')));
-                if ($nm !== '') $nama_dil[$id] = mb_substr($nm, 0, 50);
-            }
-            if ($peta === null) throw new RuntimeException('Baris judul kolom (Id Pelanggan, Nomer Tul VI-01, ...) tidak ditemukan.');
-
-            // c. simpan batch
-            if ($baris) {
-                $conn->beginTransaction();
-
-                // c0. NoTul adalah kunci tunggal: tolak NoTul yang sudah dimiliki wilayah LAIN supaya tidak menimpa data unit lain.
-                foreach (array_chunk(array_keys($baris), $tul_chunk) as $paket) {
-                    $st = $conn->prepare('SELECT NoTul, UnitUp, UnitAp, UnitUpi FROM tul_601 WHERE NoTul IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
-                    $st->execute($paket);
-                    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $ada) {
-                        if ((string) $ada['UnitUp'] === $tujuanUp && (string) $ada['UnitAp'] === $tujuanAp && (string) $ada['UnitUpi'] === $tujuanUpi) continue;
-                        $b = $baris[$ada['NoTul']];
-                        unset($baris[$ada['NoTul']]);
-                        $bentrok++; $tolak++;
-                        if (count($ditolak) < 50) $ditolak[] = [$b[0], $b[3], $b[1], 'Nomer Tul sudah tercatat pada wilayah lain'];
-                    }
-                }
-
-                // c1. FK tul_601.IdPel -> master_barang.IdPel: hanya IdPel yang sudah punya perangkat terpasang yang boleh masuk.
-                $ada_barang = [];
-                $idpel_unik = array_values(array_unique(array_column($baris, 3)));
-                foreach (array_chunk($idpel_unik, $tul_chunk) as $paket) {
-                    $st = $conn->prepare('SELECT DISTINCT IdPel FROM master_barang WHERE IdPel IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
-                    $st->execute($paket);
-                    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $idp) $ada_barang[(string) $idp] = true;
-                }
-                foreach ($baris as $notul => $b) {
-                    if (isset($ada_barang[$b[3]])) continue;
-                    unset($baris[$notul]);
-                    $tanpaBarang++; $tolak++; $idTanpaBarang[$b[3]] = true;
-                    if (count($ditolak) < 50) $ditolak[] = [$b[0], $b[3], $b[1], 'IdPel belum terpasang perangkat (tidak ada di master_barang)'];
-                }
-
-                // c1b. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong (tidak menambah pelanggan baru).
-                $nama_pakai = array_intersect_key($nama_dil, $ada_barang);
-                foreach (array_chunk($nama_pakai, $tul_chunk, true) as $paket) {
-                    $case = $param = [];
-                    foreach ($paket as $id => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $id, $nm); }
-                    $in = implode(',', array_fill(0, count($paket), '?'));
-                    foreach (array_keys($paket) as $id) $param[] = (string) $id;
-                    $conn->prepare("UPDATE dil SET NamaPelanggan = CASE IdPel " . implode(' ', $case) . " END WHERE IdPel IN ($in) AND (NamaPelanggan IS NULL OR NamaPelanggan = '')")
-                         ->execute($param);
-                }
-
-                // c2. tul_601. StatusData baris lama TIDAK diubah; StandBaca/TglBaca lama dipertahankan bila file baru kosong;
-                //     NomorPengirim tidak disentuh (diisi proses lain).
-                $namaAkunInput = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
-                $head = "INSERT INTO tul_601 (NoTul, WaktuCetak, IdPel, ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag, StandBaca, TglBaca, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES ";
-                $tail = " ON DUPLICATE KEY UPDATE WaktuCetak = VALUES(WaktuCetak), IdPel = VALUES(IdPel), ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir),
-                          Lembar = VALUES(Lembar), RpTag = VALUES(RpTag), StandBaca = COALESCE(VALUES(StandBaca), StandBaca), TglBaca = COALESCE(VALUES(TglBaca), TglBaca),
-                          NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = VALUES(WaktuData)";
-                foreach (array_chunk(array_values($baris), $tul_chunk) as $paket) {
-                    $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), "(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")) . $tail);
-                    $param = [];
-                    foreach ($paket as $b) array_push($param, $b[1], $b[2], $b[3], $b[4], $b[5], $b[6], $b[7], $b[8], $b[9], $namaAkunInput, $tujuanUp, $tujuanAp, $tujuanUpi);
-                    $stmt->execute($param);
-                }
-                $conn->commit();
-            }
-
-            $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak, 'bentrok' => $bentrok,
-                      'tanpa_barang' => $tanpaBarang, 'id_tanpa_barang' => count($idTanpaBarang),
-                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'wilayah' => $label_tujuan];
-            if ($baris) {
-                $pesan_sukses = 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris TUL VI-01 untuk wilayah ' . $label_tujuan . '.'
-                              . ($tanpaBarang ? ' ' . number_format($tanpaBarang, 0, ',', '.') . ' baris dilewati karena IdPel belum terpasang perangkat (lihat tabel Baris Ditolak).' : '');
-            } else {
-                $pesan_error = $tanpaBarang
-                    ? 'Tidak ada baris yang bisa disimpan: ' . number_format($tanpaBarang, 0, ',', '.') . ' baris ditolak karena IdPel belum terpasang perangkat (tidak ada di master_barang).'
-                    : 'Tidak ada baris valid yang bisa disimpan.';
-            }
-        } catch (Throwable $e) {
-            if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = 'Gagal memproses file: ' . $e->getMessage();
-        }
-    }
-}
-
-include __DIR__ . '/../../templates/penggunaan/upload_tul.php';
+    document.getElementById('formUnggah').addEventListener('submit', function () {
+        var b = document.getElementById('btnUnggah');
+        b.disabled = true;
+        b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...';
+    });
+})();
+</script>
