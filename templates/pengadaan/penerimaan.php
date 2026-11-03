@@ -37,7 +37,7 @@ $status_kirim = $formulir['StatusPengiriman'] ?? 'DIKIRIM';
 </div>
 
 <!-- Form Penerimaan Barang -->
-<form action="modules/pengadaan/proses_penerimaan.php?action=terima_barang" method="POST">
+<form id="form-terima-barang" action="modules/pengadaan/proses_penerimaan.php?action=terima_barang" method="POST">
     <input type="hidden" name="no_pengiriman" value="<?= htmlspecialchars($no_formulir_valid) ?>">
 
     <div class="card shadow mb-4 border-0">
@@ -84,10 +84,35 @@ $status_kirim = $formulir['StatusPengiriman'] ?? 'DIKIRIM';
 
         <?php if ($status_kirim !== 'DITERIMA' && !empty($items)): ?>
         <div class="card-footer bg-white p-3 text-end border-top">
-            <button type="submit" class="btn btn-success px-4 fw-bold" onclick="return confirm('Proses penerimaan barang ini? Lokasi aset akan otomatis berpindah ke unit Anda.')">
+            <button type="button" id="btn-proses-terima" class="btn btn-success px-4 fw-bold">
                 <i class="bi bi-check-circle-fill me-2"></i>PROSES TERIMA BARANG
             </button>
         </div>
         <?php endif; ?>
     </div>
 </form>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let btnTerima = document.getElementById('btn-proses-terima');
+    if (btnTerima) {
+        btnTerima.addEventListener('click', function() {
+            Swal.fire({
+                title: 'Terima Barang?',
+                text: "Proses penerimaan barang ini? Lokasi aset akan otomatis berpindah ke unit Anda.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#198754',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Terima!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('form-terima-barang').submit();
+                }
+            });
+        });
+    }
+});
+</script>

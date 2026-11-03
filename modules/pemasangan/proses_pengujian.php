@@ -26,7 +26,6 @@ try {
         $urutan_baru = $last_form ? (int) substr($last_form, strlen($prefix), 3) + 1 : 1;
         $no_formulir = $prefix . str_pad($urutan_baru, 3, '0', STR_PAD_LEFT) . $tgl_format . '-F.D';
         
-        // MENGGUNAKAN NAMA KOLOM: UnitUp, UnitAp, UnitUpi
         $stmt = $conn->prepare("INSERT INTO formulir_pengujian (NoFormulir, TglUji, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData) VALUES (?, ?, ?, ?, ?, ?, 'TIDAK')");
         $stmt->execute([$no_formulir, $tgl_uji, $nama_akun, $unit_up, $unit_ap, $unit_upi]);
         
@@ -43,7 +42,6 @@ try {
 
         $conn->prepare("UPDATE formulir_pengujian SET TglUji = ? WHERE NoFormulir = ?")->execute([$tgl_uji, $no_form]);
              
-        // Helper untuk memproses input kosong menjadi NULL agar Draft bisa diisi sebagian
         $val = function($key) { return (isset($_POST[$key]) && trim($_POST[$key]) !== '') ? trim($_POST[$key]) : null; };
 
         $stmt = $conn->prepare("INSERT INTO formulir_pengujian_detil (
@@ -80,6 +78,18 @@ try {
         header("Location: ../../index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=detail&no_form=" . urlencode($no_form));
         exit;
     }
+    
+    // 3.5. HAPUS KESELURUHAN DRAFT PENGUJIAN (Fitur Baru)
+    if ($action === 'hapus_draft') {
+        $no_form = $_GET['no_form'];
+        $conn->beginTransaction();
+        $conn->prepare("DELETE FROM formulir_pengujian_detil WHERE NoFormulir=?")->execute([$no_form]);
+        $conn->prepare("DELETE FROM formulir_pengujian WHERE NoFormulir=? AND StatusData='TIDAK'")->execute([$no_form]);
+        $conn->commit();
+        
+        header("Location: ../../index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=daftar&status=sukses");
+        exit;
+    }
 
     // 4. FINALISASI FORMULIR (SIMPAN SELURUHNYA)
     if ($action === 'execute_form') {
@@ -111,6 +121,27 @@ try {
     }
 } catch (Exception $e) {
     if (isset($conn) && $conn->inTransaction()) $conn->rollBack();
-    die("<script>alert('Gagal: " . addslashes($e->getMessage()) . "'); window.history.back();</script>");
+    $error_msg = addslashes($e->getMessage());
+    echo "<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Error</title>
+        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+    </head>
+    <body class='bg-light'>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: '{$error_msg}',
+                confirmButtonColor: '#0d6efd',
+                confirmButtonText: 'Kembali'
+            }).then(() => {
+                window.history.back();
+            });
+        </script>
+    </body>
+    </html>";
+    exit;
 }
 ?>

@@ -1,12 +1,10 @@
 <?php 
 $no_formulir_valid = $formulir['NoFormulir'] ?? ($_GET['no_form'] ?? '');
 
-// PERBAIKAN: Hapus pemanggilan array $data[]
 $formulir = $formulir ?? false;
 $items = $items ?? [];
 $no_formulir = $_GET['no_form'] ?? '';
 
-// Proteksi: Jika data tidak ditemukan di database, tampilkan pesan error rapi, bukan crash PHP
 if (!$formulir): 
 ?>
     <div class="alert alert-danger shadow-sm mt-4">
@@ -17,7 +15,7 @@ if (!$formulir):
     </div>
     <a href="index.php?page=pengadaan&menu=barang&sub=pembelian&view=daftar" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar</a>
 <?php 
-    return; // Hentikan eksekusi kode HTML di bawahnya
+    return; 
 endif; 
 ?>
 
@@ -50,7 +48,6 @@ endif;
         <div class="tab-content">
             <!-- TAB MANUAL -->
             <div class="tab-pane fade show active" id="manual" role="tabpanel">
-                <!-- Form Input Manual Pembelian -->
                 <form action="modules/pengadaan/proses_pembelian.php?action=add_item" method="POST">
                     <input type="hidden" name="metode" value="manual">
                     <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
@@ -107,11 +104,6 @@ endif;
 </div>
 <?php endif; ?>
 
-<!-- Form Input (Hanya tampil jika status masih Draft/TIDAK) -->
-<?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
-<!-- (Bagian form input manual & csv Anda di sini) -->
-<?php endif; ?>
-
 <!-- Tabel Daftar Barang -->
 <div class="card shadow mb-4 border-0">
     <div class="card-header bg-white py-3">
@@ -126,7 +118,6 @@ endif;
                         <th>STIKER QC</th>
                         <th>CACAT FISIK</th>
                         <th>HARGA BELI</th>
-                        <!-- Kolom AKSI hanya muncul jika status masih DRAFT -->
                         <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
                             <th class="text-end pe-4">AKSI</th>
                         <?php endif; ?>
@@ -143,13 +134,12 @@ endif;
                             <td><?= htmlspecialchars($item['CacatFisik']) ?></td>
                             <td>Rp <?= number_format($item['HargaBeli'], 0, ',', '.') ?></td>
                             
-                            <!-- Tombol Hapus per Item Hanya Tampil jika Status Draft -->
                             <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK'): ?>
                                 <td class="text-end pe-4">
-                                    <form action="modules/pengadaan/proses_pembelian.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang?')">
+                                    <form action="modules/pengadaan/proses_pembelian.php?action=delete_item" method="POST" class="d-inline form-delete-item">
                                         <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
                                         <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 btn-swal-del-item" title="Hapus Item">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -167,22 +157,75 @@ endif;
         </div>
     </div>
     
-    <!-- Tombol Reset & Eksekusi (Hanya Tampil jika Status Draft & Ada Item) -->
+    <!-- Tombol Reset & Eksekusi -->
     <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items)): ?>
     <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
-        <form action="modules/pengadaan/proses_pembelian.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar alat?')">
+        <form action="modules/pengadaan/proses_pembelian.php?action=reset_list" method="POST" class="w-50" id="form-reset-list">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-            <button type="submit" class="btn btn-outline-danger btn-lg w-100 fw-bold">
+            <button type="button" id="btn-swal-reset" class="btn btn-outline-danger btn-lg w-100 fw-bold">
                 <i class="bi bi-arrow-counterclockwise me-2"></i>RESET LIST
             </button>
         </form>
         
-        <form action="modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST" class="w-50">
+        <form action="modules/pengadaan/proses_pembelian.php?action=execute_form" method="POST" class="w-50" id="form-execute-beli">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-            <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Data siap dieksekusi?')">
+            <button type="button" id="btn-swal-execute-beli" class="btn btn-warning btn-lg w-100 fw-bold text-dark">
                 <i class="bi bi-send-check me-2"></i>FINALISASI & EKSEKUSI
             </button>
         </form>
     </div>
     <?php endif; ?>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll('.btn-swal-del-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            let form = this.closest('form');
+            Swal.fire({
+                title: 'Hapus Item?',
+                text: "Hapus item ini dari keranjang?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) form.submit(); });
+        });
+    });
+
+    let btnReset = document.getElementById('btn-swal-reset');
+    if (btnReset) {
+        btnReset.addEventListener('click', function() {
+            Swal.fire({
+                title: 'Reset Daftar?',
+                text: "Yakin ingin mereset dan menghapus seluruh daftar alat?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Reset!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) document.getElementById('form-reset-list').submit(); });
+        });
+    }
+
+    let btnExecBeli = document.getElementById('btn-swal-execute-beli');
+    if (btnExecBeli) {
+        btnExecBeli.addEventListener('click', function() {
+            Swal.fire({
+                title: 'Eksekusi Pembelian?',
+                text: "Data siap dieksekusi?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Eksekusi!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) document.getElementById('form-execute-beli').submit(); });
+        });
+    }
+});
+</script>

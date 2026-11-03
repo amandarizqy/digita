@@ -1,17 +1,15 @@
 <?php
 $user_upi = $_SESSION['UnitUpi'] ?? '56';
 $user_ap  = $_SESSION['UnitAp'] ?? '';
-$is_ap    = ($kode_hak === 'AM.AP'); // Deteksi apakah yang login Asman AP
+$is_ap    = ($kode_hak === 'AM.AP');
 
 $tgl_hari_ini = date('Y-m-d');
 $tgl_format = date('Ymd');
 
-// Ambil daftar Unit AP (hanya untuk AM.UI)
 $stmt_ap = $conn->prepare("SELECT * FROM master_ap WHERE UnitUpi = ? ORDER BY NamaUnit ASC");
 $stmt_ap->execute([$user_upi]);
 $list_ap = $stmt_ap->fetchAll(PDO::FETCH_ASSOC);
 
-// Ambil daftar Unit UP: Jika AM.AP, hanya ambil UP yang punya UnitAp sama dengan user yang login. Jika AM.UI, ambil semua se-UPI.
 if ($is_ap) {
     $stmt_up = $conn->prepare("SELECT * FROM master_up WHERE UnitAp = ? ORDER BY NamaUnit ASC");
     $stmt_up->execute([$user_ap]);

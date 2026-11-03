@@ -3,7 +3,7 @@ session_start();
 require_once __DIR__ . '/../../config/database.php';
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-if (($_SESSION['KodeHak'] ?? '') !== 'SF.UP') die("Akses Ditolak. Hanya SF.UP yang dapat melakukan Mutasi Pasang.");
+if (!in_array($_SESSION['KodeHak'] ?? '', ['SF.UP', 'SA.KP'])) die("Akses Ditolak. Hanya SF.UP atau Superadmin.");
 
 $action    = $_GET['action'] ?? '';
 $unit_up   = $_SESSION['UnitUp'] ?? '';
@@ -12,7 +12,7 @@ $unit_upi  = $_SESSION['UnitUpi'] ?? '';
 $nama_akun = $_SESSION['NamaAkun'] ?? '';
 
 try {
-    // 1. FUNGSI FINALISASI SPK OLEH SF.UP (GET Action)
+    // 1. FUNGSI FINALISASI SPK
     if ($action === 'finalisasi_spk') {
         $no_form_order = trim($_GET['no_form'] ?? '');
         
@@ -23,7 +23,7 @@ try {
         exit;
     }
 
-    // 2. PROSES PENYIMPANAN FORMULIR MUTASI PASANG (POST Method)
+    // 2. PROSES PENYIMPANAN FORMULIR MUTASI PASANG (BA)
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_form_order = trim($_POST['no_form_order']);
         $no_ref        = trim($_POST['no_ref']);
@@ -35,9 +35,14 @@ try {
         $kondisi_relay = trim($_POST['kondisi_relay']);
         $longitude     = trim($_POST['longitude'] ?? '');
         $latitude      = trim($_POST['latitude'] ?? '');
+        $no_fpk        = trim($_POST['no_fpk'] ?? '');
 
-        // Generate No Form Pasang
-        $no_form_pasang = $unit_up . date('YmdHis') . '-PAS';
+        // Fetch no_fpk jika tidak ada dari form
+        if (empty($no_fpk)) {
+            $stmt_fpk = $conn->prepare("SELECT NoFpk FROM frm_pk WHERE NoRef = ? AND JenisPk = 'PEMASANGAN' ORDER BY WaktuData DESC LIMIT 1");
+            $stmt_fpk->execute([$no_ref]);
+            $no_fpk = $stmt_fpk->fetchColumn();
+        }
 
         $foto_barang = null;
         if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] === UPLOAD_ERR_OK) {
@@ -51,33 +56,47 @@ try {
 
         $conn->beginTransaction();
 
-        // Cek apakah data pasang untuk alat ini sudah ada sebelumnya
-        $stmt_check = $conn->prepare("SELECT NoFormPasang FROM frm_pasang WHERE NoFormOrder = ? AND NoRef = ?");
-        $stmt_check->execute([$no_form_order, $no_ref]);
-        $existing = $stmt_check->fetch();
+        // Generate No Fba (Berita Acara)
+        $prefix = $unit_up;
+        $tgl_fmt = date('Ymd', strtotime($tgl_pasang));
+        $stmt_seq = $conn->prepare("SELECT NoFba FROM frm_ba WHERE NoFba LIKE :pola ORDER BY NoFba DESC LIMIT 1");
+        $stmt_seq->execute([':pola' => $prefix . '___' . $tgl_fmt . '-BA']);
+        $last_ba = $stmt_seq->fetchColumn();
+        $urutan = $last_ba ? (int) substr($last_ba, strlen($prefix), 3) + 1 : 1;
+        $no_fba = $prefix . str_pad($urutan, 3, '0', STR_PAD_LEFT) . $tgl_fmt . '-BA';
 
-        if ($existing) {
-            // Update data pasang
-            if ($foto_barang !== null && $foto_pasang !== null) {
-                $stmt_up = $conn->prepare("UPDATE frm_pasang SET TglPasang=?, KdPetugas='IPM.001', NamaAkun=?, SimId=?, ImeiModem=?, IdPel=?, Longitude=?, Latitude=?, PosisiPasang=?, FotoBarang=?, FotoPasang=?, StatusData='AKTIF' WHERE NoFormOrder=? AND NoRef=?");
-                $stmt_up->execute([$tgl_pasang, $nama_akun, $sim_id, $imei_modem, $id_pel, $longitude, $latitude, $posisi_pasang, $foto_barang, $foto_pasang, $no_form_order, $no_ref]);
-            } elseif ($foto_barang !== null) {
-                $stmt_up = $conn->prepare("UPDATE frm_pasang SET TglPasang=?, KdPetugas='IPM.001', NamaAkun=?, SimId=?, ImeiModem=?, IdPel=?, Longitude=?, Latitude=?, PosisiPasang=?, FotoBarang=?, StatusData='AKTIF' WHERE NoFormOrder=? AND NoRef=?");
-                $stmt_up->execute([$tgl_pasang, $nama_akun, $sim_id, $imei_modem, $id_pel, $longitude, $latitude, $posisi_pasang, $foto_barang, $no_form_order, $no_ref]);
-            } elseif ($foto_pasang !== null) {
-                $stmt_up = $conn->prepare("UPDATE frm_pasang SET TglPasang=?, KdPetugas='IPM.001', NamaAkun=?, SimId=?, ImeiModem=?, IdPel=?, Longitude=?, Latitude=?, PosisiPasang=?, FotoPasang=?, StatusData='AKTIF' WHERE NoFormOrder=? AND NoRef=?");
-                $stmt_up->execute([$tgl_pasang, $nama_akun, $sim_id, $imei_modem, $id_pel, $longitude, $latitude, $posisi_pasang, $foto_pasang, $no_form_order, $no_ref]);
-            } else {
-                $stmt_up = $conn->prepare("UPDATE frm_pasang SET TglPasang=?, KdPetugas='IPM.001', NamaAkun=?, SimId=?, ImeiModem=?, IdPel=?, Longitude=?, Latitude=?, PosisiPasang=?, StatusData='AKTIF' WHERE NoFormOrder=? AND NoRef=?");
-                $stmt_up->execute([$tgl_pasang, $nama_akun, $sim_id, $imei_modem, $id_pel, $longitude, $latitude, $posisi_pasang, $no_form_order, $no_ref]);
-            }
+        // Cek apakah BA pemasangan untuk FPK ini sudah ada
+        $stmt_check = $conn->prepare("SELECT NoFba FROM frm_ba WHERE NoFpk = ? AND JenisPekerjaan = 'PEMASANGAN'");
+        $stmt_check->execute([$no_fpk]);
+        $existing_ba = $stmt_check->fetchColumn();
+
+        if ($existing_ba) {
+            $no_fba = $existing_ba; // Gunakan BA yang lama untuk diupdate
+            $stmt_up_ba = $conn->prepare("UPDATE frm_ba SET TglFba=?, Longitude=?, Latitude=?, NamaAkun=? WHERE NoFba=?");
+            $stmt_up_ba->execute([$tgl_pasang, $longitude, $latitude, $nama_akun, $no_fba]);
         } else {
-            // Insert data baru pasang
-            $stmt_ins = $conn->prepare("INSERT INTO frm_pasang (NoFormPasang, NoFormOrder, TglPasang, KdPetugas, NamaAkun, NoRef, SimId, ImeiModem, IdPel, Longitude, Latitude, PosisiPasang, FotoBarang, FotoPasang, UnitUp, UnitAp, UnitUpi, StatusData) VALUES (?, ?, ?, 'IPM.001', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF')");
-            $stmt_ins->execute([$no_form_pasang, $no_form_order, $tgl_pasang, $nama_akun, $no_ref, $sim_id, $imei_modem, $id_pel, $longitude, $latitude, $posisi_pasang, $foto_barang, $foto_pasang, $unit_up, $unit_ap, $unit_upi]);
+            $stmt_ins_ba = $conn->prepare("
+                INSERT INTO frm_ba (NoFba, NoFpk, TglFba, IdPel, JenisPekerjaan, Longitude, Latitude, UnitUp, UnitAp, UnitUpi, StatusData, NamaAkun) 
+                VALUES (?, ?, ?, ?, 'PEMASANGAN', ?, ?, ?, ?, ?, 'AKTIF', ?)
+            ");
+            $stmt_ins_ba->execute([$no_fba, $no_fpk, $tgl_pasang, $id_pel, $longitude, $latitude, $unit_up, $unit_ap, $unit_upi, $nama_akun]);
         }
 
-        // Update master_barang untuk mengikat IdPel dan menghidupkan/mematikan Relay
+        // Insert / Update ke frm_ba_detil
+        $sql_detil = "INSERT INTO frm_ba_detil (NoFba, NoRef, StatusPekerjaan, SimId, ImeiModem, PosisiPasang, KondisiRelay";
+        $val_detil = ") VALUES (?, ?, 'PASANG', ?, ?, ?, ?";
+        $params_detil = [$no_fba, $no_ref, $sim_id, $imei_modem, $posisi_pasang, $kondisi_relay];
+
+        if ($foto_barang) { $sql_detil .= ", FotoBarang"; $val_detil .= ", ?"; $params_detil[] = $foto_barang; }
+        if ($foto_pasang) { $sql_detil .= ", FotoTerpasang"; $val_detil .= ", ?"; $params_detil[] = $foto_pasang; }
+        
+        $sql_detil .= $val_detil . ") ON DUPLICATE KEY UPDATE SimId=VALUES(SimId), ImeiModem=VALUES(ImeiModem), PosisiPasang=VALUES(PosisiPasang), KondisiRelay=VALUES(KondisiRelay)";
+        if ($foto_barang) $sql_detil .= ", FotoBarang=VALUES(FotoBarang)";
+        if ($foto_pasang) $sql_detil .= ", FotoTerpasang=VALUES(FotoTerpasang)";
+
+        $conn->prepare($sql_detil)->execute($params_detil);
+
+        // Update master_barang untuk mapping id_pel dan status relay
         $status_relay = ($kondisi_relay === 'BERFUNGSI') ? 'ON' : 'OFF';
         $stmt_barang = $conn->prepare("UPDATE master_barang SET IdPel = ?, StatusRelay = ? WHERE NoRef = ?");
         $stmt_barang->execute([$id_pel, $status_relay, $no_ref]);
@@ -90,5 +109,27 @@ try {
     
 } catch (Exception $e) {
     if (isset($conn) && $conn->inTransaction()) $conn->rollBack();
-    die("<script>alert('Gagal menyimpan Mutasi Pasang: " . addslashes($e->getMessage()) . "'); window.history.back();</script>");
+    $error_msg = addslashes($e->getMessage());
+    echo "<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Error</title>
+        <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+    </head>
+    <body class='bg-light'>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: '{$error_msg}',
+                confirmButtonColor: '#0d6efd',
+                confirmButtonText: 'Kembali'
+            }).then(() => {
+                window.history.back();
+            });
+        </script>
+    </body>
+    </html>";
+    exit;
 }
+?>

@@ -39,9 +39,16 @@
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-center pe-4">
-                                    <a href="index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="Buka Detail">
-                                        <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i> Detail
-                                    </a>
+                                    <div class="d-flex justify-content-center gap-1">
+                                        <a href="index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="Buka Detail">
+                                            <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i> Detail
+                                        </a>
+                                        <?php if($row['StatusData'] == 'TIDAK'): ?>
+                                            <a href="javascript:void(0);" onclick="confirmDeleteDraft('<?= urlencode($row['NoFormulir']) ?>')" class="btn btn-sm btn-outline-danger" title="Hapus Draft">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -51,3 +58,21 @@
         </div>
     </div>
 </div>
+
+<script>
+function confirmDeleteDraft(noForm) {
+    Swal.fire({
+        title: 'Hapus Draft Pengujian?',
+        text: "Data formulir pengujian ini akan dihapus permanen.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Hapus!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = "modules/pemasangan/proses_pengujian.php?action=hapus_draft&no_form=" + noForm;
+        }
+    });
+}
+</script>
