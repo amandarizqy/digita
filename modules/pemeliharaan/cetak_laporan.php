@@ -16,7 +16,7 @@ try {
     if ($type === 'mutasi') {
         [$sc, $sp] = ph_scope('b');
         $sql = "SELECT b.NoFba, b.NoFpk, b.TglFba, b.IdPel, bd.NoRef, bd.SimId, bd.ImeiModem, $nama_sql AS NamaModem, b.WaktuData,
-                       bk.SimId AS SimAwal, bk.ImeiModem AS ImeiAwal, (bk.NoFba IS NOT NULL) AS Termutasi
+                       bk.SimId AS SimAwal, bk.ImeiModem AS ImeiAwal, (bk.NoFba IS NOT NULL AND NOT (bk.NoRef <=> bd.NoRef AND bk.SimId <=> bd.SimId AND bk.ImeiModem <=> bd.ImeiModem)) AS Termutasi
                 FROM frm_ba b
                 JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
                 LEFT JOIN frm_ba_detil bk ON bk.NoFba = b.NoFba AND bk.StatusPekerjaan = 'BONGKAR'

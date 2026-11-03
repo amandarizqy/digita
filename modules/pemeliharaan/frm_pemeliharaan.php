@@ -41,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Ambil data master barang milik pelanggan
             $b = ph_barang_pelanggan($conn, $id_pel);
 
+            // Alat PASANG: pilih No Ref baru yang belum terpakai; kosong = tidak ada penggantian (sama dengan bongkar)
+            $pasang = ph_tentukan_alat_pasang($conn, $b, (string) ($_POST['no_ref_pasang'] ?? ''));
+
             // Cek apakah pelanggan masih punya FPK pemeliharaan aktif yang belum selesai (status TIDAK)
             $cek = $conn->prepare("SELECT NoFpk FROM frm_pk WHERE IdPel = ? AND JenisPk = 'PEMELIHARAAN' AND StatusData = 'TIDAK' LIMIT 1");
             $cek->execute([$id_pel]);
@@ -52,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // Membuat FPK dengan status default 'TIDAK' dan jenis 'PEMELIHARAAN'
             $no_fpk = ph_buat_pk($conn, [
                 'tgl' => $tgl, 'id_pel' => $id_pel, 'long' => $long, 'lat' => $lat, 'nama_akun' => $nama_akun,
-            ], $b);
+            ], $b, $pasang);
             $conn->commit();
 
             ph_redirect($sub_ini, 'sukses', "FPK Pemeliharaan ($no_fpk) berhasil dibuat dan dimasukkan ke sistem.");
@@ -120,6 +123,7 @@ $data_pk = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 $list_pelanggan = [];
 $list_pk_bebas  = [];
+$list_alat_baru = [];
 
 try {
     $nama_sql = ph_sql_nama_modem($conn);
@@ -127,10 +131,11 @@ try {
     [$data_pk, $total_hasil, $hal, $total_hal, $q] = ph_daftar(
         $conn,
         "p.NoFpk, p.TglFpk, p.IdPel, p.LongDil, p.LatDil, p.StatusData AS StatusPk,
-         pd.NoRef, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem,
+         pd.NoRef, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem, pp.NoRef AS NoRefPasang,
          o.NoFormOrder, o.KdPetugas AS PetugasOrder, b.NoFba, b.StatusData AS StatusBa",
         "frm_pk p
          LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
+         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
          LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
          LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
@@ -150,15 +155,23 @@ try {
                           ORDER BY mb.IdPel ASC, mb.NoRef ASC");
     $st->execute($sp);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($list_pelanggan[$r['IdPel']])) $list_pelanggan[$r['IdPel']] = $r;
+        if (!isset($list_pelanggan[$r['IdPel']])) {
+            $r['Kontak'] = ph_nomor_sim($conn, $r['SimId'] ?? '');
+            $r['NamaPel'] = ph_nama_pelanggan($conn, $r['IdPel']);
+            $list_pelanggan[$r['IdPel']] = $r;
+        }
     }
     $list_pelanggan = array_values($list_pelanggan);
 
+    // Alat baru yang belum terpakai (sudah lulus pengujian) untuk bagian PASANG
+    $list_alat_baru = ph_alat_pasang_tersedia($conn);
+
     // Ambil FPK yang belum masuk ke dalam order manapun untuk dicentang saat buat order
     [$sc, $sp] = ph_scope('p');
-    $st = $conn->prepare("SELECT p.NoFpk, p.TglFpk, p.IdPel, pd.NoRef, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem
+    $st = $conn->prepare("SELECT p.NoFpk, p.TglFpk, p.IdPel, pd.NoRef, pp.NoRef AS NoRefPasang, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem
                           FROM frm_pk p
                           LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
+                          LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
                           LEFT JOIN master_modem mm ON mm.ImeiModem = pd.ImeiModem
                           WHERE p.JenisPk = 'PEMELIHARAAN'" . $sc . "
                             AND NOT EXISTS (SELECT 1 FROM frm_order_detil od WHERE od.NoFpk = p.NoFpk)
@@ -178,6 +191,7 @@ try {
 <style>
     .pln-form-box { border: 1.5px solid #212529; font-size: 0.85rem; }
     .pln-form-box th, .pln-form-box td { border: 1px solid #212529 !important; padding: 6px 10px; vertical-align: middle; }
+    #modalBuatPK .select2-container .select2-selection { font-weight: 700; font-size: 0.85rem; }
     .pln-header-title { font-weight: 700; letter-spacing: 0.5px; }
     .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
     .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; }
@@ -188,24 +202,19 @@ try {
     <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
 <?php endif; ?>
 
-<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1 px-2 pt-2">
-        <div>
-            <h5 class="fw-bold text-primary mb-0">FPK &amp; Order Pemeliharaan</h5>
-            <p class="text-muted small mb-0">Langkah 1: Buat FPK Gangguan &rarr; Langkah 2: Gabungkan FPK ke dalam Surat Perintah Kerja (Order).</p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <?= ph_kotak_cari($sub_ini, $q) ?>
-            <button type="button" class="btn btn-warning fw-bold px-3 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalBuatPK">
-                <i class="bi bi-tools me-1"></i> 1. Buat FPK
-            </button>
-            <button type="button" class="btn btn-primary fw-bold px-3 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalBuatOrder">
-                <i class="bi bi-file-earmark-plus me-1"></i> 2. Buat Order
-            </button>
-        </div>
-    </div>
+<?php /* Tombol "Buat FPK" dan "Buat Order" hanya di header atas halaman; modal-nya ada di bawah file ini.
+         Kotak cari ditaruh sejajar dengan baris SUB ENTITAS (layar lebar) agar kartu tidak turun jauh. */ ?>
+<style>
+    .ph-cari-atas { position: relative; z-index: 2; margin-bottom: .75rem; pointer-events: none; }
+    .ph-cari-atas > * { pointer-events: auto; }
+    @media (min-width: 992px) { .ph-cari-atas { margin-top: -3.4rem; } }
+</style>
+<div class="ph-cari-atas d-flex justify-content-end">
+    <?= ph_kotak_cari($sub_ini, $q) ?>
+</div>
 
-    <div class="w-100 table-responsive mt-3">
+<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
+    <div class="w-100 table-responsive">
         <table class="table table-hover align-middle mb-0 table-compact w-100">
             <thead class="table-light border-top border-bottom">
                 <tr>
@@ -221,14 +230,14 @@ try {
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_pk)): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-4">Belum ada FPK pemeliharaan di sistem. Klik tombol "1. Buat FPK" di atas untuk mulai mencatat.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Belum ada FPK pemeliharaan di sistem. Klik tombol "Buat FPK" di atas untuk mulai mencatat.</td></tr>
                 <?php else: ?>
                     <?php foreach ($data_pk as $idx => $row): ?>
                         <tr class="border-bottom">
                             <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
                             <td class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFpk']) ?></td>
                             <td><?= ph_e($row['TglFpk']) ?></td>
-                            <td>IDPEL: <?= ph_e($row['IdPel']) ?><br><small class="text-muted">REF: <?= ph_e($row['NoRef'] ?? '-') ?></small></td>
+                            <td>IDPEL: <?= ph_e($row['IdPel']) ?><br><small class="text-muted">BONGKAR: <?= ph_e($row['NoRef'] ?? '-') ?></small><br><small class="text-muted">PASANG: <?= empty($row['NoRefPasang']) ? '-' : (($row['NoRefPasang'] === ($row['NoRef'] ?? null)) ? ph_e($row['NoRefPasang']) . ' <em>(tidak diganti)</em>' : ph_e($row['NoRefPasang'])) ?></small></td>
                             <td><span class="badge bg-info bg-opacity-10 text-info font-monospace"><?= ph_e($row['SimId'] ?? '-') ?></span></td>
                             <td class="font-monospace">
                                 <?= ph_e($row['ImeiModem'] ?? '-') ?>
@@ -302,6 +311,8 @@ try {
                                                 data-sim="<?= ph_e($pel['SimId'] ?? '') ?>"
                                                 data-imei="<?= ph_e($pel['ImeiModem'] ?? '') ?>"
                                                 data-nama="<?= ph_e($pel['NamaModem'] ?? '') ?>"
+                                                data-kontak="<?= ph_e($pel['Kontak'] ?? '') ?>"
+                                                data-namapel="<?= ph_e($pel['NamaPel'] ?? '') ?>"
                                                 data-unit="<?= ph_e($pel['UnitUp'] ?? '') ?>">
                                             <?= ph_e($pel['IdPel']) ?>
                                         </option>
@@ -310,6 +321,10 @@ try {
                             </td>
                             <td class="bg-light fw-bold">Nomor Form</td>
                             <td><span class="text-muted small fst-italic">Otomatis sistem</span></td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light fw-bold">Nama</td>
+                            <td colspan="3"><span id="pkNamaPel" class="fw-bold">-</span></td>
                         </tr>
                         <tr>
                             <td class="bg-light fw-bold">Tikor DIL</td>
@@ -325,13 +340,49 @@ try {
 
                     <div id="mapPemeliharaan" style="height: 160px; width: 100%;" class="rounded-3 border mb-3"></div>
 
-                    <table class="table pln-form-box text-center mb-1">
+                    <table class="table pln-form-box text-center mb-1 w-100">
                         <thead>
-                            <tr class="bg-light"><th style="width:25%;">PERANGKAT EKSISTING (DIL)</th><th>DATA</th></tr>
+                            <tr class="bg-light">
+                                <th style="width:16%;"></th>
+                                <th style="width:42%;">BONGKAR <span class="small fw-normal text-muted">(alat terpasang saat ini)</span></th>
+                                <th style="width:42%;">PASANG <span class="small fw-normal text-muted">(alat baru)</span></th>
+                            </tr>
                         </thead>
                         <tbody>
-                            <tr><td class="bg-light text-start fw-bold small">No Ref S41</td><td><span id="pkNoRef" class="font-monospace fw-bold text-danger">-</span></td></tr>
-                            <tr><td class="bg-light text-start fw-bold small">Nomor SIM / Modem</td><td><span id="pkSimImei" class="font-monospace small">- / -</span></td></tr>
+                            <tr>
+                                <td class="bg-light text-start fw-bold small">No Ref S41</td>
+                                <td><span id="bgNoRef" class="font-monospace fw-bold text-danger">-</span></td>
+                                <td>
+                                    <select name="no_ref_pasang" id="selectNoRefPasang" class="form-select form-select-sm font-monospace fw-bold">
+                                        <option value="">Tidak ada penggantian (sama dengan bongkar)</option>
+                                        <?php foreach ($list_alat_baru as $al): ?>
+                                            <option value="<?= ph_e($al['NoRef']) ?>"
+                                                    data-sim="<?= ph_e($al['SimId'] ?? '') ?>"
+                                                    data-imei="<?= ph_e($al['ImeiModem'] ?? '') ?>"
+                                                    data-nama="<?= ph_e($al['NamaModem'] ?? '') ?>"
+                                                    data-kontak="<?= ph_e($al['Kontak'] ?? '') ?>">
+                                                <?= ph_e($al['NoRef']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div id="psInfo" class="small text-muted fst-italic mt-1"><?= $list_alat_baru ? count($list_alat_baru) . ' alat baru siap dipasang' : 'Belum ada alat baru yang lulus uji / belum terpakai' ?></div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="bg-light text-start fw-bold small">Nomor SIM</td>
+                                <td><span id="bgSim" class="font-monospace small">-</span></td>
+                                <td><span id="psSim" class="font-monospace small">-</span></td>
+                            </tr>
+                            <tr>
+                                <td class="bg-light text-start fw-bold small">IMEI Modem</td>
+                                <td><span id="bgImei" class="font-monospace small">-</span></td>
+                                <td><span id="psImei" class="font-monospace small">-</span></td>
+                            </tr>
+                            <tr>
+                                <td class="bg-light text-start fw-bold small">Nomor Kontak</td>
+                                <td><span id="bgKontak" class="font-monospace small">-</span></td>
+                                <td><span id="psKontak" class="font-monospace small">-</span></td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -379,13 +430,13 @@ try {
                         <label class="form-label text-uppercase text-muted fw-bold small mb-1">PILIH FPK YANG DIMASUKKAN KE ORDER *</label>
                         <div class="border rounded-3 p-3 bg-light" style="max-height: 260px; overflow-y: auto;">
                             <?php if (!$list_pk_bebas): ?>
-                                <span class="text-muted small">Tidak ada FPK bebas yang tersedia. Buat FPK terlebih dahulu melalui tombol "1. Buat FPK".</span>
+                                <span class="text-muted small">Tidak ada FPK bebas yang tersedia. Buat FPK terlebih dahulu melalui tombol "Buat FPK".</span>
                             <?php endif; ?>
                             <?php foreach ($list_pk_bebas as $i => $pk): ?>
                                 <div class="form-check mb-2">
                                     <input class="form-check-input" type="checkbox" name="no_fpk_list[]" value="<?= ph_e($pk['NoFpk']) ?>" id="fpk_<?= (int) $i ?>">
                                     <label class="form-check-label font-monospace small text-dark" for="fpk_<?= (int) $i ?>">
-                                        <strong><?= ph_e($pk['NoFpk']) ?></strong> | IDPEL: <?= ph_e($pk['IdPel']) ?> | Ref: <?= ph_e($pk['NoRef'] ?? '-') ?>
+                                        <strong><?= ph_e($pk['NoFpk']) ?></strong> | IDPEL: <?= ph_e($pk['IdPel']) ?> | Bongkar: <?= ph_e($pk['NoRef'] ?? '-') ?> &rarr; Pasang: <?= ph_e($pk['NoRefPasang'] ?? '-') ?>
                                     </label>
                                 </div>
                             <?php endforeach; ?>
@@ -402,18 +453,90 @@ try {
 </div>
 
 <script>
+// Hilangkan penomoran "1." / "2." pada tombol Buat FPK & Buat Order (termasuk tombol di header halaman)
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("button, a").forEach(function (b) {
+        b.childNodes.forEach(function (n) {
+            if (n.nodeType === 3) n.nodeValue = n.nodeValue.replace(/^(\s*)[12]\.\s*(?=Buat (FPK|Order))/, "$1");
+        });
+    });
+});
 document.addEventListener("DOMContentLoaded", function () {
     var selIdPel = document.getElementById("selectIdPelPk");
+    var selPasang = document.getElementById("selectNoRefPasang");
     var kop = document.getElementById("kopUnitPLN");
+    // jQuery.on('change') menangkap event bawaan maupun event dari Select2
+    var onUbah = function (elm, fn) {
+        if (window.jQuery) jQuery(elm).on("change", fn); else elm.addEventListener("change", fn);
+    };
+    var el = function (id) { return document.getElementById(id); };
+    var gabung = function (imei, nama) { imei = imei || "-"; return nama ? nama + " \u2014 " + imei : imei; };
+
+    // Kolom PASANG: alat baru bila dipilih, kalau kosong = tidak ada penggantian -> samakan dengan BONGKAR
+    var isiPasang = function () {
+        var optBg = selIdPel.options[selIdPel.selectedIndex];
+        var optPs = selPasang.options[selPasang.selectedIndex];
+        var ganti = selPasang.value !== "";
+        var src = ganti ? optPs : optBg;
+        el("psSim").textContent = src.getAttribute("data-sim") || "-";
+        el("psImei").textContent = gabung(src.getAttribute("data-imei"), src.getAttribute("data-nama"));
+        el("psKontak").textContent = src.getAttribute("data-kontak") || "-";
+        if (selIdPel.value === "") {
+            el("psInfo").textContent = "Pilih ID Pelanggan terlebih dahulu";
+        } else if (!ganti) {
+            el("psInfo").textContent = "Tidak ada penggantian: data pasang sama dengan bongkar";
+        } else {
+            el("psInfo").textContent = "Alat baru menggantikan " + (el("bgNoRef").textContent || "-");
+        }
+    };
+
     if (selIdPel) {
-        selIdPel.addEventListener("change", function () {
+        onUbah(selIdPel, function () {
             var opt = this.options[this.selectedIndex];
-            var nama = opt.getAttribute("data-nama") || "";
-            var imei = opt.getAttribute("data-imei") || "-";
-            document.getElementById("pkNoRef").textContent = opt.getAttribute("data-noref") || "-";
-            document.getElementById("pkSimImei").textContent = (opt.getAttribute("data-sim") || "-") + " / " + (nama ? nama + " — " + imei : imei);
+            el("pkNamaPel").textContent = opt.getAttribute("data-namapel") || "-";
+            el("bgNoRef").textContent = opt.getAttribute("data-noref") || "-";
+            el("bgSim").textContent = opt.getAttribute("data-sim") || "-";
+            el("bgImei").textContent = gabung(opt.getAttribute("data-imei"), opt.getAttribute("data-nama"));
+            el("bgKontak").textContent = opt.getAttribute("data-kontak") || "-";
             var unit = opt.getAttribute("data-unit") || "";
             kop.textContent = unit ? "ULP " + unit : "PILIH ID PELANGGAN";
+            isiPasang();
+            validasiIdPel();
+        });
+    }
+    if (selPasang) onUbah(selPasang, isiPasang);
+
+    // ID Pelanggan wajib dipilih (select2 menyembunyikan validasi bawaan 'required')
+    function validasiIdPel() {
+        selIdPel.setCustomValidity(selIdPel.value === "" ? "Pilih ID Pelanggan terlebih dahulu." : "");
+    }
+    var formPK = selIdPel ? selIdPel.closest("form") : null;
+    if (formPK) {
+        formPK.addEventListener("submit", function (e) {
+            validasiIdPel();
+            if (selIdPel.value === "") {
+                e.preventDefault();
+                alert("Pilih ID Pelanggan terlebih dahulu.");
+            }
+        });
+    }
+
+    // Kotak pencarian pada ID Pelanggan dan No Ref pasang (Select2, sudah dimuat di layout)
+    if (window.jQuery && jQuery.fn.select2) {
+        var parentModal = jQuery("#modalBuatPK");
+        jQuery(selIdPel).select2({
+            theme: "bootstrap-5", width: "100%", dropdownParent: parentModal,
+            placeholder: "Ketik untuk mencari ID Pelanggan...",
+            language: { noResults: function () { return "ID Pelanggan tidak ditemukan"; } }
+        });
+        jQuery(selPasang).select2({
+            theme: "bootstrap-5", width: "100%", dropdownParent: parentModal,
+            language: { noResults: function () { return "No Ref tidak ditemukan"; } }
+        });
+        // fokus langsung ke kotak cari saat dropdown dibuka
+        jQuery(document).on("select2:open", function () {
+            var f = document.querySelector(".select2-container--open .select2-search__field");
+            if (f) f.focus();
         });
     }
 

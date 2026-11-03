@@ -11,6 +11,8 @@ if (!isset($_SESSION['NamaAkun']) || !ph_akses_monitoring()) {
 $no_fba = (string) ($_GET['no'] ?? '');
 $kolom  = ['pasang' => 'FotoTerpasang', 'barang' => 'FotoBarang'][$_GET['jenis'] ?? ''] ?? null;
 
+$status_pekerjaan = (($_GET['sisi'] ?? '') === 'bongkar') ? 'BONGKAR' : 'PASANG';
+
 if ($no_fba === '' || $kolom === null) {
     http_response_code(400);
     exit;
@@ -18,8 +20,8 @@ if ($no_fba === '' || $kolom === null) {
 
 [$sc, $sp] = ph_scope('b');
 try {
-    $st = $conn->prepare("SELECT bd.$kolom AS foto FROM frm_ba_detil bd JOIN frm_ba b ON b.NoFba = bd.NoFba WHERE bd.NoFba = ? AND bd.StatusPekerjaan = 'PASANG'" . $sc . ' LIMIT 1');
-    $st->execute(array_merge([$no_fba], $sp));
+    $st = $conn->prepare("SELECT bd.$kolom AS foto FROM frm_ba_detil bd JOIN frm_ba b ON b.NoFba = bd.NoFba WHERE bd.NoFba = ? AND bd.StatusPekerjaan = ?" . $sc . ' LIMIT 1');
+    $st->execute(array_merge([$no_fba, $status_pekerjaan], $sp));
     $foto = $st->fetchColumn();
 
     if (!$foto) {

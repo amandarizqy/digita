@@ -59,6 +59,7 @@ if (!$d) {
 $tgl   = $d['TglFba'] ? date('d-m-Y', strtotime($d['TglFba'])) : '-';
 $unit  = trim((string) ($d['NamaUnit'] ?? '')) !== '' ? $d['NamaUnit'] : ($d['UnitUp'] ?? '-');
 $bongkar = !empty($d['AdaBongkar']);
+$diganti = $bongkar && ((string) $d['K_NoRef'] !== (string) $d['P_NoRef'] || (string) $d['K_Sim'] !== (string) $d['P_Sim'] || (string) $d['K_Imei'] !== (string) $d['P_Imei']);
 
 function cba_sisi(array $d, string $s, bool $ada, PDO $conn): array {
     $g = function ($k) use ($d, $s) { return $d[$s . '_' . $k] ?? null; };
@@ -190,7 +191,7 @@ $url_foto = 'foto.php?no=' . urlencode($d['NoFba']);
         </tr>
     </table>
     <table class="catatan">
-        <tr><td><strong><u>Catatan Pemasangan:</u></strong><?= $bongkar ? '<br>Perangkat diganti (mutasi): SIM / modem lama dibongkar dan diganti dengan perangkat baru.' : '' ?></td></tr>
+        <tr><td><strong><u>Catatan Pemasangan:</u></strong><?= $diganti ? '<br>Perangkat diganti (mutasi): SIM / modem lama dibongkar dan diganti dengan perangkat baru.' : '' ?></td></tr>
     </table>
 
     <?php if ($punya_foto): ?>

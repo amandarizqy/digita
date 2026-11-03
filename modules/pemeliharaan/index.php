@@ -7,6 +7,7 @@ if (!isset($conn)) {
     require_once __DIR__ . '/../../config/database.php';
 }
 require_once __DIR__ . '/../../functions/pemeliharaan_helper.php';
+require_once __DIR__ . '/../../functions/pemeliharaan_ui.php';
 
 $boleh = [
     'order_pemeliharaan'  => ph_akses_order(),
@@ -56,47 +57,36 @@ if ($menu !== '' && !isset($struktur[$menu]['sub'][$sub])) {
 }
 ?>
 
-<style>
-    .sub-entity-label { font-size: 0.75rem; font-weight: 700; color: #495057; letter-spacing: 0.5px; }
-    .btn-sub-pill { border-radius: 50rem; font-size: 0.825rem; padding: 0.35rem 1.1rem; font-weight: 500; background-color: #fff; border: 1px solid #ced4da; color: #495057; text-decoration: none; display: inline-flex; align-items: center; transition: all .2s ease-in-out; }
-    .btn-sub-pill:hover { background-color: #f8f9fa; border-color: #0d6efd; color: #0d6efd; }
-    .btn-sub-pill.active { background-color: #e7f1ff; border-color: #0d6efd; color: #0d6efd; font-weight: 600; }
-</style>
+<?php
+// Judul, subjudul, dan tombol aksi (kanan atas) per sub-menu
+$halaman = [
+    'order_pemeliharaan'  => ['FPK & Order Pemeliharaan', 'Langkah 1: Buat FPK Gangguan → Langkah 2: Gabungkan FPK ke dalam Surat Perintah Kerja (Order).'],
+    'mutasi_pemeliharaan' => ['Eksekusi Mutasi Pemeliharaan', 'Langkah 3: Kerjakan order lapangan, rekam kondisi lampu indikator, foto, dan mutasi perangkat.'],
+    'monitoring_order'    => ['Monitoring Order Pemeliharaan', 'Rekapitulasi FPK, Order, dan Berita Acara pemeliharaan.'],
+    'monitoring_mutasi'   => ['Monitoring Mutasi Pemeliharaan', 'Riwayat penggantian SIM / modem perangkat S41.'],
+];
+$tombol = [];
+if ($sub === 'order_pemeliharaan') {
+    $tombol = [
+        ['type' => 'modal', 'label' => '1. Buat FPK',   'icon' => 'bi-tools',              'target' => 'modalBuatPK',    'class' => 'btn-warning'],
+        ['type' => 'modal', 'label' => '2. Buat Order', 'icon' => 'bi-file-earmark-plus',  'target' => 'modalBuatOrder', 'class' => 'btn-primary'],
+    ];
+} elseif ($sub === 'monitoring_order' || $sub === 'monitoring_mutasi') {
+    $tombol = [[
+        'type' => 'link', 'label' => 'Cetak Laporan PDF', 'icon' => 'bi-printer', 'class' => 'btn-outline-primary',
+        'href' => BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=' . ($sub === 'monitoring_order' ? 'order' : 'mutasi'),
+    ]];
+}
+?>
 
-<div class="container-fluid px-3 py-2">
-    <div class="mb-3">
-        <h4 class="fw-bold text-dark mb-1">Modul Pemeliharaan S41</h4>
-        <p class="text-muted small mb-0">Kelola FPK, Order Perintah Kerja, Eksekusi Lapangan (Mutasi), dan Monitoring Perangkat S41.</p>
-    </div>
+<?php if (!$struktur): ?>
+    <div class="alert alert-warning">Peran Anda tidak memiliki akses ke sub-menu Pemeliharaan.</div>
+<?php else: ?>
+    <?= ph_header([
+        'title'    => $halaman[$sub][0] ?? 'Modul Pemeliharaan S41',
+        'subtitle' => $halaman[$sub][1] ?? '',
+        'tombol'   => $tombol,
+    ], $struktur, $menu, $sub) ?>
 
-    <?php if (!$struktur): ?>
-        <div class="alert alert-warning">Peran Anda tidak memiliki akses ke sub-menu Pemeliharaan.</div>
-    <?php else: ?>
-        <div class="card border-0 shadow-sm rounded-4 p-2 mb-3 bg-white">
-            <ul class="nav nav-pills d-flex flex-row align-items-center gap-2 mb-0 border-0">
-                <?php foreach ($struktur as $kunci_menu => $m): ?>
-                    <?php $awal = array_key_first($m['sub']); ?>
-                    <li class="nav-item">
-                        <a class="nav-link text-nowrap rounded-3 px-4 py-2 fw-semibold <?= $menu === $kunci_menu ? 'active bg-primary text-white' : 'text-secondary' ?>"
-                           href="index.php?page=pemeliharaan&menu=<?= ph_e($kunci_menu) ?>&sub=<?= ph_e($awal) ?>">
-                            <i class="bi <?= ph_e($m['icon']) ?> me-2"></i><?= ph_e($m['label']) ?>
-                        </a>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-
-        <div class="d-flex align-items-center flex-wrap gap-2 mb-3 px-1">
-            <span class="sub-entity-label text-uppercase me-1">SUB ENTITAS:</span>
-            <?php foreach ($struktur[$menu]['sub'] as $kunci_sub => $info): ?>
-                <a href="index.php?page=pemeliharaan&menu=<?= ph_e($menu) ?>&sub=<?= ph_e($kunci_sub) ?>"
-                   class="btn-sub-pill <?= $sub === $kunci_sub ? 'active' : '' ?>">
-                    <?php if ($sub === $kunci_sub): ?><i class="bi bi-check2 text-primary me-1"></i><?php endif; ?>
-                    <i class="bi <?= ph_e($info[1]) ?> me-1"></i> <?= ph_e($info[0]) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-
-        <?php include __DIR__ . '/' . $struktur[$menu]['sub'][$sub][2]; ?>
-    <?php endif; ?>
-</div>
+    <?php include __DIR__ . '/' . $struktur[$menu]['sub'][$sub][2]; ?>
+<?php endif; ?>

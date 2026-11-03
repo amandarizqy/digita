@@ -3,10 +3,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../functions/csrf.php';
+require_once __DIR__ . '/../../functions/master_ui.php';
+
+$base_path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 
 // 1. Verifikasi Sesi Login
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: /modules/auth/login.php");
+    header("Location: " . $base_path . "/modules/auth/login.php");
     exit;
 }
 
@@ -19,8 +23,8 @@ if ($user_role === 'AM.UI') {
     exit;
 }
 
-// PERBAIKAN UTAMA: Berikan izin penuh untuk SA.KP dan SF.UI
-if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
+// Hanya SA.KP dan SF.UI
+if (!in_array($user_role, ['SA.KP', 'SF.UI'], true)) {
     echo "<script>
         alert('Akses Ditolak: Peran " . htmlspecialchars($user_role) . " tidak memiliki wewenang untuk membuka modul provider.');
         window.location.href = 'index.php?page=dashboard';
@@ -28,51 +32,68 @@ if (!in_array($user_role, ['SA.KP', 'SF.UI'])) {
     exit;
 }
 
+// Semua permintaan POST wajib membawa token CSRF yang sah
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_verify();
+}
+
 $action = $_GET['action'] ?? 'index';
+$url_kembali = 'index.php?page=master&sub=provider';
 
 // 3. Tambah Provider (POST - store)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'store') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store') {
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
-    $status_data   = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+    $status_data   = (($_POST['StatusData'] ?? '') === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
-    if (!empty($nama_provider)) {
-        $stmt = $conn->prepare("INSERT INTO master_provider (NamaProvider, StatusData, WaktuData) VALUES (?, ?, NOW())");
-        $stmt->execute([$nama_provider, $status_data]);
+    if ($nama_provider === '') {
+        ms_redirect($url_kembali, 'gagal', 'Nama provider wajib diisi.');
     }
-    header("Location: index.php?page=master&sub=provider");
-    exit;
+    try {
+        $conn->prepare("INSERT INTO master_provider (NamaProvider, StatusData, WaktuData) VALUES (?, ?, NOW())")
+             ->execute([$nama_provider, $status_data]);
+        ms_redirect($url_kembali, 'sukses', "Provider '$nama_provider' berhasil ditambahkan.");
+    } catch (Throwable $e) {
+        ms_redirect($url_kembali, 'gagal', 'Gagal menambah provider: ' . ms_pesan_db($e));
+    }
 }
 
 // 4. Edit Provider (POST - update)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update') {
     $kode_provider = trim($_POST['KodeProvider'] ?? '');
     $nama_provider = trim($_POST['NamaProvider'] ?? '');
-    $status_data   = (isset($_POST['StatusData']) && $_POST['StatusData'] === 'AKTIF') ? 'AKTIF' : 'TIDAK';
+    $status_data   = (($_POST['StatusData'] ?? '') === 'AKTIF') ? 'AKTIF' : 'TIDAK';
 
-    if (!empty($kode_provider) && !empty($nama_provider)) {
-        $stmt = $conn->prepare("UPDATE master_provider SET NamaProvider = ?, StatusData = ?, WaktuData = NOW() WHERE KodeProvider = ?");
-        $stmt->execute([$nama_provider, $status_data, $kode_provider]);
+    if ($kode_provider === '' || $nama_provider === '') {
+        ms_redirect($url_kembali, 'gagal', 'Data provider tidak lengkap.');
     }
-    header("Location: index.php?page=master&sub=provider");
-    exit;
+    try {
+        $conn->prepare("UPDATE master_provider SET NamaProvider = ?, StatusData = ?, WaktuData = NOW() WHERE KodeProvider = ?")
+             ->execute([$nama_provider, $status_data, $kode_provider]);
+        ms_redirect($url_kembali, 'sukses', "Provider '$nama_provider' berhasil diperbarui.");
+    } catch (Throwable $e) {
+        ms_redirect($url_kembali, 'gagal', 'Gagal memperbarui provider: ' . ms_pesan_db($e));
+    }
 }
 
-// 5. Toggle Status (GET - toggle_status)
-if ($action === 'toggle_status') {
-    $id = $_GET['id'] ?? null;
-    if ($id) {
-        $stmt = $conn->prepare("SELECT StatusData FROM master_provider WHERE KodeProvider = ?");
-        $stmt->execute([$id]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($row) {
-            $status_baru = ($row['StatusData'] === 'AKTIF') ? 'TIDAK' : 'AKTIF';
-            $update = $conn->prepare("UPDATE master_provider SET StatusData = ?, WaktuData = NOW() WHERE KodeProvider = ?");
-            $update->execute([$status_baru, $id]);
+// 5. Toggle Status (POST + CSRF)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'toggle_status') {
+    $id = trim((string) ($_POST['id'] ?? ''));
+    if ($id !== '') {
+        try {
+            $stmt = $conn->prepare("SELECT StatusData FROM master_provider WHERE KodeProvider = ?");
+            $stmt->execute([$id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $status_baru = ($row['StatusData'] === 'AKTIF') ? 'TIDAK' : 'AKTIF';
+                $conn->prepare("UPDATE master_provider SET StatusData = ?, WaktuData = NOW() WHERE KodeProvider = ?")
+                     ->execute([$status_baru, $id]);
+                ms_redirect($url_kembali, 'sukses', 'Status provider berhasil diubah.');
+            }
+        } catch (Throwable $e) {
+            ms_redirect($url_kembali, 'gagal', 'Gagal mengubah status: ' . ms_pesan_db($e));
         }
     }
-    header("Location: index.php?page=master&sub=provider");
-    exit;
+    ms_redirect($url_kembali, 'gagal', 'Provider tidak ditemukan.');
 }
 
 // 6. Query Data Provider
@@ -94,4 +115,3 @@ require_once __DIR__ . '/../../templates/master/provider.html';
 $content = ob_get_clean();
 
 require_once __DIR__ . '/../../templates/layouts/base.php';
-?>
