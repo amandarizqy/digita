@@ -81,6 +81,7 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
     ['label'=>'Tingkat ULP',    'href'=>'index.php?page=master&sub=pengguna&filter=ulp',    'on'=>$sub_filter === 'ulp'],
     ['label'=>'Vendor',         'href'=>'index.php?page=master&sub=pengguna&filter=vendor', 'on'=>$sub_filter === 'vendor'],
 ]) ?>
+<?= ms_flash_html() ?>
 
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
@@ -122,6 +123,7 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                         <?php 
                             $no_urut = $offset + $idx + 1;
                             $aktif   = (($usr['StatusData'] ?? '') === 'AKTIF'); 
+                            $akun_sendiri = (($usr['NamaAkun'] ?? '') === ($_SESSION['NamaAkun'] ?? ''));
                         ?>
                         <tr>
                             <td class="ps-4 text-muted small"><?php echo $no_urut; ?></td>
@@ -147,9 +149,9 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                                     <form action="index.php?page=master&sub=pengguna&action=toggle_status" method="POST" class="d-inline">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                         <input type="hidden" name="id" value="<?php echo htmlspecialchars($usr['NamaAkun']); ?>">
-                                        <button type="submit" class="btn btn-outline-secondary py-1 px-2"
-                                                title="<?php echo $aktif ? 'Nonaktifkan akun' : 'Aktifkan akun'; ?>"
-                                                onclick="return confirm('Ubah status akun ini?')">
+                                        <button type="button" class="btn btn-outline-secondary py-1 px-2"
+                                                title="<?php echo $akun_sendiri ? 'Tidak dapat mengubah status akun sendiri' : ($aktif ? 'Nonaktifkan akun' : 'Aktifkan akun'); ?>"
+                                                <?php if ($akun_sendiri): ?>disabled<?php else: ?>data-confirm="<?php echo htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' akun ' . ($usr['NamaAkun'] ?? '') . '?'); ?>"<?php endif; ?>>
                                             <i class="bi bi-arrow-repeat"></i>
                                         </button>
                                     </form>
@@ -250,6 +252,7 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                             <option value="<?php echo htmlspecialchars($kode); ?>"><?php echo htmlspecialchars($label); ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <small class="text-muted" style="font-size: 0.725rem;">* Pilih dengan teliti: hak akses tidak dapat diubah setelah akun disimpan.</small>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Unit UP3 (UnitAp)</label>
@@ -304,12 +307,9 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                     <input type="text" name="NomorKontak" id="edit_pg_kontak" class="form-control">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Kode Hak Access *</label>
-                    <select name="KodeHak" id="edit_pg_hak" class="form-select" required>
-                        <?php foreach ($daftar_hak as $kode => $label): ?>
-                            <option value="<?php echo htmlspecialchars($kode); ?>"><?php echo htmlspecialchars($label); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="form-label">Kode Hak Access (Locked)</label>
+                    <input type="text" id="edit_pg_hak" class="form-control font-monospace bg-light" readonly>
+                    <small class="text-muted" style="font-size: 0.725rem;">* Hak akses hanya ditentukan saat akun dibuat dan tidak dapat diubah.</small>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Status Akun</label>

@@ -37,7 +37,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $user_data['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -83,7 +83,7 @@ if (!$wilayah_valid) {
             $nama_up = $sel_up !== '' ? $opsi_up[$sel_up] : '';
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat data unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat data unit");
     }
 }
 
@@ -250,11 +250,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['proses_prioritas'])) 
                 $tabel_belum_ada = true;
                 $pesan_error = "Tabel <code>hasil_prioritas</code> belum dibuat. Jalankan file <code>hasil_prioritas.sql</code> terlebih dahulu.";
             } else {
-                $pesan_error = "Gagal memproses pemeringkatan: " . $e->getMessage();
+                $pesan_error = "Gagal memproses pemeringkatan";
             }
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = $e->getMessage();
+            $pesan_error = "GAGAL";
         }
     }
 }
@@ -282,7 +282,7 @@ try {
         $kartu_skala[(int) $r['SkalaPrioritas']]['jumlah'] = (int) $r['jml'];
     }
 } catch (PDOException $e) {
-    if (empty($pesan_error)) $pesan_error = "Gagal memuat ringkasan skala: " . $e->getMessage();
+    if (empty($pesan_error)) $pesan_error = "Gagal memuat ringkasan skala";
 }
 
 try {
@@ -305,7 +305,7 @@ try {
 
     if ($skala_dipilih >= 1 && $skala_dipilih <= 9) {
         $stmt_pv = $conn->prepare("
-            SELECT h.Peringkat, h.IdPel, d.NamaPelanggan, h.TotalTagihan, h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas
+            SELECT h.Peringkat, h.IdPel, d.Nama AS NamaPelanggan, h.TotalTagihan, h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas
             FROM hasil_prioritas h
             LEFT JOIN dil d ON d.Idpel = h.IdPel
             WHERE h.Periode = :periode AND h.SkalaPrioritas = :skala AND $scope_h_sql
@@ -319,7 +319,7 @@ try {
     if ($e->getCode() === '42S02') {
         $tabel_belum_ada = true;
     } elseif (empty($pesan_error)) {
-        $pesan_error = "Gagal memuat hasil pemeringkatan: " . $e->getMessage();
+        $pesan_error = "Gagal memuat hasil pemeringkatan";
     }
 }
 

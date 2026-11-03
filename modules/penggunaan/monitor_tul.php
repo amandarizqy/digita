@@ -97,7 +97,7 @@ if (!$unit_siap) {
             // daftar
             $w = ['t.WaktuCetak >= :d1', 't.WaktuCetak < :d2', $scope]; $p2 = $p;
             if ($status_f !== '') { $w[] = 't.StatusData = :sf'; $p2[':sf'] = $status_f; }
-            if ($keyword !== '')  { $w[] = '(t.IdPel LIKE :k1 OR t.NoTul LIKE :k2 OR l.NamaPelanggan LIKE :k3)'; $p2[':k1'] = $p2[':k2'] = $p2[':k3'] = '%' . $keyword . '%'; }
+            if ($keyword !== '')  { $w[] = '(t.IdPel LIKE :k1 OR t.NoTul LIKE :k2 OR l.Nama LIKE :k3)'; $p2[':k1'] = $p2[':k2'] = $p2[':k3'] = '%' . $keyword . '%'; }
             $where = 'WHERE ' . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(*) FROM tul_601 t LEFT JOIN dil l ON l.IdPel = t.IdPel $where");
@@ -105,7 +105,7 @@ if (!$unit_siap) {
             $total_data = (int) $st->fetchColumn();
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $st = $conn->prepare("SELECT t.NoTul, t.WaktuCetak, t.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, t.ThBlRekAwal, t.ThBlRekAkhir, t.Lembar, t.RpTag,
+            $st = $conn->prepare("SELECT t.NoTul, t.WaktuCetak, t.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, t.ThBlRekAwal, t.ThBlRekAkhir, t.Lembar, t.RpTag,
                                          t.StandBaca, t.TglBaca, t.NomorPengirim, t.UnitUp, t.StatusData, t.WaktuData
                                   FROM tul_601 t LEFT JOIN dil l ON l.IdPel = t.IdPel $where
                                   ORDER BY t.WaktuCetak DESC, t.NoTul LIMIT :lim OFFSET :off");

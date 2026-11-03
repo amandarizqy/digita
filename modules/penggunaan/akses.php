@@ -14,8 +14,7 @@ if (!function_exists('pga_matriks')) {
     {
         $semua    = ['MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'];
         $tanpa_vd = array_values(array_diff($semua, ['SF.VD']));
-        $input    = ['TL.UP', 'SF.UI', 'SF.UP'];   
-        $isi_pulsa = ['TL.UP', 'SF.VD'];            
+        $input    = ['TL.UP', 'SF.UI', 'SF.UP'];             
 
         return [
             // INPUT
@@ -23,7 +22,7 @@ if (!function_exists('pga_matriks')) {
             'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
             'upload_tul'        => $input,      // Upload TUL
-            'isi_pulsa'         => $isi_pulsa,      // Isi Pulsa
+            'isi_pulsa'         => $input,      // Isi Pulsa
             'input_perintah'    => $input,      // Perintah
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL

@@ -18,13 +18,44 @@ $sub_ini = 'modem';
 $role    = ph_role();
 $is_ulp  = (substr($role, -3) === '.UP');
 
+// Hak akses: Modem Server hanya untuk SF.UI (sesuai matriks hak akses) dan SA.KP (super admin, bisa melihat semua).
+// Dicek PALING AWAL supaya GET maupun POST (tambah/edit/toggle) dari role lain ikut tertolak.
+if (!in_array($role, ['SA.KP', 'SF.UI'], true)) {
+    http_response_code(403);
+    echo "<script>alert('Akses Ditolak: Modem Server hanya dapat diakses oleh SF.UI dan SA.KP.'); window.location.href='index.php?page=master';</script>";
+    exit;
+}
+
+/** Redirect khusus Master Modem (ph_redirect() mengarah ke modul pemeliharaan, jadi tidak dipakai di sini). */
+function modem_redirect(string $tipe, string $pesan): void
+{
+    ph_flash_set($tipe, $pesan);
+    header('Location: index.php?page=master&sub=modem');
+    exit;
+}
+
+/** Validasi IP server & port engine. Mengembalikan pesan error atau null bila valid. */
+function modem_validasi_koneksi(string $ip_data, string $ip_engine, string $port): ?string
+{
+    if (!filter_var($ip_data, FILTER_VALIDATE_IP) || !filter_var($ip_engine, FILTER_VALIDATE_IP)) {
+        return 'IP Server Data / Engine tidak valid.';
+    }
+    if (!preg_match('/^[A-Za-z0-9_\-.\/]{1,20}$/', $port)) {
+        return 'Port Engine tidak valid.';
+    }
+    return null;
+}
+
 /** Cek apakah modem termasuk wewenang pengguna yang sedang login. */
 function modem_dalam_scope(PDO $conn, string $imei): bool
 {
+    if ($imei === '') {
+        return false;
+    }
     [$sc_sql, $sc_par] = ph_scope('p');
-    $st = $conn->prepare("SELECT p.ImeiModem FROM master_modem p WHERE 1=1" . $sc_sql);
-    $st->execute($sc_par);
-    return in_array($imei, $st->fetchAll(PDO::FETCH_COLUMN), true);
+    $st = $conn->prepare("SELECT 1 FROM master_modem p WHERE p.ImeiModem = ?" . $sc_sql . " LIMIT 1");
+    $st->execute(array_merge([$imei], $sc_par));
+    return (bool) $st->fetchColumn();
 }
 
 /* ======================================================================
@@ -46,12 +77,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $ip_engine   = trim((string) ($_POST['ip_server_engine'] ?? '10.96.100.20'));
             $port_engine = trim((string) ($_POST['port_engine'] ?? 'COM13'));
             $status      = (($_POST['status_data'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
+            if (($err_k = modem_validasi_koneksi($ip_data, $ip_engine, $port_engine)) !== null) {
+                modem_redirect('gagal', $err_k);
+            }
 
             if ($imei === '') {
-                ph_redirect($sub_ini, 'gagal', 'IMEI Modem wajib diisi.');
+                modem_redirect('gagal', 'IMEI Modem wajib diisi.');
             }
             if ($keterangan === '') {
-                ph_redirect($sub_ini, 'gagal', 'Nama modem wajib diisi.');
+                modem_redirect('gagal', 'Nama modem wajib diisi.');
             }
 
             $up_pilih = trim((string) ($_POST['unit_up'] ?? ''));
@@ -60,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $unit = $st->fetch(PDO::FETCH_ASSOC);
 
             if (!$unit) {
-                ph_redirect($sub_ini, 'gagal', 'Unit ULP wajib dipilih dengan benar.');
+                modem_redirect('gagal', 'Unit ULP wajib dipilih dengan benar.');
             }
 
             $upi = $unit['UnitUpi'] ?: '56';
@@ -70,16 +104,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
                 ->execute([$imei, $keterangan, $sim_id, $ip_data, $ip_engine, $port_engine, $unit['UnitUp'], $unit['UnitAp'], $upi, $status]);
 
-            ph_redirect($sub_ini, 'sukses', "Modem '$keterangan' ($imei) berhasil ditambahkan.");
+            modem_redirect('sukses', "Modem '$keterangan' ($imei) berhasil ditambahkan.");
         } catch (Throwable $e) {
             error_log('tambah_modem error: ' . $e->getMessage());
-            $msg = $e->getMessage();
-            if (stripos($msg, 'foreign key') !== false) {
+            $raw = $e->getMessage();
+            if (stripos($raw, 'foreign key') !== false) {
                 $msg = 'SIM ID tidak terdaftar di master nomor.';
-            } elseif (stripos($msg, 'Duplicate') !== false) {
+            } elseif (stripos($raw, 'Duplicate') !== false) {
                 $msg = 'IMEI sudah terdaftar.';
+            } else {
+                $msg = 'Kesalahan database.';
             }
-            ph_redirect($sub_ini, 'gagal', 'Gagal menambah modem: ' . $msg);
+            modem_redirect('gagal', 'Gagal menambah modem: ' . $msg);
         }
     }
 
@@ -95,12 +131,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $ip_engine   = trim((string) ($_POST['ip_server_engine'] ?? '10.96.100.20'));
             $port_engine = trim((string) ($_POST['port_engine'] ?? 'COM13'));
             $status      = (($_POST['status_data'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
+            if (($err_k = modem_validasi_koneksi($ip_data, $ip_engine, $port_engine)) !== null) {
+                modem_redirect('gagal', $err_k);
+            }
 
             if ($keterangan === '') {
-                ph_redirect($sub_ini, 'gagal', 'Nama modem wajib diisi.');
+                modem_redirect('gagal', 'Nama modem wajib diisi.');
             }
             if (!modem_dalam_scope($conn, $imei)) {
-                ph_redirect($sub_ini, 'gagal', 'Modem tidak ditemukan atau di luar wewenang Anda.');
+                modem_redirect('gagal', 'Modem tidak ditemukan atau di luar wewenang Anda.');
             }
 
             $conn->prepare("UPDATE master_modem SET 
@@ -108,14 +147,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 WHERE ImeiModem = ?")
                 ->execute([$keterangan, $sim_id, $ip_data, $ip_engine, $port_engine, $status, $imei]);
 
-            ph_redirect($sub_ini, 'sukses', "Data modem '$keterangan' ($imei) berhasil diperbarui.");
+            modem_redirect('sukses', "Data modem '$keterangan' ($imei) berhasil diperbarui.");
         } catch (Throwable $e) {
             error_log('edit_modem error: ' . $e->getMessage());
-            $msg = $e->getMessage();
-            if (stripos($msg, 'foreign key') !== false) {
-                $msg = 'SIM ID tidak terdaftar di master nomor.';
-            }
-            ph_redirect($sub_ini, 'gagal', 'Gagal mengedit modem: ' . $msg);
+            $msg = (stripos($e->getMessage(), 'foreign key') !== false)
+                ? 'SIM ID tidak terdaftar di master nomor.'
+                : 'Kesalahan database.';
+            modem_redirect('gagal', 'Gagal mengedit modem: ' . $msg);
         }
     }
 
@@ -125,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $imei = trim((string) ($_POST['imei_modem'] ?? ''));
 
             if (!modem_dalam_scope($conn, $imei)) {
-                ph_redirect($sub_ini, 'gagal', 'Modem tidak ditemukan atau di luar wewenang Anda.');
+                modem_redirect('gagal', 'Modem tidak ditemukan atau di luar wewenang Anda.');
             }
 
             $conn->prepare("UPDATE master_modem 
@@ -133,10 +171,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 WHERE ImeiModem = ?")
                 ->execute([$imei]);
 
-            ph_redirect($sub_ini, 'sukses', "Status modem ($imei) berhasil diubah.");
+            modem_redirect('sukses', "Status modem ($imei) berhasil diubah.");
         } catch (Throwable $e) {
             error_log('toggle_modem error: ' . $e->getMessage());
-            ph_redirect($sub_ini, 'gagal', 'Gagal mengubah status modem: ' . $e->getMessage());
+            modem_redirect('gagal', 'Gagal mengubah status modem.');
         }
     }
 }
@@ -160,7 +198,11 @@ $persentase_aktif  = ($total_modem > 0) ? round(($total_modem_aktif / $total_mod
 [$data_modem, $total_hasil, $hal, $total_hal, $q] = ph_daftar(
     $conn,
     "p.ImeiModem, p.Keterangan, p.SimId, p.IpServerData, p.IpServerEngine, p.PortEngine, p.UnitUp, p.UnitAp, p.UnitUpi, p.StatusData, p.WaktuData",
-    "master_modem p"
+    "master_modem p",
+    '',
+    [],
+    ['alias' => 'p', 'urut' => 'p.UnitUp ASC, p.ImeiModem ASC',
+     'cari'  => ['p.ImeiModem', 'p.Keterangan', 'p.SimId', 'p.IpServerData', 'p.IpServerEngine', 'p.PortEngine']]
 );
 
 // Pilihan AP (UP3) & UP (ULP)
@@ -179,7 +221,7 @@ try {
 $akses_unit     = in_array($role, ['SA.KP', 'SF.UI'], true);
 $akses_pengguna = $akses_unit;
 $akses_provider = $akses_unit;
-$akses_modem    = true;
+$akses_modem    = true; // halaman ini hanya bisa dibuka SF.UI (lihat cek role di bagian atas file)
 $akses_pesan    = in_array($role, ['SA.KP', 'AM.UI'], true);
 
 $page_title = "Master - Digitas";

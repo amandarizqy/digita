@@ -252,7 +252,7 @@ if (!function_exists('pi_proses')) {
             else                $st['error']  = $lewat > 0 ? 'Semua pelanggan pada file tercatat di unit lain, tidak ada yang disimpan.' : 'Tidak ada baris valid yang bisa disimpan.';
             if ($lewat > 0)     $st['peringatan'] = number_format($lewat, 0, ',', '.') . ' pelanggan dilewati karena tercatat di unit lain (di luar wilayah Anda).';
         } catch (Throwable $e) {
-            $st['error'] = 'Gagal memproses: ' . $e->getMessage();
+            $st['error'] = 'Gagal memproses';
         }
         return $st;
     }

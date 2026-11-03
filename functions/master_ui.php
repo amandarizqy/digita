@@ -124,6 +124,49 @@ function tampilkanAksesDitolak() {
 JS;
 }
 
+/* ---------- Pesan sekali tampil (Post/Redirect/Get) untuk modul Master ---------- */
+function ms_flash_set(string $tipe, string $pesan): void
+{
+    $_SESSION['ms_flash'] = ['tipe' => $tipe, 'pesan' => $pesan];
+}
+
+function ms_flash_html(): string
+{
+    $f = $_SESSION['ms_flash'] ?? null;
+    unset($_SESSION['ms_flash']);
+    if (!$f) {
+        return '';
+    }
+    $ok = ($f['tipe'] === 'sukses');
+    return '<div class="alert alert-' . ($ok ? 'success' : 'danger') . ' alert-dismissible fade show rounded-3" role="alert">'
+        . '<i class="bi ' . ($ok ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill') . ' me-2"></i>' . ms_e($f['pesan'])
+        . '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+}
+
+/** Redirect ke halaman master + pesan flash. */
+function ms_redirect(string $url, string $tipe, string $pesan): void
+{
+    ms_flash_set($tipe, $pesan);
+    header('Location: ' . $url);
+    exit;
+}
+
+/** Pesan error database yang aman ditampilkan ke pengguna (detail teknis hanya di error_log). */
+function ms_pesan_db(Throwable $e): string
+{
+    error_log('master: ' . $e->getMessage());
+    $raw = $e->getMessage();
+    if ($e instanceof PDOException && (string) $e->getCode() === '23000') {
+        if (stripos($raw, 'duplicate') !== false) {
+            return 'Kode tersebut sudah terdaftar.';
+        }
+        if (stripos($raw, 'foreign key') !== false) {
+            return 'Kode induk tidak valid atau data masih dipakai data lain.';
+        }
+    }
+    return 'Terjadi kesalahan database.';
+}
+
 /**
  * Header halaman + Tab Level 2 + Pill Level 3.
  * @param array  $o     title, subtitle, tombol => ['label','target','icon']

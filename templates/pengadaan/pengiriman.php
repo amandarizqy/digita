@@ -1,7 +1,6 @@
 <?php 
 $no_formulir_valid = $_GET['no_form'] ?? ($formulir['NoFormulir'] ?? '');
 
-// Pastikan pengecekan kreator / pembuat formulir menggunakan NamaAkun yang login
 $session_akun = $_SESSION['NamaAkun'] ?? '';
 $db_akun = trim($formulir['NamaAkun'] ?? '');
 $is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 'SA.KP');
@@ -103,7 +102,6 @@ $is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 
             </div>
         </div>
     <?php else: ?>
-        <!-- PESAN JIKA BUKAN PEMBUAT FORMULIR -->
         <div class="alert alert-danger shadow-sm mb-4">
             <i class="bi bi-lock-fill me-2"></i>Hanya pembuat formulir (<strong><?= htmlspecialchars($formulir['NamaAkun'] ?? '') ?></strong>) yang diizinkan untuk menambah atau menghapus muatan pada truk pengiriman ini.
         </div>
@@ -148,10 +146,10 @@ $is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 
                             </td>
                             <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && $is_creator): ?>
                                 <td class="text-end pe-4">
-                                    <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline" onsubmit="return confirm('Hapus item ini dari keranjang pengiriman?')">
+                                    <form action="modules/pengadaan/proses_pengiriman.php?action=delete_item" method="POST" class="d-inline">
                                         <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
                                         <input type="hidden" name="no_ref" value="<?= htmlspecialchars($item['NoRef']) ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Hapus Item">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2 btn-swal-del-kirim-item" title="Hapus Item">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -169,19 +167,19 @@ $is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 
         </div>
     </div>
     
-    <!-- Tombol Reset & Eksekusi di Bagian Paling Bawah -->
+    <!-- Tombol Reset & Eksekusi -->
     <?php if (($formulir['StatusData'] ?? 'TIDAK') === 'TIDAK' && !empty($items) && $is_creator): ?>
     <div class="card-footer bg-white p-3 d-flex gap-2 border-top">
-        <form action="modules/pengadaan/proses_pengiriman.php?action=reset_list" method="POST" class="w-50" onsubmit="return confirm('Yakin ingin mereset dan menghapus seluruh daftar muatan pengiriman ini?')">
+        <form action="modules/pengadaan/proses_pengiriman.php?action=reset_list" method="POST" class="w-50" id="form-reset-kirim">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-            <button type="submit" class="btn btn-outline-danger btn-lg w-100 fw-bold">
+            <button type="button" id="btn-swal-reset-kirim" class="btn btn-outline-danger btn-lg w-100 fw-bold">
                 <i class="bi bi-arrow-counterclockwise me-2"></i>RESET LIST
             </button>
         </form>
         
-        <form action="modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST" class="w-50">
+        <form action="modules/pengadaan/proses_pengiriman.php?action=execute_form" method="POST" class="w-50" id="form-exec-kirim">
             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($no_formulir_valid) ?>">
-            <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold text-dark" onclick="return confirm('Truk siap berangkat? Data tidak dapat diubah setelah dieksekusi.')">
+            <button type="button" id="btn-swal-exec-kirim" class="btn btn-warning btn-lg w-100 fw-bold text-dark">
                 <i class="bi bi-send-check me-2"></i>EKSEKUSI PENGIRIMAN
             </button>
         </form>
@@ -189,7 +187,8 @@ $is_creator = ($db_akun === $session_akun) || (($_SESSION['KodeHak'] ?? '') === 
     <?php endif; ?>
 </div>
 
-<!-- SCRIPT SELECT2 -->
+<!-- SCRIPT SELECT2 & SWEETALERT2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     if (typeof jQuery !== 'undefined' && $.fn.select2) {
@@ -198,6 +197,55 @@ document.addEventListener("DOMContentLoaded", function() {
             placeholder: "Pilih / Ketik Nomor Ref S41...",
             allowClear: true,
             width: '100%'
+        });
+    }
+
+    document.querySelectorAll('.btn-swal-del-kirim-item').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            let form = this.closest('form');
+            Swal.fire({
+                title: 'Hapus Item?',
+                text: "Hapus item ini dari keranjang pengiriman?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) form.submit(); });
+        });
+    });
+
+    let btnResetKirim = document.getElementById('btn-swal-reset-kirim');
+    if (btnResetKirim) {
+        btnResetKirim.addEventListener('click', function() {
+            Swal.fire({
+                title: 'Reset Daftar?',
+                text: "Yakin ingin mereset dan menghapus seluruh daftar muatan pengiriman ini?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Reset!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) document.getElementById('form-reset-kirim').submit(); });
+        });
+    }
+
+    let btnExecKirim = document.getElementById('btn-swal-exec-kirim');
+    if (btnExecKirim) {
+        btnExecKirim.addEventListener('click', function() {
+            Swal.fire({
+                title: 'Eksekusi Pengiriman?',
+                text: "Truk siap berangkat? Data tidak dapat diubah setelah dieksekusi.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#ffc107',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Berangkat!',
+                cancelButtonText: 'Batal'
+            }).then((res) => { if (res.isConfirmed) document.getElementById('form-exec-kirim').submit(); });
         });
     }
 });

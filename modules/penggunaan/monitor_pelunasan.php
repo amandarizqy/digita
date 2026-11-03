@@ -67,7 +67,7 @@ if (!$unit_siap) {
 
             // ---- daftar ----
             $w = ['p.ThBlRek LIKE :per', $scope]; $p2 = $p;
-            if ($keyword !== '') { $w[] = '(p.IdPel LIKE :k1 OR l.NamaPelanggan LIKE :k2)'; $p2[':k1'] = $p2[':k2'] = '%' . $keyword . '%'; }
+            if ($keyword !== '') { $w[] = '(p.IdPel LIKE :k1 OR l.Nama LIKE :k2)'; $p2[':k1'] = $p2[':k2'] = '%' . $keyword . '%'; }
             $where = 'WHERE ' . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(*) FROM pelunasan_ap2t p LEFT JOIN dil l ON l.IdPel = p.IdPel $where");
@@ -75,7 +75,7 @@ if (!$unit_siap) {
             $total_data = (int) $st->fetchColumn();
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $st = $conn->prepare("SELECT p.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, p.ThBlRek, p.TglBayar, p.RpTag, p.RpBK, p.UnitUp, p.WaktuData
+            $st = $conn->prepare("SELECT p.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, p.ThBlRek, p.TglBayar, p.RpTag, p.RpBK, p.UnitUp, p.WaktuData
                                   FROM pelunasan_ap2t p LEFT JOIN dil l ON l.IdPel = p.IdPel $where
                                   ORDER BY p.ThBlRek DESC, p.IdPel LIMIT :lim OFFSET :off");
             foreach ($p2 as $k => $v) $st->bindValue($k, $v);

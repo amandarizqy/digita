@@ -45,25 +45,14 @@ $url_cetak_order = BASE_URL . '/modules/pemeliharaan/cetak_order.php';
 $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=order';
 ?>
 
-<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 px-2 pt-2">
-        <div>
-            <h5 class="fw-bold text-primary mb-0">Monitoring Laporan Order Pemeliharaan</h5>
-            <p class="text-muted small mb-0">Rekapitulasi FPK, Order, dan Berita Acara pemeliharaan.</p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <?= ph_kotak_cari($sub_ini, $q) ?>
-            <a href="<?= ph_e($url_cetak_laporan) ?>" target="_blank" class="btn btn-outline-primary fw-bold px-3 rounded-3 shadow-sm">
-                <i class="bi bi-printer me-1"></i> Cetak Laporan PDF
-            </a>
-        </div>
-    </div>
-
-    <div class="w-100 table-responsive">
-        <table class="table table-hover align-middle mb-0 w-100">
-            <thead class="table-light text-dark border-top border-bottom">
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <?= ph_card_header('Daftar Monitoring Order Pemeliharaan', $sub_ini, $q) ?>
+    <div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 ph-table">
+            <thead class="table-light text-secondary text-uppercase ph-thead">
                 <tr>
-                    <th class="ps-2 text-center" style="width:3%;">#</th>
+                    <th class="ps-4" style="width:40px;">#</th>
                     <th style="width:17%;">NO ORDER / FPK / BA</th>
                     <th style="width:10%;">TGL FPK</th>
                     <th style="width:15%;">IDPEL / NO REF</th>
@@ -71,7 +60,7 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
                     <th style="width:15%;">MODEM</th>
                     <th style="width:10%;">INDIKATOR</th>
                     <th style="width:7%;">STATUS</th>
-                    <th class="text-center" style="width:11%;">AKSI</th>
+                    <th class="text-end pe-4">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
@@ -80,7 +69,7 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
                 <?php else: ?>
                     <?php foreach ($data_mon_order as $idx => $row): ?>
                         <tr class="border-bottom">
-                            <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
+                            <td class="ps-4 text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
                             <td>
                                 <div class="small text-secondary font-monospace">ORDER: <?= ph_e($row['NoFormOrder'] ?? '-') ?>
                                     <?php if (!empty($row['NoFormOrder'])): ?>
@@ -96,7 +85,7 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
                             <td class="font-monospace text-muted"><?= ph_e($row['ImeiModem'] ?? '-') ?></td>
                             <td><?= ph_badge_relay($row['KondisiRelay']) ?></td>
                             <td><?= ph_badge_status($row['StatusData']) ?></td>
-                            <td class="pe-2 text-center">
+                            <td class="text-end pe-4">
                                 <?php if (!empty($row['NoFba'])): ?>
                                     <a href="<?= ph_e($url_cetak . '?no_fba=' . urlencode($row['NoFba'])) ?>" target="_blank" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1" title="Cetak BA"><i class="bi bi-printer-fill"></i></a>
                                     <?php if (!empty($row['AdaFotoPasang']) || !empty($row['AdaFotoBarang'])): ?>
@@ -114,6 +103,7 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
     </div>
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>

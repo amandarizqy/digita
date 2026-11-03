@@ -121,7 +121,7 @@ if ($unit_siap) {
             $peta_unit[] = ['kode' => (string) $kode, 'nama' => $nama, 'ups' => $ups];
         }
     } catch (PDOException $e) {
-        $pesan_error = 'Gagal memuat daftar unit: ' . $e->getMessage();
+        $pesan_error = 'Gagal memuat daftar unit';
         $unit_siap = false;
     }
 }
@@ -219,12 +219,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 //     insert ke pelunasan_ap2t dan kategorisasi_risiko, karena kedua tabel itu punya foreign key
                 //     IdPel -> dil.IdPel. INSERT IGNORE: pelanggan yang sudah ada di DIL tidak diubah
                 //     (status AKTIF/TIDAK dan nama yang sudah ada dipertahankan).
-                //     NamaPelanggan tidak ada di file riwayat -> kosong; lengkapi lewat Penggunaan > Input DIL.
+                //     Nama tidak ada di file riwayat -> kosong; lengkapi lewat Penggunaan > Input DIL / import Excel DIL.
+                //     Unit memakai wilayah tujuan upload, NamaAkun akun yang mengunggah.
                 $idpel_unik = array_values(array_unique(array_column($baris, 0)));
                 foreach (array_chunk($idpel_unik, $riwayat_chunk) as $paket) {
-                    $stmt = $conn->prepare("INSERT IGNORE INTO dil (IdPel, NamaPelanggan, StatusData, WaktuData) VALUES "
-                          . implode(',', array_fill(0, count($paket), "(?, '', 'AKTIF', NOW())")));
-                    $stmt->execute($paket);
+                    $stmt = $conn->prepare("INSERT IGNORE INTO dil (IdPel, Nama, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES "
+                          . implode(',', array_fill(0, count($paket), "(?, '', ?, ?, ?, ?, 'AKTIF', NOW())")));
+                    $param_dil = [];
+                    foreach ($paket as $id_dil) array_push($param_dil, $id_dil, mb_substr((string) $namaAkunInput, 0, 20), $tujuanUp, $tujuanAp, $tujuanUpi);
+                    $stmt->execute($param_dil);
                     $dilBaru += $stmt->rowCount();
                 }
 
@@ -262,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$baris) $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
         } catch (Throwable $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = 'Gagal memproses file: ' . $e->getMessage();
+            $pesan_error = 'Gagal memproses file';
         }
     }
 }

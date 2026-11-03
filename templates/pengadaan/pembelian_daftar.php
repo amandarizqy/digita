@@ -1,4 +1,7 @@
 <div class="card shadow mb-4 border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="m-0 font-weight-bold text-primary"><i class="bi bi-cart-plus me-1"></i>Daftar Formulir Pembelian</h6>
+    </div>
     <div class="card-body p-0">
         <!-- Baris Filter Pencarian & Limit Paging -->
         <div class="d-flex justify-content-between align-items-center flex-wrap px-4 pt-3 pb-2 gap-2">
@@ -69,9 +72,9 @@
                                     </a>
                                     
                                     <?php if ($row['StatusData'] !== 'AKTIF'): ?>
-                                        <form action="modules/pengadaan/proses_pembelian.php?action=delete_draft" method="POST" style="display:inline-block;" onsubmit="return confirm('Apakah Anda yakin ingin menghapus draft formulir pembelian ini?');">
+                                        <form action="modules/pengadaan/proses_pembelian.php?action=delete_draft" method="POST" style="display:inline-block;" class="form-delete-draft">
                                             <input type="hidden" name="no_formulir" value="<?= htmlspecialchars($row['NoFormulir']) ?>">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus Draft">
+                                            <button type="button" class="btn btn-sm btn-outline-danger btn-swal-delete" title="Hapus Draft">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
@@ -115,3 +118,28 @@
         <?php endif; ?>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll('.btn-swal-delete').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            let form = this.closest('form');
+            Swal.fire({
+                title: 'Hapus Draft?',
+                text: "Apakah Anda yakin ingin menghapus draft formulir pembelian ini?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
+});
+</script>

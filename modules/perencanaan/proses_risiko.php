@@ -46,7 +46,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $user_data['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -107,7 +107,7 @@ if (!empty($unitUpi)) {
             $sel_up = '';
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -118,8 +118,8 @@ $scope_label = ($nama_upi ?: '-')
              . ($nama_ap !== '' ? ' › ' . $nama_ap : '')
              . ($nama_up !== '' ? ' › ' . $nama_up : '');
 
-// Sumber unit per pelanggan: tabel `dil` TIDAK memiliki kolom unit, maka unit tiap
-// pelanggan diambil dari pelunasan_ap2t. SENGAJA tanpa filter periode, supaya daftar
+// Sumber unit per pelanggan: tetap diambil dari pelunasan_ap2t (bukan dil.UnitUp/UnitAp/UnitUpi,
+// karena unit di DIL bisa berbeda/kosong untuk data hasil import Excel). SENGAJA tanpa filter periode, supaya daftar
 // pelanggan tetap muncul di wilayahnya walau periode yang dipilih belum punya tagihan
 // (pemrosesan tetap hanya memakai tagihan periode terpilih).
 $unit_map = "(SELECT IdPel, MAX(UnitUp) AS UnitUp, MAX(UnitAp) AS UnitAp, MAX(UnitUpi) AS UnitUpi
@@ -189,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_P
             $status_txt   = ($posisi_sr === '1') ? 'Tergantung dengan Pelanggan Lain' : 'Tidak Tergantung (Mandiri)';
             $pesan_sukses = "Posisi SR untuk ID Pelanggan <strong>" . htmlspecialchars($idpel_target) . "</strong> (Periode $periode_filter) berhasil diperbaharui menjadi: <strong>$status_txt</strong>.";
         } catch (Exception $e) {
-            $pesan_error = "Gagal merubah Posisi SR: " . $e->getMessage();
+            $pesan_error = "Gagal merubah Posisi SR";
         }
     }
 }
@@ -220,7 +220,7 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
             $pesan_sukses = "Data kategorisasi risiko IDPel <strong>" . htmlspecialchars($idpel_hapus) . "</strong> (Periode $periode_filter) berhasil di-reset!";
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = "Gagal menghapus data: " . $e->getMessage();
+            $pesan_error = "Gagal menghapus data";
         }
     }
 }
@@ -314,15 +314,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             // 3a. Daftarkan pelanggan yang akan diproses ke DIL: IdPel + StatusData 'AKTIF' otomatis.
             //     Dilakukan SEBELUM kategorisasi_risiko agar aman bila ada foreign key ke dil.
             //     Pelanggan yang sudah ada di DIL tidak diubah (status AKTIF/TIDAK yang sudah dipilih dipertahankan).
-            //     NamaPelanggan tidak ada di pelunasan_ap2t -> diisi kosong; lengkapi lewat Penggunaan > Input DIL.
+            //     Nama tidak ada di pelunasan_ap2t -> diisi kosong; lengkapi lewat Penggunaan > Input DIL / import Excel DIL.
+            //     Unit (UP/AP/UPI) diisi dari tagihan pelunasan_ap2t, NamaAkun dari akun yang login.
             $params_dil = $params;
             unset($params_dil[':p10'], $params_dil[':p70']);
+            $params_dil[':dil_akun'] = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
             $stmt_dil_baru = $conn->prepare("
-                INSERT INTO dil (IdPel, NamaPelanggan, StatusData, WaktuData)
-                SELECT DISTINCT p.IdPel, '', 'AKTIF', NOW()
+                INSERT INTO dil (IdPel, Nama, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
+                SELECT p.IdPel, '', :dil_akun, MAX(p.UnitUp), MAX(p.UnitAp), MAX(p.UnitUpi), 'AKTIF', NOW()
                 FROM pelunasan_ap2t p
                 INNER JOIN kategorisasi_risiko k_ext ON p.IdPel = k_ext.IdPel AND k_ext.Periode = :periode
                 $where_clause
+                GROUP BY p.IdPel
                 ON DUPLICATE KEY UPDATE StatusData = StatusData
             ");
             $stmt_dil_baru->execute($params_dil);
@@ -469,7 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                           . "Data yang belum memiliki <strong>Posisi SR</strong> dan/atau <strong>Level Kepentingan</strong> (dari modul Input Kepentingan) otomatis dilewati.";
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = "Gagal memproses data: " . $e->getMessage();
+            $pesan_error = "Gagal memproses data";
         }
     } else {
         $pesan_error = "Pilih minimal satu ID Pelanggan atau klik tombol 'Proses Semua Data'!";
@@ -538,7 +541,7 @@ try {
     $params_view      = array_merge([':periode' => $periode_filter], $scope_view_params);
 
     if (!empty($keyword)) {
-        $where_conditions[] = "(u.IdPel LIKE :kw OR d.NamaPelanggan LIKE :kw)";
+        $where_conditions[] = "(u.IdPel LIKE :kw OR d.Nama LIKE :kw)";
         $params_view[':kw'] = '%' . $keyword . '%';
     }
 
@@ -568,7 +571,7 @@ try {
     $sql_list = "
         SELECT 
             u.IdPel AS Idpel, 
-            NULLIF(d.NamaPelanggan, '') AS NamaPelanggan, 
+            NULLIF(d.Nama, '') AS NamaPelanggan, 
             k.PosisiSR, 
             k.LevelKeterlambatan, 
             k.LevelKepentingan,
@@ -597,7 +600,7 @@ try {
     $list_preview = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    $pesan_error = "Gagal mengambil data preview: " . $e->getMessage();
+    $pesan_error = "Gagal mengambil data preview";
     $list_preview = [];
     $total_rows   = 0;
     $total_dil = $total_sudah = $total_belum = 0;
