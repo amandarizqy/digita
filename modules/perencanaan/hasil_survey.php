@@ -163,7 +163,7 @@ if (!empty($keyword)) {
         $where_clauses[] = "k.Idpel = :kw_exact";
         $params[':kw_exact'] = $keyword;
     } else {
-        $where_clauses[] = "(k.Idpel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2 OR k.UnitUp LIKE :kw3 OR mu.SingkatanNama LIKE :kw4)";
+        $where_clauses[] = "(k.Idpel LIKE :kw1 OR d.Nama LIKE :kw2 OR k.UnitUp LIKE :kw3 OR mu.SingkatanNama LIKE :kw4)";
         $params[':kw1'] = $params[':kw2'] = $params[':kw3'] = $params[':kw4'] = $keyword . '%';
     }
 }
@@ -199,7 +199,7 @@ if ($total_pages < 1) $total_pages = 1;
 // 4. AMBIL DATA HASIL SURVEY (PAGINATED) -- unit ditampilkan dengan SingkatanNama
 // ---------------------------------------------------------
 try {
-    $query_tampil = "SELECT k.Idpel, d.NamaPelanggan, k.PosisiSR, k.UnitUp, k.UnitAp, k.UnitUpi,
+    $query_tampil = "SELECT k.Idpel, d.Nama AS NamaPelanggan, k.PosisiSR, k.UnitUp, k.UnitAp, k.UnitUpi,
                             COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp)  AS NamaUnitUp,
                             COALESCE(NULLIF(ma.SingkatanNama, ''), k.UnitAp)  AS NamaUnitAp,
                             COALESCE(NULLIF(mi.SingkatanNama, ''), k.UnitUpi) AS NamaUnitUpi

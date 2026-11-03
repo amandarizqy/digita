@@ -6,6 +6,9 @@
 $url_dil = fn(array $ubah = []) => pg_url('monitor_dil', array_merge(
     ['keyword' => $keyword, 'status' => $status, 'limit' => $limit == 10 ? '' : $limit], $ubah));
 
+// sel kosong ditampilkan "-"
+$kosong = fn($v) => trim((string) $v) === '' ? '<span class="text-muted">-</span>' : pg_e($v);
+
 echo pg_header([
     'title'    => 'Monitoring DIL',
     'subtitle' => 'Daftar Induk Langganan: cari pelanggan' . ($boleh_edit ? ', ubah nama, serta aktifkan atau nonaktifkan.' : '.'),
@@ -49,7 +52,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
         <form method="GET" action="" class="row g-2 align-items-center mb-3">
             <?= pg_hidden('monitor_dil') ?>
             <div class="col-md-5">
-                <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm" placeholder="Cari IdPel atau nama pelanggan...">
+                <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm" placeholder="Cari IdPel, nama, alamat, telepon, No. kWh, tarif, unit...">
             </div>
             <div class="col-md-2">
                 <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -75,17 +78,20 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
         </form>
     </div>
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover table-sm align-middle mb-0" style="font-size:.85rem;">
             <thead class="table-light">
                 <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
-                    <th class="ps-4">IdPel</th><th>Nama Pelanggan</th><th class="text-center">Index Prioritas</th>
+                    <th class="ps-4">IdPel</th><th>Nama</th><th>Alamat</th><th>Jenis MK</th><th>No. Telepon</th><th>No. HP</th>
+                    <th>Gol. Tarif</th><th class="text-end">Daya (VA)</th><th class="text-center">Teg. Ukur</th><th class="text-center">Kd. Pemb. Meter</th>
+                    <th>No. kWh</th><th>Aktifasi</th><th>Produk Prabayar</th><th class="text-center">Index Prioritas</th><th>Nama Akun</th>
+                    <th>Unit UPI</th><th>Unit AP</th><th>Unit UP</th>
                     <th class="text-center">Status</th><th>Waktu Data</th>
                     <?php if ($boleh_edit): ?><th class="text-end pe-4">Aksi</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
             <?php if (!$data): ?>
-                <tr><td colspan="<?= $boleh_edit ? 6 : 5 ?>" class="text-center text-muted py-5">
+                <tr><td colspan="<?= $boleh_edit ? 21 : 20 ?>" class="text-center text-muted py-5">
                     <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
                     <?= ($keyword !== '' || $status !== '') ? 'Tidak ada data yang cocok dengan filter.' : 'Belum ada data DIL.' ?>
                 </td></tr>
@@ -95,18 +101,33 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
             ?>
                 <tr>
                     <td class="ps-4 font-monospace fw-semibold"><?= pg_e($r['IdPel']) ?></td>
-                    <td>
+                    <td class="text-nowrap">
                         <?php if ($nama_kosong): ?>
                             <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-50"><i class="bi bi-exclamation-triangle me-1"></i>Belum diisi</span>
                         <?php else: ?><?= pg_e($r['NamaPelanggan']) ?><?php endif; ?>
                     </td>
+                    <td class="small" style="min-width:240px;"><?= $kosong($r['Alamat']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['JenisMk']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['NomorTlp']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['NomorHp']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['GolTar']) ?></td>
+                    <td class="text-end text-nowrap"><?= $r['Daya'] === null ? '<span class="text-muted">-</span>' : pg_n($r['Daya']) ?></td>
+                    <td class="text-center"><?= $kosong($r['TegUkur']) ?></td>
+                    <td class="text-center"><?= $kosong($r['KdPembMeter']) ?></td>
+                    <td class="font-monospace small text-nowrap"><?= $kosong($r['NomorKwh']) ?></td>
+                    <td class="text-nowrap small"><?= $kosong($r['Aktifasi']) ?></td>
+                    <td class="text-nowrap small"><?= $kosong($r['ProdukPrabayar']) ?></td>
                     <td class="text-center"><?= $r['IndexPrioritas'] === null ? '<span class="text-muted">-</span>' : pg_e($r['IndexPrioritas']) ?></td>
+                    <td class="text-nowrap small"><?= $kosong($r['NamaAkun']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['UnitUpi']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['UnitAp']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['UnitUp']) ?></td>
                     <td class="text-center">
                         <span class="badge bg-<?= $aktif ? 'success' : 'secondary' ?> bg-opacity-10 text-<?= $aktif ? 'success' : 'secondary' ?> border border-<?= $aktif ? 'success' : 'secondary' ?> border-opacity-50 px-2 py-1">
                             <?= $aktif ? 'AKTIF' : 'NONAKTIF' ?>
                         </span>
                     </td>
-                    <td class="text-muted small"><?= pg_e($r['WaktuData']) ?></td>
+                    <td class="text-muted small text-nowrap"><?= pg_e($r['WaktuData']) ?></td>
                     <?php if ($boleh_edit): ?>
                     <td class="text-end pe-4 text-nowrap">
                         <button type="button" class="btn btn-sm btn-outline-primary btn-edit-dil"

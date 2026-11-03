@@ -201,6 +201,77 @@ function pg_scope(array $u, string $alias, string $awalan, array &$p): string
     if ($u['up'] !== '') { $w[] = "$alias.{$awalan}Up = :s_up"; $p[':s_up'] = $u['up']; }
     return implode(' AND ', $w);
 }
+// ------------------------------------------------------------------
+// FILTER UNIT UNTUK HALAMAN MONITORING (akun tanpa AP / UP di session memilih dahulu)
+// ------------------------------------------------------------------
+/**
+ * Wilayah efektif halaman monitoring: unit session + pilihan GET (unit_ap, unit_up).
+ * Akun tanpa AP (mis. tingkat UPI) WAJIB memilih AP dulu (perlu_filter = true); UP selalu opsional.
+ * Pilihan dibatasi ke bawah unit akun: master_ap di bawah UPI, master_up di bawah AP. Mengembalikan:
+ * u_eff (untuk pg_scope), sel_ap, sel_up, opsi_ap, opsi_up, label, perlu_filter, par_unit (ikut di tautan/form), error.
+ */
+function pg_filter_unit(PDO $conn, array $u): array
+{
+    $f = ['sel_ap' => $u['ap'] !== '' ? $u['ap'] : trim((string) ($_GET['unit_ap'] ?? '')),
+          'sel_up' => $u['up'] !== '' ? $u['up'] : trim((string) ($_GET['unit_up'] ?? '')),
+          'opsi_ap' => [], 'opsi_up' => [], 'error' => ''];
+    $bagian   = explode(' › ', (string) $u['label']);
+    $nama_upi = $bagian[0] ?? $u['upi'];
+    $nama_ap  = $u['ap'] !== '' ? ($bagian[1] ?? $u['ap']) : '';
+    $nama_up  = $u['up'] !== '' ? ($bagian[2] ?? $u['up']) : '';
+    if ($u['upi'] !== '') {
+        try {
+            if ($u['ap'] === '') {
+                $st = $conn->prepare("SELECT UnitAp, COALESCE(NULLIF(SingkatanNama,''), UnitAp) FROM master_ap WHERE UnitUpi = ? AND StatusData = 'AKTIF' ORDER BY UnitAp");
+                $st->execute([$u['upi']]);
+                $f['opsi_ap'] = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+                if (isset($f['opsi_ap'][$f['sel_ap']])) $nama_ap = (string) $f['opsi_ap'][$f['sel_ap']]; else { $f['sel_ap'] = ''; $f['sel_up'] = ''; }
+            }
+            if ($u['up'] === '' && $f['sel_ap'] !== '') {
+                $st = $conn->prepare("SELECT UnitUp, COALESCE(NULLIF(SingkatanNama,''), UnitUp) FROM master_up WHERE UnitAp = ? AND StatusData = 'AKTIF' ORDER BY UnitUp");
+                $st->execute([$f['sel_ap']]);
+                $f['opsi_up'] = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+                if (isset($f['opsi_up'][$f['sel_up']])) $nama_up = (string) $f['opsi_up'][$f['sel_up']]; else $f['sel_up'] = '';
+            }
+        } catch (PDOException $e) {
+            $f['error'] = 'Gagal memuat daftar unit: ' . pg_e($e->getMessage());
+        }
+    }
+    $f['perlu_filter'] = $u['upi'] !== '' && $f['sel_ap'] === '';
+    $f['u_eff']  = ['upi' => $u['upi'], 'ap' => $f['sel_ap'], 'up' => $f['sel_up']];
+    $f['label']  = $nama_upi . ($nama_ap !== '' ? ' › ' . $nama_ap : '') . ($nama_up !== '' ? ' › ' . $nama_up : '');
+    $f['par_unit'] = ['unit_ap' => $u['ap'] === '' ? $f['sel_ap'] : '', 'unit_up' => $u['up'] === '' ? $f['sel_up'] : ''];
+    return $f;
+}
+
+/** Kartu pilihan unit (HTML) untuk akun tanpa AP / UP; kosong bila akun sudah punya AP dan UP. */
+function pg_filter_unit_html(array $f, array $u, string $action): string
+{
+    if ($u['ap'] !== '' && $u['up'] !== '') return '';
+    $h  = '<div class="card border-0 shadow-sm rounded-4 mb-4"><div class="card-body p-4">'
+        . '<h6 class="fw-bold mb-3"><span class="badge ' . ($f['perlu_filter'] ? 'bg-primary' : 'bg-success') . ' rounded-circle me-2">' . ($f['perlu_filter'] ? '1' : '✓') . '</span>Filter Unit '
+        . '<span class="fw-normal text-muted small">(pilih dahulu untuk menampilkan data)</span></h6>'
+        . '<form method="GET" action="" class="row g-2 align-items-end">' . pg_hidden($action);
+    if ($u['ap'] === '') {
+        $h .= '<div class="col-md-4"><label for="unit_ap" class="form-label small fw-bold text-secondary text-uppercase">Unit AP</label>'
+            . '<select class="form-select form-select-sm" id="unit_ap" name="unit_ap" onchange="var up=document.getElementById(\'unit_up\'); if (up) up.value=\'\'; this.form.submit();">'
+            . '<option value="">Pilih Unit AP...</option>';
+        foreach ($f['opsi_ap'] as $k => $n) $h .= '<option value="' . pg_e($k) . '"' . ((string) $k === $f['sel_ap'] ? ' selected' : '') . '>' . pg_e($n) . '</option>';
+        $h .= '</select></div>';
+    } else {
+        $h .= '<input type="hidden" name="unit_ap" value="' . pg_e($f['sel_ap']) . '">';
+    }
+    if ($u['up'] === '') {
+        $h .= '<div class="col-md-4"><label for="unit_up" class="form-label small fw-bold text-secondary text-uppercase">Unit UP <span class="fw-normal text-muted text-lowercase">(opsional)</span></label>'
+            . '<select class="form-select form-select-sm" id="unit_up" name="unit_up" onchange="this.form.submit();"' . ($f['sel_ap'] === '' ? ' disabled' : '') . '>'
+            . '<option value="">Semua UP</option>';
+        foreach ($f['opsi_up'] as $k => $n) $h .= '<option value="' . pg_e($k) . '"' . ((string) $k === $f['sel_up'] ? ' selected' : '') . '>' . pg_e($n) . '</option>';
+        $h .= '</select></div>';
+    }
+    $h .= '</form>' . ($f['perlu_filter'] ? '<div class="form-text mt-2">Pilih Unit AP terlebih dahulu, lalu (bila perlu) persempit ke satu Unit UP.</div>' : '') . '</div></div>';
+    return $h;
+}
+
 
 /**
  * Pilihan wilayah tujuan unggahan: AP di bawah UPI akun, lalu UP di bawah tiap AP.

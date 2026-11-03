@@ -239,7 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($paket as $id => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $id, $nm); }
                     $in = implode(',', array_fill(0, count($paket), '?'));
                     foreach (array_keys($paket) as $id) $param[] = (string) $id;
-                    $conn->prepare("UPDATE dil SET NamaPelanggan = CASE IdPel " . implode(' ', $case) . " END WHERE IdPel IN ($in) AND (NamaPelanggan IS NULL OR NamaPelanggan = '')")
+                    $conn->prepare("UPDATE dil SET Nama = CASE IdPel " . implode(' ', $case) . " END WHERE IdPel IN ($in) AND (Nama IS NULL OR Nama = '')")
                          ->execute($param);
                 }
 

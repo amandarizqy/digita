@@ -165,7 +165,7 @@ try {
     $where  = ["k.Periode = :periode", "k.LevelKepentingan IN ('RENDAH','MODERAT','TINGGI')", $sc_k_sql];
     $params = array_merge([':periode' => $periode], $sc_k_par);
     if ($keyword !== '') {
-        $where[] = "(k.IdPel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
+        $where[] = "(k.IdPel LIKE :kw1 OR d.Nama LIKE :kw2)";
         $params[':kw1'] = $params[':kw2'] = '%' . $keyword . '%';
     }
     if ($level !== '') {
@@ -181,7 +181,7 @@ try {
     $offset     = ($hal - 1) * $limit;
 
     $st = $conn->prepare("
-        SELECT k.IdPel, d.NamaPelanggan, k.LevelKepentingan, k.PosisiSR, k.SkalaPrioritas,
+        SELECT k.IdPel, d.Nama AS NamaPelanggan, k.LevelKepentingan, k.PosisiSR, k.SkalaPrioritas,
                k.UnitUp, COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp) AS NamaUnitUp
         FROM kategorisasi_risiko k
         LEFT JOIN dil d ON d.Idpel = k.IdPel

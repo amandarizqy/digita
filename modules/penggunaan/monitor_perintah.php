@@ -49,7 +49,7 @@ if (!$unit_siap) {
             $w = [$scope];
             if ($status !== '') { $w[] = 't.StatusData = :st'; $p[':st'] = $status; }
             if ($keyword !== '') {
-                $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.NamaPelanggan LIKE :k4)";
+                $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.Nama LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
             $join_n = $tab === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '';
@@ -61,8 +61,8 @@ if (!$unit_siap) {
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
             $extra = $tab === 'putus' ? ", MIN(n.TiketNyala) AS Rujukan" : ", t.TiketPutus AS Rujukan";
-            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData $extra
-                                  $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData" . ($tab === 'nyala' ? ", t.TiketPutus" : '') . "
+            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData $extra
+                                  $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.Nama, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData" . ($tab === 'nyala' ? ", t.TiketPutus" : '') . "
                                   ORDER BY t.WaktuData DESC, t.$pk DESC LIMIT :lim OFFSET :off");
         } else {
             // ------------------------- SMS (smsd) -------------------------
@@ -109,7 +109,7 @@ if (!$unit_siap) {
             $w = [$scope];
             if ($status !== '' && ($ada_status || $ada_processed)) { $w[] = 'o.Status = :st'; $p[':st'] = $status; } else $status = '';
             if ($keyword !== '') {
-                $w[] = '(o.Nomor LIKE :k1 OR o.TextDecoded LIKE :k2 OR o.CreatorID LIKE :k3 OR b.IdPel LIKE :k4 OR l.NamaPelanggan LIKE :k5)';
+                $w[] = '(o.Nomor LIKE :k1 OR o.TextDecoded LIKE :k2 OR o.CreatorID LIKE :k3 OR b.IdPel LIKE :k4 OR l.Nama LIKE :k5)';
                 foreach (['k1', 'k2', 'k3', 'k4', 'k5'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
             $where = 'WHERE ' . implode(' AND ', $w);
@@ -121,7 +121,7 @@ if (!$unit_siap) {
 
             $st = $conn->prepare("SELECT o.ID, o.Nomor, o.TextDecoded, o.CreatorID, o.Waktu, o.Status,
                                          IF(o.CreatorID LIKE 'digita:%' AND LENGTH(o.CreatorID) - LENGTH(REPLACE(o.CreatorID, ':', '')) >= 3, SUBSTRING_INDEX(o.CreatorID, ':', -1), NULL) AS Tiket,
-                                         MIN(b.IdPel) AS IdPel, MIN(b.NoRef) AS NoRef, MIN(NULLIF(l.NamaPelanggan,'')) AS NamaPelanggan
+                                         MIN(b.IdPel) AS IdPel, MIN(b.NoRef) AS NoRef, MIN(NULLIF(l.Nama,'')) AS NamaPelanggan
                                   $dasar $where GROUP BY $gk ORDER BY o.Waktu DESC, o.ID DESC LIMIT :lim OFFSET :off");
         }
         foreach ($p as $k => $v) $st->bindValue($k, $v);

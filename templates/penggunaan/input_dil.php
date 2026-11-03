@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/input_dil.php  -  Input DIL
 // Variabel dari modules/penggunaan/input_dil.php:
-//   $kpi, $csrf, $boleh_monitor, $pesan_sukses, $pesan_error, $detail_import
+//   $kpi, $csrf, $unit_awal, $boleh_monitor, $pesan_sukses, $pesan_error, $detail_import
 
 echo pg_header([
     'title'    => 'Input DIL',
@@ -39,28 +39,57 @@ if (!empty($detail_import)) {
 </div>
 
 <!-- FORM TAMBAH -->
+<?php
+// [name, label, maxlength, kolom bootstrap, atribut tambahan]
+$fld = function (string $name, string $label, int $max, string $col = 'col-md-3', string $extra = '', string $val = '') {
+    $id = 'f_' . $name;
+    return '<div class="' . $col . '"><label for="' . $id . '" class="form-label small fw-bold text-secondary text-uppercase">' . pg_e($label) . '</label>'
+         . '<input type="text" class="form-control form-control-sm" id="' . $id . '" name="' . $name . '" maxlength="' . $max . '" value="' . pg_e($val) . '" ' . $extra . '></div>';
+};
+$judul = fn(string $t, string $ic) => '<div class="col-12"><div class="small fw-bold text-primary border-bottom pb-1 mt-2"><i class="bi ' . $ic . ' me-1"></i>' . $t . '</div></div>';
+?>
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
-        <h6 class="fw-bold mb-3"><i class="bi bi-person-plus me-2 text-primary"></i>Tambah Pelanggan</h6>
-        <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" class="row g-3 align-items-end">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0"><i class="bi bi-person-plus me-2 text-primary"></i>Tambah Pelanggan</h6>
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-50 px-3 py-2">Status AKTIF (otomatis)</span>
+        </div>
+        <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" class="row g-3">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="tambah">
-            <div class="col-md-3">
-                <label for="idpel" class="form-label small fw-bold text-secondary text-uppercase">IdPel</label>
-                <input type="text" class="form-control font-monospace" id="idpel" name="idpel" maxlength="12" minlength="12"
-                       pattern="[A-Za-z0-9]{12}" placeholder="12 karakter" required>
-            </div>
-            <div class="col-md-5">
-                <label for="nama" class="form-label small fw-bold text-secondary text-uppercase">Nama Pelanggan</label>
-                <input type="text" class="form-control" id="nama" name="nama" maxlength="50" placeholder="Maks. 50 karakter" required>
-            </div>
+
+            <?= $judul('Identitas Pelanggan', 'bi-person-vcard') ?>
+            <?= $fld('idpel', 'IdPel *', 12, 'col-md-3', 'minlength="12" pattern="[A-Za-z0-9]{12}" placeholder="12 karakter" required style="font-family:monospace"') ?>
+            <?= $fld('nama', 'Nama *', 50, 'col-md-5', 'placeholder="Maks. 50 karakter" required') ?>
+            <?= $fld('nomortlp', 'No. Telepon', 20, 'col-md-2', 'inputmode="tel"') ?>
+            <?= $fld('nomorhp', 'No. HP', 20, 'col-md-2', 'inputmode="tel"') ?>
+            <?= $fld('alamat', 'Alamat', 100, 'col-12', 'placeholder="Maks. 100 karakter"') ?>
+
+            <?= $judul('Data Layanan & Meter', 'bi-lightning-charge') ?>
+            <?= $fld('goltar', 'Gol. Tarif', 5, 'col-md-2', 'placeholder="mis. R1M"') ?>
+            <?= $fld('daya', 'Daya (VA)', 9, 'col-md-2', 'inputmode="numeric" pattern="[0-9]*" placeholder="mis. 900"') ?>
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary text-uppercase">Status</label>
-                <div><span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-50 px-3 py-2">AKTIF (otomatis)</span></div>
+                <label for="f_tegukur" class="form-label small fw-bold text-secondary text-uppercase">Tegangan Ukur</label>
+                <select class="form-select form-select-sm" id="f_tegukur" name="tegukur">
+                    <option value="">- pilih -</option>
+                    <option value="TR">TR</option><option value="TM">TM</option><option value="TT">TT</option>
+                </select>
             </div>
-            <div class="col-md-2 d-grid">
-                <button type="submit" class="btn btn-primary shadow-sm"><i class="bi bi-plus-lg me-1"></i> Simpan</button>
+            <?= $fld('jenismk', 'Jenis MK', 10, 'col-md-2', 'placeholder="mis. N"') ?>
+            <?= $fld('kdpembmeter', 'Kd. Pemb. Meter', 1, 'col-md-2', 'placeholder="A/M/P/L/E"') ?>
+            <?= $fld('nomorkwh', 'Nomor kWh Meter', 15, 'col-md-2', 'inputmode="numeric"') ?>
+            <?= $fld('aktifasi', 'Aktifasi', 15, 'col-md-3', 'placeholder="mis. AKTIF (A)"') ?>
+            <?= $fld('produkprabayar', 'Produk Prabayar', 50, 'col-md-4') ?>
+
+            <?= $judul('Unit', 'bi-building') ?>
+            <?= $fld('unitupi', 'Unit UPI', 2, 'col-md-2', '', $unit_awal['UnitUpi']) ?>
+            <?= $fld('unitap', 'Unit AP', 5, 'col-md-2', '', $unit_awal['UnitAp']) ?>
+            <?= $fld('unitup', 'Unit UP', 5, 'col-md-2', '', $unit_awal['UnitUp']) ?>
+            <div class="col-md-6 d-flex align-items-end justify-content-end gap-2">
+                <button type="reset" class="btn btn-light btn-sm px-3">Kosongkan</button>
+                <button type="submit" class="btn btn-primary btn-sm px-4 shadow-sm"><i class="bi bi-plus-lg me-1"></i> Simpan</button>
             </div>
+            <div class="col-12 small text-muted">* wajib diisi. Index Prioritas diisi otomatis oleh modul Perencanaan.</div>
         </form>
     </div>
 </div>
@@ -76,15 +105,14 @@ if (!empty($detail_import)) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 10 MB), sheet pertama, baris pertama boleh berupa judul:</p>
-                <table class="table table-sm table-bordered small text-center mb-3" style="max-width:320px;">
-                    <thead class="table-light"><tr><th>A</th><th>B</th></tr></thead>
-                    <tbody><tr><td>IdPel</td><td>Nama Pelanggan</td></tr><tr><td>123456789012</td><td>BUDI SANTOSO</td></tr></tbody>
-                </table>
+                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 10 MB) hasil <strong>Monitoring DIL Detail</strong>, sheet pertama. Baris judul dicari otomatis, jadi kop laporan di atasnya boleh ada.</p>
+                <p class="small text-muted mb-1">Kolom yang dibaca (berdasarkan judul kolom):</p>
+                <div class="small font-monospace text-secondary mb-3">IDPEL, NAMA, ALAMAT, NO TLP, NO HP, TARIF, DAYA, JENIS MK, TEGUKUR, KDPEMBMETER, NOMORKWH, AKTIFASI, PRODUK PRABAYAR, UNITUP, UNITAP, UNITUPI</div>
                 <ul class="small text-muted ps-3">
+                    <li>Data dimuat ke tabel penampung <code>transit_dil</code>, dipindahkan ke DIL, lalu penampung dikosongkan.</li>
                     <li>Semua pelanggan yang diimpor otomatis berstatus <strong>AKTIF</strong>.</li>
                     <li>IdPel yang sudah ada dilewati, data lama tidak diubah.</li>
-                    <li>IdPel angka kurang dari 12 digit dilengkapi nol di depan.</li>
+                    <li>IDPEL dan NAMA wajib ada di judul kolom.</li>
                 </ul>
                 <input type="file" name="file_xlsx" class="form-control" accept=".xlsx" required>
             </div>
@@ -95,3 +123,41 @@ if (!empty($detail_import)) {
         </form>
     </div>
 </div>
+
+<!-- Loader saat Simpan / Import. Memakai window.showPageLoader (assets/js/loader.js); bila file aset itu
+     tidak termuat (404 / cache lama), overlay cadangan di bawah tetap tampil. -->
+<script>
+(function () {
+    function tampil(teks) {
+        var ov = document.getElementById('page-loader');
+        if (ov && typeof window.showPageLoader === 'function') {
+            var t = ov.querySelector('.txt'); if (t && teks) t.textContent = teks;
+            window.showPageLoader();
+            ov.classList.add('show');                      // langsung, tanpa menunggu timer
+            return;
+        }
+        if (document.getElementById('dil-loader-cadangan')) return;
+        var d = document.createElement('div');
+        d.id = 'dil-loader-cadangan';
+        d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.8);font-weight:600;color:#0b253a';
+        d.innerHTML = '<div style="width:56px;height:56px;border:5px solid #dbe7f5;border-top-color:#0d6efd;border-radius:50%;animation:dilspin .8s linear infinite"></div>'
+                    + '<div style="margin-top:14px"></div><style>@keyframes dilspin{to{transform:rotate(360deg)}}</style>';
+        d.children[1].textContent = teks || 'Memproses…';
+        document.body.appendChild(d);
+    }
+    document.querySelectorAll('form').forEach(function (f) {
+        var aksi = f.querySelector('input[name="aksi"]');
+        if (!aksi || (aksi.value !== 'tambah' && aksi.value !== 'import')) return;
+        f.addEventListener('submit', function (e) {
+            if (e.defaultPrevented) return;
+            tampil(aksi.value === 'import' ? 'Mengimpor data DIL, mohon tunggu…' : 'Menyimpan…');
+        });
+    });
+    // kembali lewat tombol Back: pastikan overlay tidak tertinggal
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;
+        var c = document.getElementById('dil-loader-cadangan'); if (c) c.remove();
+        if (typeof window.hidePageLoader === 'function') window.hidePageLoader();
+    });
+})();
+</script>

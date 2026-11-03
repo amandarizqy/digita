@@ -305,7 +305,7 @@ try {
 
     if ($skala_dipilih >= 1 && $skala_dipilih <= 9) {
         $stmt_pv = $conn->prepare("
-            SELECT h.Peringkat, h.IdPel, d.NamaPelanggan, h.TotalTagihan, h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas
+            SELECT h.Peringkat, h.IdPel, d.Nama AS NamaPelanggan, h.TotalTagihan, h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas
             FROM hasil_prioritas h
             LEFT JOIN dil d ON d.Idpel = h.IdPel
             WHERE h.Periode = :periode AND h.SkalaPrioritas = :skala AND $scope_h_sql

@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/monitor_dil.php  -  Monitoring DIL (tabel `dil`)
-// Fitur: cari, filter status / nama kosong, paginasi, edit nama & status (hanya akun yang berhak Input DIL).
+// Menampilkan semua kolom tabel dil. Fitur: cari (IdPel, nama, alamat, telepon, kWh, tarif, unit, akun), filter status / nama kosong, paginasi, edit nama & status (hanya akun yang berhak Input DIL).
 // IdPel adalah kunci, jadi tidak dapat diubah.
 
 $pesan_sukses = '';
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Nama pelanggan wajib diisi (maksimal 50 karakter).';
         } else {
             try {
-                $st = $conn->prepare("UPDATE dil SET NamaPelanggan = ?, StatusData = ?, WaktuData = NOW() WHERE IdPel = ?");
+                $st = $conn->prepare("UPDATE dil SET Nama = ?, StatusData = ?, WaktuData = NOW() WHERE IdPel = ?");
                 $st->execute([$nama, $baru, $idpel]);
                 $pesan_sukses = 'Data IdPel <strong>' . pg_e($idpel) . '</strong> berhasil diperbarui.';
             } catch (PDOException $e) {
@@ -84,15 +84,17 @@ try {
         if (isset($kpi[$r['StatusData']])) $kpi[$r['StatusData']] = (int) $r['c'];
         $kpi['total'] += (int) $r['c'];
     }
-    $kpi['KOSONG'] = (int) $conn->query("SELECT COUNT(*) FROM dil WHERE NamaPelanggan IS NULL OR NamaPelanggan = ''")->fetchColumn();
+    $kpi['KOSONG'] = (int) $conn->query("SELECT COUNT(*) FROM dil WHERE Nama IS NULL OR Nama = ''")->fetchColumn();
 
     $where = []; $p = [];
     if ($keyword !== '') {
-        $where[] = '(IdPel LIKE :k1 OR NamaPelanggan LIKE :k2)';
-        $p[':k1'] = $p[':k2'] = '%' . $keyword . '%';
+        $cari = ['IdPel', 'Nama', 'Alamat', 'NomorTlp', 'NomorHp', 'NomorKwh', 'GolTar', 'UnitUp', 'NamaAkun'];
+        $w_k = [];
+        foreach ($cari as $i => $c) { $w_k[] = "$c LIKE :k$i"; $p[":k$i"] = '%' . $keyword . '%'; }
+        $where[] = '(' . implode(' OR ', $w_k) . ')';
     }
     if ($status === 'KOSONG') {
-        $where[] = "(NamaPelanggan IS NULL OR NamaPelanggan = '')";
+        $where[] = "(Nama IS NULL OR Nama = '')";
     } elseif ($status !== '') {
         $where[] = 'StatusData = :st';
         $p[':st'] = $status;
@@ -104,7 +106,7 @@ try {
     $total_data = (int) $st->fetchColumn();
     $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-    $st = $conn->prepare("SELECT IdPel, NamaPelanggan, IndexPrioritas, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
+    $st = $conn->prepare("SELECT IdPel, Nama AS NamaPelanggan, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorKwh, Aktifasi, ProdukPrabayar, IndexPrioritas, NamaAkun, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
     foreach ($p as $k => $v) $st->bindValue($k, $v);
     $st->bindValue(':lim', $limit, PDO::PARAM_INT);
     $st->bindValue(':off', ($hal - 1) * $limit, PDO::PARAM_INT);
