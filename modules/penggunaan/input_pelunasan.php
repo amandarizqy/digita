@@ -124,7 +124,7 @@ if ($unit_siap) {
             $p = [':per' => $tahun . $bulan_f . '%'];
             $scope = pg_scope($u, 'd', 'Unit', $p);
             $w = ['d.ThBlRek LIKE :per', 'p.IdPel IS NULL', $scope];
-            if ($keyword !== '') { $w[] = '(d.IdPel LIKE :k1 OR l.NamaPelanggan LIKE :k2)'; $p[':k1'] = $p[':k2'] = '%' . $keyword . '%'; }
+            if ($keyword !== '') { $w[] = '(d.IdPel LIKE :k1 OR l.Nama LIKE :k2)'; $p[':k1'] = $p[':k2'] = '%' . $keyword . '%'; }
             $from = "FROM dpp d
                      LEFT JOIN pelunasan_ap2t p ON p.IdPel = d.IdPel AND p.ThBlRek = d.ThBlRek
                      LEFT JOIN dil l ON l.IdPel = d.IdPel
@@ -136,7 +136,7 @@ if ($unit_siap) {
             $ringkas = ['jumlah' => $total_data, 'rp' => $rp];
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $st = $conn->prepare("SELECT d.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, d.ThBlRek, d.RpTag $from
+            $st = $conn->prepare("SELECT d.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, d.ThBlRek, d.RpTag $from
                                   ORDER BY d.ThBlRek DESC, d.IdPel LIMIT :lim OFFSET :off");
             foreach ($p as $k => $v) $st->bindValue($k, $v);
             $st->bindValue(':lim', $limit, PDO::PARAM_INT);

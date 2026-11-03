@@ -35,7 +35,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -105,7 +105,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -147,7 +147,7 @@ try {
         $total_dil = (int) $st->fetchColumn();
     } catch (PDOException $e) {
         $total_dil = 0;
-        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan: ' . $e->getMessage());
+        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan');
     }
 
     [$sc_k_sql, $sc_k_par] = $build_scope('k');
@@ -165,7 +165,7 @@ try {
     $where  = ["k.Periode = :periode", "k.LevelKepentingan IN ('RENDAH','MODERAT','TINGGI')", $sc_k_sql];
     $params = array_merge([':periode' => $periode], $sc_k_par);
     if ($keyword !== '') {
-        $where[] = "(k.IdPel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
+        $where[] = "(k.IdPel LIKE :kw1 OR d.Nama LIKE :kw2)";
         $params[':kw1'] = $params[':kw2'] = '%' . $keyword . '%';
     }
     if ($level !== '') {
@@ -181,7 +181,7 @@ try {
     $offset     = ($hal - 1) * $limit;
 
     $st = $conn->prepare("
-        SELECT k.IdPel, d.NamaPelanggan, k.LevelKepentingan, k.PosisiSR, k.SkalaPrioritas,
+        SELECT k.IdPel, d.Nama AS NamaPelanggan, k.LevelKepentingan, k.PosisiSR, k.SkalaPrioritas,
                k.UnitUp, COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp) AS NamaUnitUp
         FROM kategorisasi_risiko k
         LEFT JOIN dil d ON d.Idpel = k.IdPel
@@ -198,7 +198,7 @@ try {
     $st->execute();
     $list_hasil = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $pesan_error = "Gagal memuat hasil tingkat kepentingan: " . $e->getMessage();
+    $pesan_error = "Gagal memuat hasil tingkat kepentingan";
 }
 
 include __DIR__ . '/../../templates/perencanaan/hasil_kepentingan.php';

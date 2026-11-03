@@ -186,7 +186,7 @@ if ($unit_siap) {
 
             $w = [$scope];
             if ($keyword !== '') {
-                $w[] = '(b.NoRef LIKE :k1 OR b.IdPel LIKE :k2 OR b.NomorBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR l.NamaPelanggan LIKE :k5)';
+                $w[] = '(b.NoRef LIKE :k1 OR b.IdPel LIKE :k2 OR b.NomorBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR l.Nama LIKE :k5)';
                 foreach (['k1', 'k2', 'k3', 'k4', 'k5'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
             if ($relay !== '') $w[] = $relay === 'ON' ? $sql_relay_on : $sql_relay_off;
@@ -198,7 +198,7 @@ if ($unit_siap) {
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
             $st = $conn->prepare("SELECT b.NoRef, MIN(b.NomorBarang) AS NomorBarang, MIN(b.ImeiModem) AS ImeiModem, MIN(b.StatusRelay) AS StatusRelay,
-                                         MIN(b.IdPel) AS IdPel, MIN(NULLIF(l.NamaPelanggan,'')) AS NamaPelanggan, MIN(b.UnitUp) AS UnitUp
+                                         MIN(b.IdPel) AS IdPel, MIN(NULLIF(l.Nama,'')) AS NamaPelanggan, MIN(b.UnitUp) AS UnitUp
                                   $from GROUP BY b.NoRef ORDER BY b.NoRef LIMIT :lim OFFSET :off");
         } else {
             $c = $tiket_cfg[$sumber]; $pk = $c['pk']; $tb = $c['tabel'];
@@ -216,7 +216,7 @@ if ($unit_siap) {
             if ($tindakan === 'BELUM')     $w[] = "a.$pk IS NULL";
             elseif ($tindakan === 'SUDAH') $w[] = "a.$pk IS NOT NULL";
             if ($keyword !== '') {
-                $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.NamaPelanggan LIKE :k4)";
+                $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.Nama LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
             $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '') . " WHERE " . implode(' AND ', $w);
@@ -226,9 +226,9 @@ if ($unit_siap) {
             $total_data = (int) $st->fetchColumn();
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk AS AdaTindakan, a.SmsId, a.JenisTindakan, a.WaktuData AS WaktuTindakan"
+            $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk AS AdaTindakan, a.SmsId, a.JenisTindakan, a.WaktuData AS WaktuTindakan"
                                  . ($sumber === 'putus' ? ", MIN(n.TiketNyala) AS TiketNyala" : '')
-                                 . " $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk, a.SmsId, a.JenisTindakan, a.WaktuData
+                                 . " $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.Nama, t.ThBlRek, t.NomorBarang, t.UnitUp, t.StatusData, t.WaktuData, a.$pk, a.SmsId, a.JenisTindakan, a.WaktuData
                                    ORDER BY t.WaktuData DESC, t.$pk DESC LIMIT :lim OFFSET :off");
         }
         foreach ($p as $k => $v) $st->bindValue($k, $v);

@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else {
             try {
                 // IdPel WAJIB sudah terdaftar di DIL; halaman ini tidak pernah menambah data ke DIL
-                $st = $conn->prepare("SELECT NamaPelanggan FROM dil WHERE IdPel = ?");
+                $st = $conn->prepare("SELECT Nama AS NamaPelanggan FROM dil WHERE IdPel = ?");
                 $st->execute([$idpel]);
                 $dil = $st->fetch(PDO::FETCH_ASSOC);
                 $punya_barang = false;
@@ -312,7 +312,7 @@ if ($unit_lengkap) {
         $p = []; $scope = pg_scope($ut, 'b', 'Unit', $p);
         $w = ['b.IdPel IS NOT NULL', $scope];
         if ($keyword !== '') {
-            $w[] = '(b.IdPel LIKE :k1 OR b.NoRef LIKE :k2 OR b.SimIdBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR b.NomorBarang LIKE :k6 OR l.NamaPelanggan LIKE :k5)';
+            $w[] = '(b.IdPel LIKE :k1 OR b.NoRef LIKE :k2 OR b.SimIdBarang LIKE :k3 OR b.ImeiModem LIKE :k4 OR b.NomorBarang LIKE :k6 OR l.Nama LIKE :k5)';
             foreach (['k1', 'k2', 'k3', 'k4', 'k5', 'k6'] as $k) $p[":$k"] = '%' . $keyword . '%';
         }
         $from = "FROM `$sumber_barang` b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE " . implode(' AND ', $w);
@@ -322,8 +322,8 @@ if ($unit_lengkap) {
         $total_cari = (int) $st->fetchColumn();
         $hal = min($hal, max(1, (int) ceil($total_cari / $limit)));
 
-        $st = $conn->prepare("SELECT b.IdPel, NULLIF(l.NamaPelanggan,'') AS NamaPelanggan, COUNT(*) AS jml, MIN(b.NoRef) AS NoRef, MIN(b.SimIdBarang) AS SimIdBarang, MIN(b.ImeiModem) AS ImeiModem, MIN(b.NomorBarang) AS NomorBarang
-                              $from GROUP BY b.IdPel, l.NamaPelanggan ORDER BY b.IdPel LIMIT :lim OFFSET :off");
+        $st = $conn->prepare("SELECT b.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, COUNT(*) AS jml, MIN(b.NoRef) AS NoRef, MIN(b.SimIdBarang) AS SimIdBarang, MIN(b.ImeiModem) AS ImeiModem, MIN(b.NomorBarang) AS NomorBarang
+                              $from GROUP BY b.IdPel, l.Nama ORDER BY b.IdPel LIMIT :lim OFFSET :off");
         foreach ($p as $k => $v) $st->bindValue($k, $v);
         $st->bindValue(':lim', $limit, PDO::PARAM_INT);
         $st->bindValue(':off', ($hal - 1) * $limit, PDO::PARAM_INT);
@@ -334,7 +334,7 @@ if ($unit_lengkap) {
         $pil = (string) ($_GET['idpel'] ?? '');
         if (preg_match('/^\d{12}$/', $pil)) {
             $pp = []; $sc2 = pg_scope($ut, 'b', 'Unit', $pp); $pp[':pil'] = $pil;
-            $st = $conn->prepare("SELECT NULLIF(l.NamaPelanggan,'') AS nama, COUNT(*) AS jml FROM `$sumber_barang` b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE b.IdPel = :pil AND $sc2 GROUP BY l.NamaPelanggan");
+            $st = $conn->prepare("SELECT NULLIF(l.Nama,'') AS nama, COUNT(*) AS jml FROM `$sumber_barang` b INNER JOIN dil l ON l.IdPel = b.IdPel WHERE b.IdPel = :pil AND $sc2 GROUP BY l.Nama");
             $st->execute($pp);
             if ($r = $st->fetch(PDO::FETCH_ASSOC)) { $idpel_pilih = $pil; $info_pilih = $r; }
         }

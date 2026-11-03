@@ -30,7 +30,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -95,7 +95,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -151,7 +151,7 @@ try {
     $params = array_merge([':periode' => $periode], $sc_k_par);
 
     if ($keyword !== '') {
-        $where[] = "(k.IdPel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
+        $where[] = "(k.IdPel LIKE :kw1 OR d.Nama LIKE :kw2)";
         $params[':kw1'] = $params[':kw2'] = '%' . $keyword . '%';
     }
     if ($prioritas !== '' && ctype_digit($prioritas)) {
@@ -180,7 +180,7 @@ try {
     $offset     = ($hal - 1) * $limit;
 
     $st = $conn->prepare("
-        SELECT k.IdPel AS Idpel, d.NamaPelanggan, k.Periode, k.PosisiSR, k.LevelKeterlambatan, k.LevelKepentingan,
+        SELECT k.IdPel AS Idpel, d.Nama AS NamaPelanggan, k.Periode, k.PosisiSR, k.LevelKeterlambatan, k.LevelKepentingan,
                k.LevelKemungkinan, k.LevelDampak, k.Kuadran, k.SkalaPrioritas,
                COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp) AS NamaUnitUp
         FROM kategorisasi_risiko k
@@ -198,7 +198,7 @@ try {
     $st->execute();
     $list_hasil = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $pesan_error = "Gagal memuat hasil evaluasi risiko: " . $e->getMessage();
+    $pesan_error = "Gagal memuat hasil evaluasi risiko";
     $offset = 0;
 }
 

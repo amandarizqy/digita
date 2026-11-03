@@ -32,7 +32,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -97,7 +97,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -194,7 +194,7 @@ try {
         $params[':skala']  = $skala_filter;
     }
     if ($keyword !== '') {
-        $where[]         = "(h.IdPel LIKE :kw1 OR d.NamaPelanggan LIKE :kw2)";
+        $where[]         = "(h.IdPel LIKE :kw1 OR d.Nama LIKE :kw2)";
         $params[':kw1']  = '%' . $keyword . '%';
         $params[':kw2']  = '%' . $keyword . '%';
     }
@@ -213,7 +213,7 @@ try {
     $offset      = ($page - 1) * $per_page;
 
     $stmt_list = $conn->prepare("
-        SELECT h.Peringkat, h.IdPel, d.NamaPelanggan, h.SkalaPrioritas, h.TotalTagihan,
+        SELECT h.Peringkat, h.IdPel, d.Nama AS NamaPelanggan, h.SkalaPrioritas, h.TotalTagihan,
                h.JumlahTelat, h.JumlahLewatBulan, h.SkorPrioritas,
                k.LevelKepentingan, k.LevelKeterlambatan, k.LevelDampak, k.PosisiSR,
                COALESCE(NULLIF(mu.SingkatanNama, ''), h.UnitUp) AS NamaUnitUp
@@ -232,7 +232,7 @@ try {
     if ($e->getCode() === '42S02') {
         $tabel_belum_ada = true;
     } else {
-        $pesan_error = "Gagal memuat hasil prioritas: " . $e->getMessage();
+        $pesan_error = "Gagal memuat hasil prioritas";
     }
 }
 
