@@ -1,3 +1,21 @@
+<?php
+// Ambil daftar kartu untuk pilihan Smart Search manual
+$unit_ap = $_SESSION['UnitAp'] ?? '';
+$unit_up = $_SESSION['UnitUp'] ?? '';
+$kode_hak = $_SESSION['KodeHak'] ?? '';
+
+if ($kode_hak === 'SA.KP') {
+    $filter_q = "1=1";
+} elseif ($kode_hak === 'TL.UP') {
+    $filter_q = "KodeUp = '$unit_up'";
+} else {
+    $filter_q = "KodeAp = '$unit_ap' AND (KodeUp IS NULL OR KodeUp = '')";
+}
+
+$stmt_kartu = $conn->query("SELECT SimId, NomorAkun FROM master_nomor WHERE $filter_q ORDER BY SimId ASC");
+$list_kartu_dropdown = $stmt_kartu->fetchAll(PDO::FETCH_ASSOC);
+?>
+
 <div class="card shadow mb-4 border-0">
     <div class="card-body p-4">
         
@@ -11,14 +29,21 @@
         </ul>
         
         <div class="tab-content" id="pills-tabContentPulsa">
-            <!-- Form Manual -->
+            <!-- Form Manual dengan Select2 Smart Search -->
             <div class="tab-pane fade show active" id="manual_pulsa" role="tabpanel">
                 <form action="modules/pengadaan/proses_kartu.php?action=pulsa" method="POST">
                     <input type="hidden" name="metode" value="manual">
                     <div class="row mb-3">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label fw-bold text-muted small">SIM ID (Tujuan)</label>
-                            <input type="text" class="form-control" name="sim_id" placeholder="Masukkan ICCID Kartu" required autofocus>
+                            <label class="form-label fw-bold text-muted small">Cari / Pilih SIM ID Tujuan</label>
+                            <select class="form-select select2-pulsa-baru" name="sim_id" required style="width: 100%;">
+                                <option value="">-- Ketik / Pilih SimId --</option>
+                                <?php foreach ($list_kartu_dropdown as $k): ?>
+                                    <option value="<?= htmlspecialchars($k['SimId']) ?>">
+                                        SimId: <?= htmlspecialchars($k['SimId']) ?> (No: +<?= htmlspecialchars($k['NomorAkun']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label fw-bold text-muted small">Nominal Pengisian (Rp)</label>
@@ -36,7 +61,7 @@
                 </form>
             </div>
 
-            <!-- Form Upload Excel -->
+            <!-- Form Upload Excel / CSV -->
             <div class="tab-pane fade" id="excel_pulsa" role="tabpanel">
                 <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
                     <i class="bi bi-info-circle-fill fs-4 me-3"></i>
@@ -62,3 +87,19 @@
 
     </div>
 </div>
+
+<!-- DEPENDENCY SELECT2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('.select2-pulsa-baru').select2({
+        theme: 'bootstrap-5',
+        placeholder: "-- Ketik / Pilih SimId --",
+        allowClear: true,
+        width: '100%'
+    });
+});
+</script>

@@ -1,5 +1,5 @@
 <div class="card shadow mb-4 border-0">
-    <div class="card-header bg-white py-3">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="m-0 font-weight-bold text-primary"><i class="bi bi-list-ul me-1"></i>Daftar Aktivasi Perdana</h6>
     </div>
     <div class="card-body p-0">
@@ -89,42 +89,22 @@
             
             <nav aria-label="Page navigation">
                 <ul class="pagination pagination-sm mb-0">
-                    <!-- Tombol Sebelumnya -->
                     <li class="page-item <?= ($data['paging']['current_page'] <= 1) ? 'disabled' : '' ?>">
                         <a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=<?= htmlspecialchars($sub) ?>&view=daftar&limit=<?= $data['paging']['limit'] ?>&p=<?= $data['paging']['current_page'] - 1 ?><?= !empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '' ?>">
                             <i class="bi bi-chevron-left"></i> Prev
                         </a>
                     </li>
-
                     <?php 
-                    // Logika rentang halaman agar tidak terlalu panjang jika data banyak
                     $current = $data['paging']['current_page'];
                     $total_p = $data['paging']['total_pages'];
                     $start = max(1, $current - 2);
                     $end = min($total_p, $current + 2);
-
-                    if ($start > 1) {
-                        echo '<li class="page-item"><a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=' . $sub . '&view=daftar&limit=' . $data['paging']['limit'] . '&p=1' . (!empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '') . '">1</a></li>';
-                        if ($start > 2) { echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; }
-                    }
-
                     for ($i = $start; $i <= $end; $i++): 
                     ?>
                         <li class="page-item <?= ($i == $current) ? 'active' : '' ?>">
-                            <a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=<?= htmlspecialchars($sub) ?>&view=daftar&limit=<?= $data['paging']['limit'] ?>&p=<?= $i ?><?= !empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '' ?>">
-                                <?= $i ?>
-                            </a>
+                            <a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=<?= htmlspecialchars($sub) ?>&view=daftar&limit=<?= $data['paging']['limit'] ?>&p=<?= $i ?><?= !empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '' ?>"><?= $i ?></a>
                         </li>
-                    <?php 
-                    endfor; 
-
-                    if ($end < $total_p) {
-                        if ($end < $total_p - 1) { echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; }
-                        echo '<li class="page-item"><a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=' . $sub . '&view=daftar&limit=' . $data['paging']['limit'] . '&p=' . $total_p . (!empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '') . '">' . $total_p . '</a></li>';
-                    }
-                    ?>
-
-                    <!-- Tombol Selanjutnya -->
+                    <?php endfor; ?>
                     <li class="page-item <?= ($data['paging']['current_page'] >= $data['paging']['total_pages']) ? 'disabled' : '' ?>">
                         <a class="page-link" href="index.php?page=pengadaan&menu=kartu&sub=<?= htmlspecialchars($sub) ?>&view=daftar&limit=<?= $data['paging']['limit'] ?>&p=<?= $data['paging']['current_page'] + 1 ?><?= !empty($_GET['q']) ? '&q=' . urlencode($_GET['q']) : '' ?>">
                             Next <i class="bi bi-chevron-right"></i>
@@ -134,7 +114,6 @@
             </nav>
         </div>
         <?php endif; ?>
-
     </div>
 </div>
 
@@ -175,21 +154,17 @@
   </div>
 </div>
 
-<!-- SCRIPT JAVASCRIPT UNTUK MODAL ISI PULSA -->
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const modalEl = document.getElementById('modalIsiPulsa');
     if (modalEl) {
         const modal = new bootstrap.Modal(modalEl);
-        
         document.querySelectorAll('.btn-isi-pulsa').forEach(button => {
             button.addEventListener('click', function() {
                 let simId = this.getAttribute('data-simid');
                 let nomor = this.getAttribute('data-nomor');
-                
                 document.getElementById('modal_sim_id').value = simId;
                 document.getElementById('modal_nomor_akun').value = '+' + nomor;
-                
                 modal.show();
             });
         });
