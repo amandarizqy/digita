@@ -33,27 +33,34 @@ $struktur = [
     ],
 ];
 
+// Semua sub-menu tetap ditampilkan (seperti Master); yang tidak boleh diakses ditandai terkunci (elemen ke-4)
 foreach ($struktur as $kunci_menu => $m) {
     foreach ($m['sub'] as $kunci_sub => $info) {
-        if (empty($boleh[$kunci_sub])) {
-            unset($struktur[$kunci_menu]['sub'][$kunci_sub]);
-        }
-    }
-    if (!$struktur[$kunci_menu]['sub']) {
-        unset($struktur[$kunci_menu]);
+        $struktur[$kunci_menu]['sub'][$kunci_sub][3] = empty($boleh[$kunci_sub]);
     }
 }
+
+// Sub-menu pertama yang boleh dibuka (dipakai bila alamat yang diminta terkunci / tidak dikenal)
+$pertama_boleh = function (array $daftar_sub): string {
+    foreach ($daftar_sub as $k => $info) {
+        if (empty($info[3])) return (string) $k;
+    }
+    return '';
+};
 
 $sub  = (string) ($_GET['sub'] ?? '');
 $menu = (string) ($_GET['menu'] ?? '');
 if ($sub !== '') {
     $menu = ph_menu_dari_sub($sub);
 }
-if (!isset($struktur[$menu])) {
-    $menu = (string) (array_key_first($struktur) ?? '');
+if (!isset($struktur[$menu]) || $pertama_boleh($struktur[$menu]['sub']) === '') {
+    $menu = '';
+    foreach ($struktur as $km => $m) {
+        if ($pertama_boleh($m['sub']) !== '') { $menu = (string) $km; break; }
+    }
 }
-if ($menu !== '' && !isset($struktur[$menu]['sub'][$sub])) {
-    $sub = (string) array_key_first($struktur[$menu]['sub']);
+if ($menu !== '' && (!isset($struktur[$menu]['sub'][$sub]) || !empty($struktur[$menu]['sub'][$sub][3]))) {
+    $sub = $pertama_boleh($struktur[$menu]['sub']);
 }
 ?>
 
@@ -79,7 +86,7 @@ if ($sub === 'order_pemeliharaan') {
 }
 ?>
 
-<?php if (!$struktur): ?>
+<?php if ($menu === '' || $sub === ''): ?>
     <div class="alert alert-warning">Peran Anda tidak memiliki akses ke sub-menu Pemeliharaan.</div>
 <?php else: ?>
     <?= ph_header([

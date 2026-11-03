@@ -4,6 +4,7 @@
 // judul + tombol aksi di kanan atas, tab level 2, pill level 3, kartu tabel dengan header/footer yang sama.
 
 require_once __DIR__ . '/pemeliharaan_helper.php';
+require_once __DIR__ . '/master_ui.php';   // gembok, pop-up "Akses ditolak" (SweetAlert2) dan konfirmasi, sama dengan Master
 
 function ph_ui_styles(): string
 {
@@ -26,13 +27,13 @@ CSS;
  * Header halaman + tab (Eksekusi / Monitoring) + pill sub entitas.
  * @param array  $o         title, subtitle, tombol => daftar tombol di kanan atas:
  *                          ['type'=>'modal','label','icon','target','class'] atau ['type'=>'link','label','icon','href','class']
- * @param array  $struktur  menu => ['label','icon','sub'=>[kunci => [label, icon, file]]]
+ * @param array  $struktur  menu => ['label','icon','sub'=>[kunci => [label, icon, file, terkunci(bool)]]]
  * @param string $menu      menu aktif
  * @param string $sub       sub aktif
  */
 function ph_header(array $o, array $struktur, string $menu, string $sub): string
 {
-    $h = ph_ui_styles();
+    $h = ms_styles() . ph_ui_styles() . ms_skrip_akses();
 
     // JUDUL + AKSI (kanan)
     $h .= '<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3"><div>'
@@ -52,24 +53,44 @@ function ph_header(array $o, array $struktur, string $menu, string $sub): string
     }
     $h .= '</div></div>';
 
-    // LEVEL 2: TAB
+    // LEVEL 2: TAB (tab yang seluruh sub-menunya tidak boleh diakses tampil terkunci)
     $h .= '<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle flex-wrap">';
     foreach ($struktur as $kunci => $m) {
+        $awal = '';
+        foreach ($m['sub'] as $ks => $info) {
+            if (empty($info[3])) { $awal = (string) $ks; break; }
+        }
+        $terkunci = ($awal === '');
+        if ($terkunci) {
+            $awal = (string) array_key_first($m['sub']);
+        }
+        $url   = 'index.php?page=pemeliharaan&menu=' . ph_e($kunci) . '&sub=' . ph_e($awal);
         $aktif = ($kunci === $menu);
-        $awal  = (string) array_key_first($m['sub']);
-        $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium ' . ($aktif ? 'active text-white' : 'text-secondary') . '"'
-            . ($aktif ? ' style="background-color:#0d6efd;"' : '')
-            . ' href="index.php?page=pemeliharaan&menu=' . ph_e($kunci) . '&sub=' . ph_e($awal) . '">'
-            . '<i class="bi ' . ph_e($m['icon']) . ' me-2"></i>' . ph_e($m['label']) . '</a></li>';
+        if ($terkunci) {
+            $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium text-secondary" aria-disabled="true" style="opacity:.6;" href="' . $url . '"'
+                . ' onclick="event.preventDefault();tampilkanAksesDitolak();return false;">'
+                . '<i class="bi ' . ph_e($m['icon']) . ' me-2"></i>' . ph_e($m['label']) . ' <i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i></a></li>';
+        } else {
+            $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium ' . ($aktif ? 'active text-white' : 'text-secondary') . '"'
+                . ($aktif ? ' style="background-color:#0d6efd;"' : '') . ' href="' . $url . '">'
+                . '<i class="bi ' . ph_e($m['icon']) . ' me-2"></i>' . ph_e($m['label']) . '</a></li>';
+        }
     }
     $h .= '</ul>';
 
-    // LEVEL 3: PILL SUB ENTITAS
+    // LEVEL 3: PILL SUB ENTITAS (yang tidak boleh diakses terkunci)
     $h .= '<div class="d-flex align-items-center flex-wrap gap-2 mb-4">'
         . '<span class="text-secondary fw-bold text-uppercase me-2 ph-label">SUB ENTITAS:</span>';
     foreach ($struktur[$menu]['sub'] as $kunci_sub => $info) {
+        $url = 'index.php?page=pemeliharaan&menu=' . ph_e($menu) . '&sub=' . ph_e($kunci_sub);
+        if (!empty($info[3])) {
+            $h .= '<a href="' . $url . '" class="btn btn-sm rounded-pill px-3 py-1 fw-medium btn-outline-secondary text-secondary bg-white"'
+                . ' aria-disabled="true" style="opacity:.6;" onclick="event.preventDefault();tampilkanAksesDitolak();return false;">'
+                . ph_e($info[0]) . ' <i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i></a>';
+            continue;
+        }
         $on = ($kunci_sub === $sub);
-        $h .= '<a href="index.php?page=pemeliharaan&menu=' . ph_e($menu) . '&sub=' . ph_e($kunci_sub) . '" '
+        $h .= '<a href="' . $url . '" '
             . 'class="btn btn-sm rounded-pill px-3 py-1 fw-medium ' . ($on ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white') . '"'
             . ($on ? ' style="border-color:#0d6efd;background-color:#e7f1ff;color:#0d6efd;"' : '') . '>'
             . ($on ? '<i class="bi bi-check2 me-1"></i>' : '') . ph_e($info[0]) . '</a>';

@@ -135,7 +135,7 @@ try {
          o.NoFormOrder, o.KdPetugas AS PetugasOrder, b.NoFba, b.StatusData AS StatusBa",
         "frm_pk p
          LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
          LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
          LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
@@ -171,7 +171,7 @@ try {
     $st = $conn->prepare("SELECT p.NoFpk, p.TglFpk, p.IdPel, pd.NoRef, pp.NoRef AS NoRefPasang, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem
                           FROM frm_pk p
                           LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-                          LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+                          LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
                           LEFT JOIN master_modem mm ON mm.ImeiModem = pd.ImeiModem
                           WHERE p.JenisPk = 'PEMELIHARAAN'" . $sc . "
                             AND NOT EXISTS (SELECT 1 FROM frm_order_detil od WHERE od.NoFpk = p.NoFpk)

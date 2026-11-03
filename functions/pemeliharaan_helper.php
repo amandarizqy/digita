@@ -265,7 +265,7 @@ function ph_alat_pasang_tersedia(PDO $conn): array
                             AND mb.ImeiModem IS NOT NULL AND mb.ImeiModem <> ''
                             AND NOT EXISTS (SELECT 1 FROM frm_pk_detil d
                                             JOIN frm_pk pk ON pk.NoFpk = d.NoFpk
-                                            WHERE d.StatusBarang = 'PASANG' AND d.NoRef = mb.NoRef AND pk.StatusData = 'TIDAK')
+                                            WHERE d.StatusBarang = 'STOK' AND d.NoRef = mb.NoRef AND pk.StatusData = 'TIDAK')
                             AND NOT EXISTS (SELECT 1 FROM frm_ba_detil x
                                             WHERE x.StatusPekerjaan = 'BONGKAR' AND x.NoRef = mb.NoRef
                                               AND NOT EXISTS (SELECT 1 FROM frm_ba_detil y
@@ -299,7 +299,7 @@ function ph_tentukan_alat_pasang(PDO $conn, array $bongkar, string $no_ref_pasan
 
 /**
  * UTAMA: Membuat FPK dengan langsung menyertakan string literal 'PEMELIHARAAN' dan 'TIDAK'.
- * Detil disimpan dua baris: 'DIL' = alat yang dibongkar, 'PASANG' = alat yang dipasang.
+ * Detil disimpan dua baris: 'DIL' = alat yang dibongkar, 'STOK' = alat baru yang dipasang.
  */
 function ph_buat_pk(PDO $conn, array $p, array $b, ?array $pasang = null): string
 {
@@ -337,7 +337,7 @@ function ph_buat_pk(PDO $conn, array $p, array $b, ?array $pasang = null): strin
     // PASANG: hanya disimpan bila ada alat baru. Tanpa baris PASANG = tidak ada penggantian (data pasang = data bongkar).
     if ($pasang !== null && (string) $pasang['NoRef'] !== (string) $b['NoRef']) {
         $nomor_ps = ph_nomor_sim($conn, $pasang['SimId'] ?? '');
-        $ins->execute([$no_fpk, 'PASANG', $pasang['NoRef'], $pasang['SimId'], $pasang['ImeiModem'], $nomor_ps, $nomor_ps]);
+        $ins->execute([$no_fpk, 'STOK', $pasang['NoRef'], $pasang['SimId'], $pasang['ImeiModem'], $nomor_ps, $nomor_ps]);
     }
 
     return $no_fpk;

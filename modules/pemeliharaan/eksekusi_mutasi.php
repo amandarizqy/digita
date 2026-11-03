@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
                               JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
                               JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
                               LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-                              LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+                              LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
                               WHERE p.NoFpk = ? AND p.JenisPk = 'PEMELIHARAAN'" . $sc . ' LIMIT 1');
         $st->execute(array_merge([$no_fpk], $sp));
         $pk = $st->fetch(PDO::FETCH_ASSOC);
@@ -162,15 +162,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
 
         // Alat pasang final dicatat kembali di FPK. Tanpa penggantian = tidak ada baris PASANG di FPK.
         if ($ref_final === $ref_bongkar) {
-            $conn->prepare("DELETE FROM frm_pk_detil WHERE NoFpk = ? AND StatusBarang = 'PASANG'")->execute([$no_fpk]);
+            $conn->prepare("DELETE FROM frm_pk_detil WHERE NoFpk = ? AND StatusBarang = 'STOK'")->execute([$no_fpk]);
         } else {
-            $st = $conn->prepare("SELECT COUNT(*) FROM frm_pk_detil WHERE NoFpk = ? AND StatusBarang = 'PASANG'");
+            // Bersihkan baris rusak (StatusBarang kosong) sisa simpan lama sebelum menyimpan alat baru
+            $conn->prepare("DELETE FROM frm_pk_detil WHERE NoFpk = ? AND (StatusBarang = '' OR StatusBarang IS NULL)")->execute([$no_fpk]);
+            $st = $conn->prepare("SELECT COUNT(*) FROM frm_pk_detil WHERE NoFpk = ? AND StatusBarang = 'STOK'");
             $st->execute([$no_fpk]);
             if ((int) $st->fetchColumn() === 0) {
-                $conn->prepare("INSERT INTO frm_pk_detil (NoFpk, StatusBarang, NoRef, SimId, ImeiModem, NomorBarang, NomorModem) VALUES (?, 'PASANG', ?, ?, ?, ?, ?)")
+                $conn->prepare("INSERT INTO frm_pk_detil (NoFpk, StatusBarang, NoRef, SimId, ImeiModem, NomorBarang, NomorModem) VALUES (?, 'STOK', ?, ?, ?, ?, ?)")
                      ->execute([$no_fpk, $dev_ps['NoRef'], $dev_ps['SimId'], $dev_ps['ImeiModem'], $kontak_ps, $kontak_ps]);
             } else {
-                $conn->prepare("UPDATE frm_pk_detil SET NoRef = ?, SimId = ?, ImeiModem = ?, NomorBarang = ?, NomorModem = ? WHERE NoFpk = ? AND StatusBarang = 'PASANG'")
+                $conn->prepare("UPDATE frm_pk_detil SET NoRef = ?, SimId = ?, ImeiModem = ?, NomorBarang = ?, NomorModem = ? WHERE NoFpk = ? AND StatusBarang = 'STOK'")
                      ->execute([$dev_ps['NoRef'], $dev_ps['SimId'], $dev_ps['ImeiModem'], $kontak_ps, $kontak_ps, $no_fpk]);
             }
         }
@@ -223,7 +225,7 @@ try {
          JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder
          JOIN frm_pk p ON p.NoFpk = od.NoFpk
          LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
          LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
          LEFT JOIN frm_ba_detil bk ON bk.NoFba = b.NoFba AND bk.StatusPekerjaan = 'BONGKAR'
