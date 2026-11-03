@@ -46,7 +46,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $user_data['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -107,7 +107,7 @@ if (!empty($unitUpi)) {
             $sel_up = '';
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -189,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_P
             $status_txt   = ($posisi_sr === '1') ? 'Tergantung dengan Pelanggan Lain' : 'Tidak Tergantung (Mandiri)';
             $pesan_sukses = "Posisi SR untuk ID Pelanggan <strong>" . htmlspecialchars($idpel_target) . "</strong> (Periode $periode_filter) berhasil diperbaharui menjadi: <strong>$status_txt</strong>.";
         } catch (Exception $e) {
-            $pesan_error = "Gagal merubah Posisi SR: " . $e->getMessage();
+            $pesan_error = "Gagal merubah Posisi SR";
         }
     }
 }
@@ -220,7 +220,7 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
             $pesan_sukses = "Data kategorisasi risiko IDPel <strong>" . htmlspecialchars($idpel_hapus) . "</strong> (Periode $periode_filter) berhasil di-reset!";
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = "Gagal menghapus data: " . $e->getMessage();
+            $pesan_error = "Gagal menghapus data";
         }
     }
 }
@@ -469,7 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                           . "Data yang belum memiliki <strong>Posisi SR</strong> dan/atau <strong>Level Kepentingan</strong> (dari modul Input Kepentingan) otomatis dilewati.";
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = "Gagal memproses data: " . $e->getMessage();
+            $pesan_error = "Gagal memproses data";
         }
     } else {
         $pesan_error = "Pilih minimal satu ID Pelanggan atau klik tombol 'Proses Semua Data'!";
@@ -597,7 +597,7 @@ try {
     $list_preview = $stmt_list->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    $pesan_error = "Gagal mengambil data preview: " . $e->getMessage();
+    $pesan_error = "Gagal mengambil data preview";
     $list_preview = [];
     $total_rows   = 0;
     $total_dil = $total_sudah = $total_belum = 0;

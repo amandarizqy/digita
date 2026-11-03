@@ -35,7 +35,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -105,7 +105,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -147,7 +147,7 @@ try {
         $total_dil = (int) $st->fetchColumn();
     } catch (PDOException $e) {
         $total_dil = 0;
-        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan: ' . $e->getMessage());
+        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan');
     }
 
     [$sc_k_sql, $sc_k_par] = $build_scope('k');
@@ -198,7 +198,7 @@ try {
     $st->execute();
     $list_hasil = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $pesan_error = "Gagal memuat hasil tingkat kepentingan: " . $e->getMessage();
+    $pesan_error = "Gagal memuat hasil tingkat kepentingan";
 }
 
 include __DIR__ . '/../../templates/perencanaan/hasil_kepentingan.php';

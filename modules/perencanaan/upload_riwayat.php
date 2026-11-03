@@ -121,7 +121,7 @@ if ($unit_siap) {
             $peta_unit[] = ['kode' => (string) $kode, 'nama' => $nama, 'ups' => $ups];
         }
     } catch (PDOException $e) {
-        $pesan_error = 'Gagal memuat daftar unit: ' . $e->getMessage();
+        $pesan_error = 'Gagal memuat daftar unit';
         $unit_siap = false;
     }
 }
@@ -262,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$baris) $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
         } catch (Throwable $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            $pesan_error = 'Gagal memproses file: ' . $e->getMessage();
+            $pesan_error = 'Gagal memproses file';
         }
     }
 }

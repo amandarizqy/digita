@@ -30,7 +30,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -95,7 +95,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -198,7 +198,7 @@ try {
     $st->execute();
     $list_hasil = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $pesan_error = "Gagal memuat hasil evaluasi risiko: " . $e->getMessage();
+    $pesan_error = "Gagal memuat hasil evaluasi risiko";
     $offset = 0;
 }
 

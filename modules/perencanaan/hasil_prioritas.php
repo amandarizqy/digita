@@ -32,7 +32,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -97,7 +97,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -232,7 +232,7 @@ try {
     if ($e->getCode() === '42S02') {
         $tabel_belum_ada = true;
     } else {
-        $pesan_error = "Gagal memuat hasil prioritas: " . $e->getMessage();
+        $pesan_error = "Gagal memuat hasil prioritas";
     }
 }
 

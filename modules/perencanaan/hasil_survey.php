@@ -30,7 +30,7 @@ if (!empty($namaAkun)) {
             $unitUpi = $u['UnitUpi'] ?: NULL;
         }
     } catch (PDOException $e) {
-        $pesan_error = "Gagal memuat unit session: " . $e->getMessage();
+        $pesan_error = "Gagal memuat unit session";
     }
 }
 
@@ -96,7 +96,7 @@ if ($tingkat_akses !== null) {
             }
         }
     } catch (PDOException $e) {
-        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit: " . $e->getMessage());
+        $pesan_error = trim($pesan_error . " Gagal memuat daftar unit");
     }
 }
 
@@ -138,7 +138,7 @@ if (isset($_GET['act']) && $_GET['act'] == 'delete') {
                 $pesan_error = "Data tidak ditemukan, bukan di wilayah Anda, atau gagal dihapus.";
             }
         } catch (PDOException $e) {
-            $pesan_error = "Gagal menghapus data: " . $e->getMessage();
+            $pesan_error = "Gagal menghapus data";
         }
     }
 }
@@ -189,7 +189,7 @@ try {
     $total_data = (int) $stmt_count->fetchColumn();
 } catch (PDOException $e) {
     $total_data = 0;
-    $pesan_error = "Gagal menghitung data: " . $e->getMessage();
+    $pesan_error = "Gagal menghitung data";
 }
 
 $total_pages = ceil($total_data / $limit);
@@ -224,7 +224,7 @@ try {
     $data_hasil = $stmt_tampil->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $data_hasil = [];
-    $pesan_error = "Gagal mengambil data survey: " . $e->getMessage();
+    $pesan_error = "Gagal mengambil data survey";
 }
 
 // ---------------------------------------------------------
@@ -245,7 +245,7 @@ try {
         $total_dil = (int) $st->fetchColumn();
     } catch (PDOException $e) {
         $total_dil = 0;
-        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan: ' . $e->getMessage());
+        $pesan_error = trim(($pesan_error ?? '') . ' Gagal menghitung populasi pelanggan');
     }
 
     $st = $conn->prepare("SELECT k.PosisiSR, COUNT(*) FROM kategorisasi_risiko k WHERE k.Periode = :p AND k.PosisiSR IN ('0','1') AND $sc_k_sql GROUP BY k.PosisiSR");
@@ -255,7 +255,7 @@ try {
         if ((string) $sr === '1') $total_tergantung = (int) $j;
     }
 } catch (PDOException $e) {
-    if (empty($pesan_error)) $pesan_error = "Gagal memuat ringkasan: " . $e->getMessage();
+    if (empty($pesan_error)) $pesan_error = "Gagal memuat ringkasan";
 }
 $total_tersurvey = $total_mandiri + $total_tergantung;
 
