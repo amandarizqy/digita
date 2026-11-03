@@ -23,4 +23,4 @@ function render_sub_entitas_penghapusan($current_action) {
         echo '</a>';
     }
     echo '</div>';
-}
+} 
