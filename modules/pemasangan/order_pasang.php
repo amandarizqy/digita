@@ -5,7 +5,7 @@ $view    = $_GET['view'] ?? 'daftar';
 $q       = trim($_GET['q'] ?? '');
 
 if ($view === 'daftar') {
-    // Ambil Data FPK & Order Pemasangan
+    // Ambil Data FPK & Order Pemasangan (JenisPk = 'PASANG')
     $sql_fpk = "SELECT f.*, 
                        pd.NoRef as NomorBarangDetil, pd.SimId as SimIdDetil, pd.ImeiModem as ImeiModemDetil,
                        (SELECT NoFormOrder FROM frm_order_detil d WHERE d.NoFpk = f.NoFpk LIMIT 1) as TerikatOrder,
@@ -13,7 +13,7 @@ if ($view === 'daftar') {
                        (SELECT o.NoFormOrder FROM frm_order_detil d JOIN frm_order o ON o.NoFormOrder = d.NoFormOrder WHERE d.NoFpk = f.NoFpk LIMIT 1) as NoFormOrder
                 FROM frm_pk f 
                 LEFT JOIN frm_pk_detil pd ON pd.NoFpk = f.NoFpk
-                WHERE f.JenisPk = 'PEMASANGAN'";
+                WHERE f.JenisPk = 'PASANG'";
     $params_fpk = [];
     if (!$is_sa && !empty($unit_up)) {
         $sql_fpk .= " AND f.UnitUp = ?";
@@ -30,10 +30,10 @@ if ($view === 'daftar') {
     $stmt_fpk->execute($params_fpk);
     $list_fpk = $stmt_fpk->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil Data Pelanggan untuk Modal FPK (Berurut berdasarkan skala dan peringkat dari hasil_prioritas)
+    // Ambil Data Pelanggan untuk Modal FPK
     $sql_pel = "SELECT IdPel, Peringkat, TotalTagihan, SkalaPrioritas FROM hasil_prioritas 
                 WHERE IdPel NOT IN (SELECT IdPel FROM master_barang WHERE IdPel IS NOT NULL AND IdPel != '')
-                  AND IdPel NOT IN (SELECT IdPel FROM frm_pk WHERE JenisPk = 'PEMASANGAN')";
+                  AND IdPel NOT IN (SELECT IdPel FROM frm_pk WHERE JenisPk = 'PASANG')";
     $params_pel = [];
     if (!$is_sa && !empty($unit_up)) {
         $sql_pel .= " AND UnitUp = ?";
@@ -44,7 +44,7 @@ if ($view === 'daftar') {
     $stmt_pelanggan->execute($params_pel);
     $list_pelanggan = $stmt_pelanggan->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil Data Alat untuk Modal FPK (HANYA alat yang sudah lolos uji pengujian & belum dipasang)
+    // Ambil Data Alat untuk Modal FPK
     $sql_al = "SELECT ed.NoRef, ed.ImeiModem, ed.SimId 
                FROM formulir_pengujian_detil ed
                JOIN formulir_pengujian e ON ed.NoFormulir = e.NoFormulir
@@ -54,7 +54,7 @@ if ($view === 'daftar') {
                  AND ed.NoRef NOT IN (
                     SELECT pd.NoRef FROM frm_pk_detil pd 
                     JOIN frm_pk f ON pd.NoFpk = f.NoFpk 
-                    WHERE f.JenisPk = 'PEMASANGAN' AND pd.NoRef IS NOT NULL
+                    WHERE f.JenisPk = 'PASANG' AND pd.NoRef IS NOT NULL
                  )";
     $params_al = [];
     if (!$is_sa && !empty($unit_up)) {
@@ -131,11 +131,20 @@ if ($view === 'daftar') {
                                 <?php endif; ?>
                             </td>
                             <td class="text-center pe-3">
-                                <?php if (empty($fpk['TerikatOrder'])): ?>
-                                    <a href="javascript:void(0);" onclick="confirmDeleteFpk('modules/pemasangan/proses_order.php?action=hapus_fpk&no_fpk=<?= urlencode($fpk['NoFpk']) ?>')" class="btn btn-sm btn-outline-danger px-2 py-1" title="Hapus FPK"><i class="bi bi-trash"></i></a>
-                                <?php else: ?>
-                                    <span class="text-muted small">-</span>
-                                <?php endif; ?>
+                                <div class="d-flex justify-content-center gap-1 align-items-center">
+                                    <?php if (empty($fpk['TerikatOrder'])): ?>
+                                        <a href="javascript:void(0);" onclick="confirmDeleteFpk('modules/pemasangan/proses_order.php?action=hapus_fpk&no_fpk=<?= urlencode($fpk['NoFpk']) ?>')" class="btn btn-sm btn-outline-danger px-2 py-1" title="Hapus FPK"><i class="bi bi-trash"></i></a>
+                                    <?php else: ?>
+                                        <span class="text-muted small">-</span>
+                                    <?php endif; ?>
+
+                                    <!-- Tombol Cetak SPK PDF -->
+                                    <?php if (!empty($fpk['TerikatOrder'])): ?>
+                                        <a href="modules/pemasangan/cetak_order.php?no_order=<?= urlencode($fpk['TerikatOrder']) ?>" target="_blank" class="btn btn-sm btn-outline-primary px-2 py-1" title="Cetak SPK Order PDF">
+                                            <i class="bi bi-printer-fill"></i>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -205,7 +214,7 @@ $(document).ready(function() {
 } elseif ($view === 'baru') {
     $sql_bebas = "SELECT f.NoFpk, f.IdPel, pd.NoRef FROM frm_pk f 
                   LEFT JOIN frm_pk_detil pd ON pd.NoFpk = f.NoFpk
-                  WHERE f.JenisPk = 'PEMASANGAN' AND f.NoFpk NOT IN (SELECT NoFpk FROM frm_order_detil)";
+                  WHERE f.JenisPk = 'PASANG' AND f.NoFpk NOT IN (SELECT NoFpk FROM frm_order_detil)";
     $params_bebas = [];
     if (!$is_sa && !empty($unit_up)) {
         $sql_bebas .= " AND f.UnitUp = ?";

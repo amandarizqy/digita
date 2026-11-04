@@ -7,8 +7,11 @@ if ($view === 'daftar') {
     $sql = "SELECT o.NoFormOrder, o.TglOrder, o.NamaAkun, o.StatusData, o.WaktuData,
                    (SELECT COUNT(NoFpk) FROM frm_order_detil d WHERE d.NoFormOrder = o.NoFormOrder) as TotalTarget,
                    (SELECT COUNT(d.NoFpk) FROM frm_order_detil d 
-                    JOIN frm_ba b ON d.NoFpk = b.NoFpk AND b.JenisPekerjaan = 'PEMASANGAN'
-                    WHERE d.NoFormOrder = o.NoFormOrder AND b.StatusData = 'AKTIF') as TotalSelesai
+                    JOIN frm_ba b ON d.NoFpk = b.NoFpk AND b.JenisPekerjaan = 'PASANG'
+                    WHERE d.NoFormOrder = o.NoFormOrder AND b.StatusData = 'AKTIF') as TotalSelesai,
+                   (SELECT b.NoFba FROM frm_order_detil d 
+                    JOIN frm_ba b ON d.NoFpk = b.NoFpk AND b.JenisPekerjaan = 'PASANG'
+                    WHERE d.NoFormOrder = o.NoFormOrder LIMIT 1) as NoFba
             FROM frm_order o
             WHERE o.UnitUp = :up AND (o.NoFormOrder LIKE :q)
             ORDER BY o.WaktuData DESC";
@@ -62,14 +65,14 @@ if ($view === 'daftar') {
                                 </span>
                             </td>
                             <td class="text-center pe-3">
-                                <div class="d-flex justify-content-center gap-1">
+                                <div class="d-flex justify-content-center gap-1 align-items-center">
                                     <a href="index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang&view=detail&no_form=<?= urlencode($row['NoFormOrder']) ?>" class="btn btn-sm btn-outline-primary px-3">
                                         <i class="bi bi-tools me-1"></i> Eksekusi
                                     </a>
-                                    <!-- Tombol Hapus Order SPK jika belum ada pemasangan yang selesai -->
-                                    <?php if ($row['TotalSelesai'] == 0 && $row['StatusData'] === 'AKTIF'): ?>
-                                        <a href="javascript:void(0);" onclick="confirmDeleteOrder('<?= urlencode($row['NoFormOrder']) ?>')" class="btn btn-sm btn-outline-danger px-2 py-1" title="Hapus SPK">
-                                            <i class="bi bi-trash"></i>
+
+                                    <?php if (!empty($row['NoFba'])): ?>
+                                        <a href="modules/pemasangan/cetak_ba.php?no_fba=<?= urlencode($row['NoFba']) ?>" target="_blank" class="btn btn-sm btn-outline-success px-2 py-1" title="Cetak Berita Acara PDF">
+                                            <i class="bi bi-printer-fill"></i>
                                         </a>
                                     <?php endif; ?>
                                 </div>
@@ -82,24 +85,6 @@ if ($view === 'daftar') {
     </div>
 </div>
 
-<script>
-function confirmDeleteOrder(noOrder) {
-    Swal.fire({
-        title: 'Batalkan & Hapus SPK?',
-        text: "SPK (Order) yang dihapus akan melepaskan ikatan pada FPK di dalamnya.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Ya, Hapus!'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.href = "modules/pemasangan/proses_order.php?action=hapus_order&no_form=" + noOrder;
-        }
-    });
-}
-</script>
-
 <?php 
 } elseif ($view === 'detail') {
     $no_form = $_GET['no_form'] ?? '';
@@ -108,17 +93,19 @@ function confirmDeleteOrder(noOrder) {
     $formulir = $stmt_head->fetch(PDO::FETCH_ASSOC);
     
     if (!$formulir) {
-        echo '<div class="alert alert-danger">Surat Perintah Kerja (Order) tidak ditemukan atau bukan milik Unit Anda.</div>';
+        echo '<div class="alert alert-danger">Surat Perintah Kerja (Order) tidak ditemukan.</div>';
         return;
     }
 
+    // Menggunakan JenisPekerjaan = 'PASANG' agar sinkron dengan tabel database
     $stmt_detil = $conn->prepare("
-        SELECT od.NoFpk, pk.IdPel, pk.NoRef, pk.SimId, pk.ImeiModem,
+        SELECT od.NoFpk, pk.IdPel, pkd.NoRef, pkd.SimId, pkd.ImeiModem,
                b.NoFba as NoFormPasang, b.TglFba as TglPasang, bd.PosisiPasang, b.StatusData as StatusPasang
         FROM frm_order_detil od
         JOIN frm_pk pk ON od.NoFpk = pk.NoFpk
-        LEFT JOIN frm_ba b ON od.NoFpk = b.NoFpk AND b.JenisPekerjaan = 'PEMASANGAN'
-        LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.NoRef = pk.NoRef AND bd.StatusPekerjaan = 'PASANG'
+        JOIN frm_pk_detil pkd ON pk.NoFpk = pkd.NoFpk
+        LEFT JOIN frm_ba b ON od.NoFpk = b.NoFpk AND b.JenisPekerjaan = 'PASANG'
+        LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.NoRef = pkd.NoRef AND bd.StatusPekerjaan = 'PASANG'
         WHERE od.NoFormOrder = ?
     ");
     $stmt_detil->execute([$no_form]);
@@ -168,7 +155,7 @@ function confirmDeleteOrder(noOrder) {
                                 <?php endif; ?>
                             </td>
                             <td class="text-center">
-                                <a href="modules/pemasangan/proses_mutasi.php?no_form=<?= urlencode($no_form) ?>&noref=<?= urlencode($it['NoRef']) ?>&no_fpk=<?= urlencode($it['NoFpk']) ?>" class="btn btn-sm <?= $sudah_pasang ? 'btn-outline-success' : 'btn-primary' ?> px-3">
+                                <a href="index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang&view=form_ba&no_form=<?= urlencode($no_form) ?>&noref=<?= urlencode($it['NoRef']) ?>&no_fpk=<?= urlencode($it['NoFpk']) ?>" class="btn btn-sm <?= $sudah_pasang ? 'btn-outline-success' : 'btn-primary' ?> px-3">
                                     <?= $sudah_pasang ? 'Detail BA' : 'Input BA' ?>
                                 </a>
                             </td>
@@ -179,4 +166,163 @@ function confirmDeleteOrder(noOrder) {
         </table>
     </div>
 </div>
+
+<?php 
+} elseif ($view === 'form_ba') {
+    $no_form = $_GET['no_form'] ?? '';
+    $noref   = $_GET['noref'] ?? '';
+    $no_fpk  = $_GET['no_fpk'] ?? '';
+
+    $stmt_info = $conn->prepare("
+        SELECT pk.IdPel, pkd.NoRef, pkd.SimId, pkd.ImeiModem 
+        FROM frm_pk pk 
+        JOIN frm_pk_detil pkd ON pk.NoFpk = pkd.NoFpk 
+        WHERE pk.NoFpk = ? AND pkd.NoRef = ?
+    ");
+    $stmt_info->execute([$no_fpk, $noref]);
+    $data_alat = $stmt_info->fetch(PDO::FETCH_ASSOC);
+?>
+
+<!-- Panggil Leaflet CSS & JS untuk Peta Interaktif -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="card border-0 shadow-sm rounded-4 bg-white p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold text-primary mb-1">Formulir Berita Acara (BA) Pemasangan Perangkat</h5>
+            <p class="text-muted small mb-0">Sesuai Dokumen FPK: <strong><?= htmlspecialchars($no_fpk) ?></strong></p>
+        </div>
+        <a href="index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang&view=detail&no_form=<?= urlencode($no_form) ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Kembali</a>
+    </div>
+
+    <form action="modules/pemasangan/proses_mutasi.php" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="no_form_order" value="<?= htmlspecialchars($no_form) ?>">
+        <input type="hidden" name="no_fpk" value="<?= htmlspecialchars($no_fpk) ?>">
+        <input type="hidden" name="no_ref" value="<?= htmlspecialchars($data_alat['NoRef'] ?? $noref) ?>">
+        <input type="hidden" name="id_pel" value="<?= htmlspecialchars($data_alat['IdPel'] ?? '') ?>">
+        <input type="hidden" name="sim_id" value="<?= htmlspecialchars($data_alat['SimId'] ?? '') ?>">
+        <input type="hidden" name="imei_modem" value="<?= htmlspecialchars($data_alat['ImeiModem'] ?? '') ?>">
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">ID Pelanggan</label>
+                <input type="text" class="form-control bg-light font-monospace" value="<?= htmlspecialchars($data_alat['IdPel'] ?? '-') ?>" readonly>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">NoRef / IMEI S41</label>
+                <input type="text" class="form-control bg-light font-monospace" value="<?= htmlspecialchars($data_alat['NoRef'] ?? $noref) ?> (IMEI: <?= htmlspecialchars($data_alat['ImeiModem'] ?? '-') ?>)" readonly>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Tanggal Pasang</label>
+                <input type="date" name="tgl_pasang" class="form-control" value="<?= date('Y-m-d') ?>" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Posisi Pasang</label>
+                <select name="posisi_pasang" class="form-select" required>
+                    <option value="Pangkal">Pangkal</option>
+                    <option value="Tengah">Tengah</option>
+                    <option value="Ujung">Ujung</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Lampu Indikator</label>
+                <select name="kondisi_relay" class="form-select" required>
+                    <option value="MENYALA">Menyala (Normal)</option>
+                    <option value="TIDAK">Tidak Menyala</option>
+                </select>
+            </div>
+            
+            <!-- PENGAMBILAN KORDINAT GPS & PETA INTERAKTIF -->
+            <div class="col-12">
+                <div class="card border bg-light p-3 rounded-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Koordinat Lokasi Pemasangan (Tikor)</label>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="ambilLokasiGPS()">
+                            <i class="bi bi-crosshair me-1"></i> Ambil Lokasi Saat Ini
+                        </button>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Longitude</label>
+                            <input type="text" id="longitude" name="longitude" class="form-control font-monospace bg-white" placeholder="106.xxxx" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Latitude</label>
+                            <input type="text" id="latitude" name="latitude" class="form-control font-monospace bg-white" placeholder="-6.xxxx" required>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mb-2">Geser pin pada peta di bawah ini atau klik untuk mengoreksi posisi lokasi pemasangan:</small>
+                    <div id="map" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #ced4da;"></div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Foto Barang</label>
+                <input type="file" name="foto_barang" class="form-control" accept="image/*">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Foto Terpasang di Lapangan</label>
+                <input type="file" name="foto_pasang" class="form-control" accept="image/*">
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold small">Catatan Pemasangan</label>
+                <textarea name="catatan" class="form-control" rows="2" placeholder="Catatan tambahan lapangan..."></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4 text-end">
+            <button type="submit" class="btn btn-primary px-5 fw-bold shadow-sm">
+                <i class="bi bi-save me-1"></i> Simpan Berita Acara Pemasangan
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var defaultLat = -6.1574;
+    var defaultLng = 106.7285;
+
+    var map = L.map('map').setView([defaultLat, defaultLng], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    var marker = L.marker([defaultLat, defaultLng], {draggable: true}).addTo(map);
+
+    function updateInputs(lat, lng) {
+        document.getElementById('latitude').value = lat.toFixed(6);
+        document.getElementById('longitude').value = lng.toFixed(6);
+    }
+
+    marker.on('dragend', function (e) {
+        var coord = marker.getLatLng();
+        updateInputs(coord.lat, coord.lng);
+    });
+
+    map.on('click', function(e) {
+        marker.setLatLng(e.latlng);
+        updateInputs(e.latlng.lat, e.latlng.lng);
+    });
+
+    window.ambilLokasiGPS = function() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
+                map.setView([lat, lng], 17);
+                marker.setLatLng([lat, lng]);
+                updateInputs(lat, lng);
+            }, function(error) {
+                alert('Gagal mendeteksi lokasi GPS: ' + error.message);
+            }, { enableHighAccuracy: true });
+        } else {
+            alert('Geolocation tidak didukung oleh browser Anda.');
+        }
+    }
+});
+</script>
 <?php } ?>

@@ -32,22 +32,30 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
     <!-- MAIN TAB (LEVEL 2) -->
     <div class="card border-0 shadow-sm rounded-4 p-2 mb-3 bg-white">
         <ul class="nav nav-pills d-flex flex-row align-items-center gap-2 mb-0 border-0">
+            <!-- Tab Pra Eksekusi -->
             <li class="nav-item">
                 <a class="nav-link text-nowrap rounded-3 px-4 py-2 fw-semibold <?= ($menu === 'pra_eksekusi') ? 'active bg-primary text-white' : 'text-secondary' ?>"
                    href="index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian">
-                    <i class="bi bi-shield-check me-2"></i>Pra Eksekusi
+                    <i class="bi bi-shield-check me-2"></i>Pra Eksekusi 
+                    <?php if (!$can_pra_eksekusi): ?><i class="bi bi-lock-fill ms-1"></i><?php endif; ?>
                 </a>
             </li>
+
+            <!-- Tab Eksekusi -->
             <li class="nav-item">
                 <a class="nav-link text-nowrap rounded-3 px-4 py-2 fw-semibold <?= ($menu === 'eksekusi') ? 'active bg-primary text-white' : 'text-secondary' ?>"
-                   href="index.php?page=pemasangan&menu=eksekusi&sub=order_pasang">
-                    <i class="bi bi-tools me-2"></i>Eksekusi
+                   href="index.php?page=pemasangan&menu=eksekusi&sub=<?= $can_order_pasang ? 'order_pasang' : 'mutasi_pasang' ?>">
+                    <i class="bi bi-tools me-2"></i>Eksekusi 
+                    <?php if (!$can_eksekusi): ?><i class="bi bi-lock-fill ms-1"></i><?php endif; ?>
                 </a>
             </li>
+
+            <!-- Tab Monitoring -->
             <li class="nav-item">
                 <a class="nav-link text-nowrap rounded-3 px-4 py-2 fw-semibold <?= ($menu === 'monitoring') ? 'active bg-primary text-white' : 'text-secondary' ?>"
                    href="index.php?page=pemasangan&menu=monitoring&sub=status_pengujian">
-                    <i class="bi bi-display me-2"></i>Monitoring
+                    <i class="bi bi-display me-2"></i>Monitoring 
+                    <?php if (!$can_monitoring): ?><i class="bi bi-lock-fill ms-1"></i><?php endif; ?>
                 </a>
             </li>
         </ul>
@@ -62,12 +70,16 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
                 <i class="bi bi-check2 me-1"></i> Pengujian
             </a>
         <?php elseif ($menu === 'eksekusi'): ?>
+            <!-- Order Pasang -->
             <a href="index.php?page=pemasangan&menu=eksekusi&sub=order_pasang" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'order_pasang') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">
-                <i class="bi bi-file-earmark-text me-1"></i> Order Pasang
+                Order Pasang <?php if (!$can_order_pasang): ?><i class="bi bi-lock-fill ms-1"></i><?php endif; ?>
             </a>
+
+            <!-- Mutasi Pasang -->
             <a href="index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'mutasi_pasang') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">
-                <i class="bi bi-arrow-left-right me-1"></i> Mutasi Pasang
+                Mutasi Pasang <?php if (!$can_mutasi_pasang): ?><i class="bi bi-lock-fill ms-1"></i><?php endif; ?>
             </a>
+
         <?php else: ?>
             <a href="index.php?page=pemasangan&menu=monitoring&sub=status_pengujian" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'status_pengujian') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">Status Pengujian</a>
             <a href="index.php?page=pemasangan&menu=monitoring&sub=riwayat_pengujian" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'riwayat_pengujian') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">Riwayat Pengujian</a>
