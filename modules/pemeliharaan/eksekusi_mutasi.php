@@ -260,8 +260,6 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
 ?>
 
 <style>
-    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
-    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; }
     .pln-form-box { border: 1.5px solid #212529; font-size: 0.85rem; }
     .pln-form-box th, .pln-form-box td { border: 1px solid #212529 !important; padding: 6px 10px; vertical-align: middle; }
     #modalEksekusi .select2-container .select2-selection { font-weight: 700; font-size: 0.85rem; }
@@ -272,20 +270,14 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
     <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
 <?php endif; ?>
 
-<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 px-2 pt-2">
-        <div>
-            <h5 class="fw-bold text-primary mb-0">Eksekusi Mutasi Pemeliharaan</h5>
-            <p class="text-muted small mb-0">Langkah 3: Kerjakan order lapangan, catat kondisi alat yang dibongkar dan yang dipasang.</p>
-        </div>
-        <?= ph_kotak_cari($sub_ini, $q) ?>
-    </div>
-
-    <div class="w-100 table-responsive">
-        <table class="table table-hover align-middle mb-0 table-compact w-100">
-            <thead class="table-light border-top border-bottom">
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <?= ph_card_header('Daftar Order Pemeliharaan untuk Dieksekusi', $sub_ini, $q) ?>
+    <div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 ph-table">
+            <thead class="table-light text-secondary text-uppercase ph-thead">
                 <tr>
-                    <th class="ps-2 text-center" style="width:3%;">#</th>
+                    <th class="ps-4" style="width:40px;">#</th>
                     <th>NO ORDER / PETUGAS</th>
                     <th>NO FPK / NO BA</th>
                     <th>IDPEL / NO REF</th>
@@ -293,12 +285,12 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                     <th>MODEM (PASANG)</th>
                     <th>INDIKATOR</th>
                     <th>STATUS</th>
-                    <th class="text-center" style="width:120px;">AKSI</th>
+                    <th class="text-end pe-4" style="width:130px;">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_eks)): ?>
-                    <tr><td colspan="9" class="text-center text-muted py-5">Belum ada FPK diorderkan.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK diorderkan.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_eks as $idx => $row): ?>
                         <?php
@@ -322,7 +314,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                         $sama = (string) ($row['BNoRef'] ?? '') === (string) ($row['PNoRef'] ?? '');
                         ?>
                         <tr class="border-bottom">
-                            <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
+                            <td class="ps-4 text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
                             <td class="font-monospace"><?= ph_e($row['NoFormOrder']) ?><br><small class="text-muted"><?= ph_e($row['PetugasOrder'] ?? '-') ?></small></td>
                             <td>
                                 <div class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFpk']) ?></div>
@@ -335,7 +327,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                             <td class="font-monospace"><?= ph_e($row['PImei'] ?? '-') ?></td>
                             <td><?= ph_badge_relay($row['PLampu'] ?? '') ?></td>
                             <td><?= $ada_ba ? ph_badge_status($row['StatusBa']) : '<span class="badge bg-primary-subtle text-primary">BELUM</span>' ?></td>
-                            <td class="pe-2 text-center">
+                            <td class="text-end pe-4">
                                 <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-3 py-1 fw-bold btn-eksekusi"
                                         data-row="<?= ph_e(json_encode($js, JSON_UNESCAPED_UNICODE)) ?>"
                                         data-status="<?= ph_e($row['StatusBa'] ?? 'TIDAK') ?>">
@@ -347,6 +339,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
     </div>
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>

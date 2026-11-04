@@ -386,14 +386,18 @@ function ph_daftar(PDO $conn, string $select, string $from, string $where, array
 
 function ph_kotak_cari(string $sub, string $q, string $placeholder = 'Cari no form, idpel, no ref...'): string
 {
-    return '<form method="GET" action="index.php" class="input-group" style="width:320px;">'
-        . '<input type="hidden" name="page" value="pemeliharaan"><input type="hidden" name="menu" value="' . ph_e(ph_menu_dari_sub($sub)) . '"><input type="hidden" name="sub" value="' . ph_e($sub) . '">'
-        . '<input type="text" name="q" value="' . ph_e($q) . '" class="form-control bg-light small" placeholder="' . ph_e($placeholder) . '">'
-        . '<button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>'
-        . ($q !== '' ? '<a class="btn btn-outline-secondary" href="index.php?page=pemeliharaan&menu=' . ph_e(ph_menu_dari_sub($sub)) . '&sub=' . ph_e(urlencode($sub)) . '"><i class="bi bi-x-lg"></i></a>' : '')
+    $menu  = ph_e(ph_menu_dari_sub($sub));
+    $reset = ($q !== '')
+        ? '<a class="btn btn-outline-secondary" href="index.php?page=pemeliharaan&menu=' . $menu . '&sub=' . ph_e(urlencode($sub)) . '" title="Hapus pencarian"><i class="bi bi-x-lg"></i></a>'
+        : '';
+    // Disamakan dengan kotak cari modul Master: kecil, ikon di kiri, lebar 260px
+    return '<form method="GET" action="index.php" class="input-group input-group-sm" style="width:260px;max-width:100%;">'
+        . '<input type="hidden" name="page" value="pemeliharaan"><input type="hidden" name="menu" value="' . $menu . '"><input type="hidden" name="sub" value="' . ph_e($sub) . '">'
+        . '<span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>'
+        . '<input type="text" name="q" value="' . ph_e($q) . '" class="form-control bg-light border-start-0" placeholder="' . ph_e($placeholder) . '">'
+        . $reset
         . '</form>';
 }
-
 function ph_pager(string $sub, int $total, int $hal, int $total_hal, string $q): string
 {
     $mulai = $total > 0 ? ($hal - 1) * PH_PER_HALAMAN + 1 : 0;
@@ -401,7 +405,7 @@ function ph_pager(string $sub, int $total, int $hal, int $total_hal, string $q):
     $url = function (int $p) use ($sub, $q) {
         return 'index.php?page=pemeliharaan&menu=' . ph_menu_dari_sub($sub) . '&sub=' . urlencode($sub) . '&p=' . $p . ($q !== '' ? '&q=' . urlencode($q) : '');
     };
-    $h = '<div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 px-2 pt-3">'
+    $h = '<div class="card-footer bg-white py-3 px-4 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">'
         . '<div class="small text-muted">Menampilkan <b>' . $mulai . '</b> - <b>' . $akhir . '</b> dari <b>' . $total . '</b> data</div>';
     if ($total_hal > 1) {
         $h .= '<nav><ul class="pagination pagination-sm mb-0 gap-1">';

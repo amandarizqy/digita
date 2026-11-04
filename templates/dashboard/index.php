@@ -57,11 +57,21 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
         "SELECT COALESCE(SUM(CASE WHEN TglBayar IS NULL THEN RpTag ELSE 0 END),0) AS tunggakan,
                 COALESCE(SUM(TglBayar >= ? AND TglBayar < ?),0) AS lunas
            FROM pelunasan_ap2t WHERE 1=1" . $s, array_merge([$awal, $akhir], $p));
-    // SESUAIKAN: rusak = KondisiRelay 'RUSAK'
+    // Pemeliharaan: dihitung dari FPK + Berita Acara + detil kondisi lampu (tabel yang dipakai modul Pemeliharaan)
+    // SESUAIKAN: "rusak" = LampuIndikator pada BA mengandung kata TIDAK (TIDAK BERFUNGSI)
+    $akh_hak = substr($kode_hak, -3);
+    $sp = ''; $pp = [];
+    if ($akh_hak === '.UP')     { $sp = ' AND p.UnitUp = ?'; $pp = [$u_up]; }
+    elseif ($akh_hak === '.AP') { $sp = ' AND p.UnitAp = ?'; $pp = [$u_ap]; }
+    // .UI / .VD / SA.KP melihat semua unit, sama seperti aturan di modul Pemeliharaan
     $m = dash_q($conn, $err, 'Pemeliharaan',
-        "SELECT COALESCE(SUM(KondisiRelay = 'RUSAK'),0) AS rusak,
-                COALESCE(SUM(TglPemeliharaan >= ? AND TglPemeliharaan < ?),0) AS bulan_ini
-           FROM frm_pemeliharaan WHERE 1=1" . $s, array_merge([$awal, $akhir], $p));
+        "SELECT COALESCE(SUM(b.TglFba >= ? AND b.TglFba < ?),0) AS bulan_ini,
+                COALESCE(SUM(UPPER(bd.LampuIndikator) LIKE '%TIDAK%'),0) AS rusak
+           FROM frm_ba b
+           JOIN frm_pk p ON p.NoFpk = b.NoFpk
+           LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
+          WHERE b.JenisPekerjaan = 'PEMELIHARAAN' AND b.StatusData = 'AKTIF'" . $sp,
+        array_merge([$awal, $akhir], $pp));
     $k = dash_q($conn, $err, 'Pengiriman',
         "SELECT COUNT(*) AS n FROM formulir_pengiriman WHERE StatusPengiriman = 'DIKIRIM'" . $s2, $p2);
     $r = dash_q($conn, $err, 'Prioritas',

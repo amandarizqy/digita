@@ -8,8 +8,9 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../../config/database.php';
 
+$base_path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 if (!isset($_SESSION['NamaAkun'])) {
-    header("Location: /modules/auth/login.php");
+    header("Location: " . $base_path . "/modules/auth/login.php");
     exit;
 }
 
