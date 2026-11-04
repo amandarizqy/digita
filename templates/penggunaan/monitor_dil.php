@@ -83,7 +83,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                 <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
                     <th class="ps-4">IdPel</th><th>Nama</th><th>Alamat</th><th>Jenis MK</th><th>No. Telepon</th><th>No. HP</th>
                     <th>Gol. Tarif</th><th class="text-end">Daya (VA)</th><th class="text-center">Teg. Ukur</th><th class="text-center">Kd. Pemb. Meter</th>
-                    <th>No. kWh</th><th>Aktifasi</th><th>Produk Prabayar</th><th class="text-center">Index Prioritas</th><th>Nama Akun</th>
+                    <th>No. kWh</th><th>Aktifasi</th><th>Produk Prabayar</th><th>Nama Akun</th>
                     <th>Unit UPI</th><th>Unit AP</th><th>Unit UP</th>
                     <th class="text-center">Status</th><th>Waktu Data</th>
                     <?php if ($boleh_edit): ?><th class="text-end pe-4">Aksi</th><?php endif; ?>
@@ -117,7 +117,6 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                     <td class="font-monospace small text-nowrap"><?= $kosong($r['NomorKwh']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['Aktifasi']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['ProdukPrabayar']) ?></td>
-                    <td class="text-center"><?= $r['IndexPrioritas'] === null ? '<span class="text-muted">-</span>' : pg_e($r['IndexPrioritas']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['NamaAkun']) ?></td>
                     <td class="text-nowrap"><?= $kosong($r['UnitUpi']) ?></td>
                     <td class="text-nowrap"><?= $kosong($r['UnitAp']) ?></td>
