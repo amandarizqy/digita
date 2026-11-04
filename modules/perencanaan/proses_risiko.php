@@ -212,10 +212,6 @@ if (isset($_GET['action_crud']) && $_GET['action_crud'] === 'hapus') {
             $stmt_del = $conn->prepare("DELETE FROM kategorisasi_risiko WHERE IdPel = ? AND Periode = ?");
             $stmt_del->execute([$idpel_hapus, $periode_filter]);
 
-            // Reset IndexPrioritas di DIL
-            $stmt_dil_reset = $conn->prepare("UPDATE dil SET IndexPrioritas = NULL WHERE Idpel = ?");
-            $stmt_dil_reset->execute([$idpel_hapus]);
-
             $conn->commit();
             $pesan_sukses = "Data kategorisasi risiko IDPel <strong>" . htmlspecialchars($idpel_hapus) . "</strong> (Periode $periode_filter) berhasil di-reset!";
         } catch (Exception $e) {
@@ -453,17 +449,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $stmt_bulk = $conn->prepare($sql_bulk_upsert);
             $stmt_bulk->execute($params);
             $jumlah_diproses = $stmt_bulk->rowCount();
-
-            // 3c. Sync IndexPrioritas ke DIL -- hanya untuk periode yang sedang diproses DAN wilayah terpilih
-            [$scope_dil_sql, $scope_dil_params] = $build_scope('k');
-            $sql_sync_dil = "
-                UPDATE dil d
-                INNER JOIN kategorisasi_risiko k ON k.IdPel = d.Idpel AND k.Periode = :periode
-                SET d.IndexPrioritas = k.SkalaPrioritas
-                WHERE $scope_dil_sql
-            ";
-            $stmt_sync = $conn->prepare($sql_sync_dil);
-            $stmt_sync->execute(array_merge([':periode' => $periode_filter], $scope_dil_params));
 
             $conn->commit();
             $target_label = $is_proses_semua ? "seluruh pelanggan" : "data terpilih";

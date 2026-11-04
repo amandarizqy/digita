@@ -106,7 +106,7 @@ try {
     $total_data = (int) $st->fetchColumn();
     $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-    $st = $conn->prepare("SELECT IdPel, Nama AS NamaPelanggan, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorKwh, Aktifasi, ProdukPrabayar, IndexPrioritas, NamaAkun, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
+    $st = $conn->prepare("SELECT IdPel, Nama AS NamaPelanggan, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorKwh, Aktifasi, ProdukPrabayar, NamaAkun, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
     foreach ($p as $k => $v) $st->bindValue($k, $v);
     $st->bindValue(':lim', $limit, PDO::PARAM_INT);
     $st->bindValue(':off', ($hal - 1) * $limit, PDO::PARAM_INT);
