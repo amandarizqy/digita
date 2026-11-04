@@ -19,6 +19,8 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
     ['label'=>'Perintah Baku (AT Commands)', 'href'=>'index.php?page=master&sub=pesan',    'on'=>true,  'locked'=>!$akses_pesan],
 ]) ?>
 
+<?= ms_flash_html() ?>
+
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
     <?= ms_kpi('Total Perintah Terdaftar', ms_kpi_nilai($total_perintah, 'Format'), 'Format perintah baku terdaftar', 'bi-terminal', 'primary') ?>
@@ -75,12 +77,15 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                             <td class="text-muted font-monospace small"><?= htmlspecialchars($row['WaktuData'] ?? '-'); ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="index.php?page=master&sub=pesan&action=toggle_status&id=<?= htmlspecialchars(urlencode($row['Id'])); ?>"
-                                       class="btn btn-outline-secondary py-1 px-2"
-                                       title="<?= $perintah_aktif ? 'Nonaktifkan perintah' : 'Aktifkan perintah'; ?>"
-                                       data-confirm="<?= htmlspecialchars(($perintah_aktif ? 'Nonaktifkan' : 'Aktifkan') . ' perintah ' . ($row['IsiPesan'] ?? '') . '?'); ?>">
-                                        <i class="bi bi-arrow-repeat"></i>
-                                    </a>
+                                    <form method="POST" action="index.php?page=master&sub=pesan&action=toggle_status" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($row['Id'])); ?>">
+                                        <button class="btn btn-outline-secondary py-1 px-2" type="submit"
+                                                title="<?= $perintah_aktif ? 'Nonaktifkan perintah' : 'Aktifkan perintah'; ?>"
+                                                data-confirm="<?= htmlspecialchars(($perintah_aktif ? 'Nonaktifkan' : 'Aktifkan') . ' perintah ' . ($row['IsiPesan'] ?? '') . '?'); ?>">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-perintah"
                                             data-id="<?= htmlspecialchars($row['Id']); ?>"
                                             data-isi="<?= htmlspecialchars($row['IsiPesan'] ?? ''); ?>"
@@ -110,6 +115,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 <div class="modal fade" id="modalTambahPerintah" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="index.php?page=master&sub=pesan" method="POST" class="modal-content border-0 shadow rounded-4">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="store">
             <div class="modal-header border-bottom px-4 py-3">
                 <h5 class="modal-title fw-bold">Tambah Format Perintah Baku</h5>
@@ -157,6 +163,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 <div class="modal fade" id="modalEditPerintah" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="index.php?page=master&sub=pesan" method="POST" class="modal-content border-0 shadow rounded-4">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="Id" id="edit_perintah_id">
             <div class="modal-header border-bottom px-4 py-3">

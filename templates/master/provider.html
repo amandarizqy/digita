@@ -19,6 +19,8 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
     ['label'=>'Perintah Baku (AT Commands)', 'href'=>'index.php?page=master&sub=pesan',    'on'=>false, 'locked'=>!$akses_pesan],
 ]) ?>
 
+<?= ms_flash_html() ?>
+
 <!-- KARTU METRIK KPI -->
 <div class="row g-3 mb-4">
     <?= ms_kpi('Total Operator', ms_kpi_nilai($total_operator, 'Provider'), 'Operator seluler terdaftar', 'bi-reception-4', 'primary') ?>
@@ -54,12 +56,15 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
                             <td><?= ms_badge_status($prv['StatusData'] ?? '') ?></td>
                             <td class="text-end pe-4">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="index.php?page=master&sub=provider&action=toggle_status&id=<?= urlencode($prv['KodeProvider']); ?>"
-                                       class="btn btn-outline-secondary py-1 px-2"
-                                       title="<?= $aktif ? 'Nonaktifkan provider' : 'Aktifkan provider'; ?>"
-                                       data-confirm="<?= htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' provider ' . ($prv['NamaProvider'] ?? '') . '?'); ?>">
-                                        <i class="bi bi-arrow-repeat"></i>
-                                    </a>
+                                    <form method="POST" action="index.php?page=master&sub=provider&action=toggle_status" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($prv['KodeProvider'])); ?>">
+                                        <button class="btn btn-outline-secondary py-1 px-2" type="submit"
+                                                title="<?= $aktif ? 'Nonaktifkan provider' : 'Aktifkan provider'; ?>"
+                                                data-confirm="<?= htmlspecialchars(($aktif ? 'Nonaktifkan' : 'Aktifkan') . ' provider ' . ($prv['NamaProvider'] ?? '') . '?'); ?>">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
                                     <button type="button" class="btn btn-outline-primary py-1 px-2 btn-edit-provider"
                                             data-kode="<?= htmlspecialchars($prv['KodeProvider'] ?? ''); ?>"
                                             data-nama="<?= htmlspecialchars($prv['NamaProvider'] ?? ''); ?>"
@@ -86,6 +91,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 <div class="modal fade" id="modalTambahProvider" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="index.php?page=master&sub=provider" method="POST" class="modal-content border-0 shadow rounded-4">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="store">
             <div class="modal-header border-bottom px-4 py-3">
                 <h5 class="modal-title fw-bold">Tambah Provider Baru</h5>
@@ -116,6 +122,7 @@ $akses_pesan    = ($role === 'SA.KP' || $role === 'AM.UI');
 <div class="modal fade" id="modalEditProvider" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form action="index.php?page=master&sub=provider" method="POST" class="modal-content border-0 shadow rounded-4">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="KodeProvider" id="edit_prv_kode">
             <div class="modal-header border-bottom px-4 py-3">

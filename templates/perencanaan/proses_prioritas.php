@@ -231,6 +231,7 @@ if ($tabel_belum_ada && empty($pesan_error)) {
 </div>
 <?php endif; ?>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var form   = document.getElementById('formPrioritas');
@@ -257,11 +258,45 @@ document.addEventListener('DOMContentLoaded', function () {
     var selUp = document.getElementById('selUnitUp');
     if (selUp) selUp.addEventListener('change', function () { document.getElementById('formUnit').submit(); });
 
+    // ---- Konfirmasi SweetAlert2 (gaya sama dengan dialog "Nonaktifkan data?") ----
+    var scopeLabel = <?= json_encode(pr_e($scope_label)) ?>;
+
+    function kirimForm() {
+        // Nilai tombol submit tidak ikut terkirim lewat form.submit(), jadi ditambahkan manual
+        var h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'proses_prioritas'; h.value = '1';
+        form.appendChild(h);
+        var btn = document.getElementById('btnProses');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Memproses...'; }
+        form.submit();
+    }
+    function peringatan(judul, teks) {
+        if (window.Swal) Swal.fire({ icon: 'warning', title: judul, text: teks, confirmButtonText: 'OK', confirmButtonColor: '#0d6efd' });
+        else alert(teks);
+    }
+
     form.addEventListener('submit', function (e) {
+        e.preventDefault();
         var skala = form.querySelector('input[name="skala_prioritas"]:checked');
-        if (!skala) { e.preventDefault(); alert('Pilih salah satu Skala Prioritas (1-9) terlebih dahulu.'); return; }
-        if (metode.value === 'gabungan' && !hitungTotal()) { e.preventDefault(); alert('Total bobot harus tepat 100%.'); return; }
-        if (!confirm('Proses pemeringkatan untuk Prioritas ' + skala.value + ' di wilayah ' + <?= json_encode($scope_label) ?> + '? Hasil lama untuk skala ini di wilayah tersebut akan diganti.')) { e.preventDefault(); }
+        if (!skala) { peringatan('Skala belum dipilih', 'Pilih salah satu Skala Prioritas (1-9) terlebih dahulu.'); return; }
+        if (metode.value === 'gabungan' && !hitungTotal()) { peringatan('Total bobot belum 100%', 'Total bobot harus tepat 100%.'); return; }
+
+        if (!window.Swal) {   // cadangan bila CDN tidak terjangkau
+            if (confirm('Proses pemeringkatan untuk Prioritas ' + skala.value + '? Hasil lama untuk skala ini di wilayah tersebut akan diganti.')) kirimForm();
+            return;
+        }
+        Swal.fire({
+            icon: 'warning',
+            title: 'Proses pemeringkatan?',
+            html: 'Pemeringkatan untuk <b>Prioritas ' + skala.value + '</b> di wilayah <b>' + scopeLabel + '</b>.<br>Hasil lama untuk skala ini di wilayah tersebut akan diganti.',
+            showCancelButton: true,
+            confirmButtonText: 'Ya, Proses',
+            cancelButtonText: 'Batal',
+            confirmButtonColor: '#0d6efd',
+            cancelButtonColor: '#6c757d',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function (hasil) { if (hasil.isConfirmed) kirimForm(); });
     });
 });
 </script>

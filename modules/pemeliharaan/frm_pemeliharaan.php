@@ -135,7 +135,7 @@ try {
          o.NoFormOrder, o.KdPetugas AS PetugasOrder, b.NoFba, b.StatusData AS StatusBa",
         "frm_pk p
          LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+         LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
          LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
          LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
@@ -171,7 +171,7 @@ try {
     $st = $conn->prepare("SELECT p.NoFpk, p.TglFpk, p.IdPel, pd.NoRef, pp.NoRef AS NoRefPasang, pd.SimId, pd.ImeiModem, $nama_sql AS NamaModem
                           FROM frm_pk p
                           LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-                          LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'PASANG'
+                          LEFT JOIN frm_pk_detil pp ON pp.NoFpk = p.NoFpk AND pp.StatusBarang = 'STOK'
                           LEFT JOIN master_modem mm ON mm.ImeiModem = pd.ImeiModem
                           WHERE p.JenisPk = 'PEMELIHARAAN'" . $sc . "
                             AND NOT EXISTS (SELECT 1 FROM frm_order_detil od WHERE od.NoFpk = p.NoFpk)
@@ -193,8 +193,6 @@ try {
     .pln-form-box th, .pln-form-box td { border: 1px solid #212529 !important; padding: 6px 10px; vertical-align: middle; }
     #modalBuatPK .select2-container .select2-selection { font-weight: 700; font-size: 0.85rem; }
     .pln-header-title { font-weight: 700; letter-spacing: 0.5px; }
-    .table-compact thead th { font-size: 0.75rem !important; font-weight: 700 !important; color: #6c757d !important; padding: 0.6rem 0.35rem !important; }
-    .table-compact tbody td { padding: 0.5rem 0.35rem !important; font-size: 0.81rem !important; }
 </style>
 
 <?= $pesan_flash ?>
@@ -202,39 +200,30 @@ try {
     <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= ph_e($pesan_error) ?></div>
 <?php endif; ?>
 
-<?php /* Tombol "Buat FPK" dan "Buat Order" hanya di header atas halaman; modal-nya ada di bawah file ini.
-         Kotak cari ditaruh sejajar dengan baris SUB ENTITAS (layar lebar) agar kartu tidak turun jauh. */ ?>
-<style>
-    .ph-cari-atas { position: relative; z-index: 2; margin-bottom: .75rem; pointer-events: none; }
-    .ph-cari-atas > * { pointer-events: auto; }
-    @media (min-width: 992px) { .ph-cari-atas { margin-top: -3.4rem; } }
-</style>
-<div class="ph-cari-atas d-flex justify-content-end">
-    <?= ph_kotak_cari($sub_ini, $q) ?>
-</div>
-
-<div class="card border-0 shadow-sm rounded-4 bg-white p-3">
-    <div class="w-100 table-responsive">
-        <table class="table table-hover align-middle mb-0 table-compact w-100">
-            <thead class="table-light border-top border-bottom">
+<div class="card border-0 shadow-sm rounded-4 bg-white">
+    <?= ph_card_header('Daftar FPK & Order Pemeliharaan', $sub_ini, $q) ?>
+    <div class="card-body p-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 ph-table">
+            <thead class="table-light text-secondary text-uppercase ph-thead">
                 <tr>
-                    <th class="ps-2 text-center" style="width:3%;">#</th>
+                    <th class="ps-4" style="width:40px;">#</th>
                     <th>NO FPK</th>
                     <th>TGL FPK</th>
                     <th>IDPEL / NO REF</th>
                     <th>SIM ID</th>
                     <th>MODEM</th>
                     <th>NO ORDER / PETUGAS</th>
-                    <th>TAHAP / STATUS</th>
+                    <th class="text-end pe-4">TAHAP / STATUS</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_pk)): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-4">Belum ada FPK pemeliharaan di sistem. Klik tombol "Buat FPK" di atas untuk mulai mencatat.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK pemeliharaan di sistem. Klik tombol "Buat FPK" di kanan atas untuk mulai mencatat.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_pk as $idx => $row): ?>
                         <tr class="border-bottom">
-                            <td class="ps-2 text-center text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
+                            <td class="ps-4 text-muted small"><?= ($hal - 1) * PH_PER_HALAMAN + $idx + 1 ?></td>
                             <td class="fw-bold text-dark font-monospace"><?= ph_e($row['NoFpk']) ?></td>
                             <td><?= ph_e($row['TglFpk']) ?></td>
                             <td>IDPEL: <?= ph_e($row['IdPel']) ?><br><small class="text-muted">BONGKAR: <?= ph_e($row['NoRef'] ?? '-') ?></small><br><small class="text-muted">PASANG: <?= empty($row['NoRefPasang']) ? '-' : (($row['NoRefPasang'] === ($row['NoRef'] ?? null)) ? ph_e($row['NoRefPasang']) . ' <em>(tidak diganti)</em>' : ph_e($row['NoRefPasang'])) ?></small></td>
@@ -252,7 +241,7 @@ try {
                                     <span class="text-muted fst-italic small">Belum diorderkan</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td class="text-end pe-4">
                                 <?php if (!empty($row['NoFba'])): ?>
                                     <?= (($row['StatusBa'] ?? '') === 'AKTIF') ? '<span class="badge bg-success-subtle text-success">BA SELESAI</span>' : '<span class="badge bg-warning-subtle text-warning-emphasis">BA PENDING</span>' ?>
                                 <?php elseif (!empty($row['NoFormOrder'])): ?>
@@ -266,6 +255,7 @@ try {
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
     </div>
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>

@@ -350,9 +350,7 @@ ob_start();
         </div>
     </div>
 
-    <div class="card-footer bg-white py-3 px-4 border-top">
-        <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
-    </div>
+    <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>
 
 <!-- MODAL TAMBAH MASTER MODEM BARU (Filter Hirarkis AP -> UP) -->

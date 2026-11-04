@@ -3,7 +3,7 @@
 $current_action = $_GET['action'] ?? 'form_pk';
 ?>
 
-<!-- PUSTAKA CSS & JS WAJIB UNTUK STYLING & MAP -->
+<!-- Pustaka CSS & JS -->
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,14 +18,13 @@ $current_action = $_GET['action'] ?? 'form_pk';
 
 <div class="max-w-6xl mx-auto bg-white shadow-md border border-gray-200 rounded-lg p-6 my-4 font-sans">
     
-    <!-- Render Navigasi Sub Entitas -->
     <?php 
     if (function_exists('render_sub_entitas_penghapusan')) {
-        render_sub_entitas_penghapusan($current_action); 
+        render_sub_entitas_penghapusan('eksekusi', 'order_penghapusan'); 
     }
     ?>
 
-    <!-- Kop Surat Formulir -->
+    <!-- Kop Surat -->
     <div class="flex justify-between items-center pb-4 border-b border-gray-300 mb-6">
         <div>
             <h1 class="font-bold text-gray-900 text-lg leading-tight">PT PLN (PERSERO) UID BANTEN</h1>
@@ -36,13 +35,10 @@ $current_action = $_GET['action'] ?? 'form_pk';
         </div>
     </div>
 
-    <!-- Form Pengisian -->
+    <!-- Form Pengisian - Pengalamatan Ke File Backend Pemroses -->
     <form action="functions/proses_penghapusan.php?action=buat_pk" method="POST">
         
-        <!-- Grid Input Utama -->
         <div class="form-grid text-sm mb-6 rounded overflow-hidden shadow-sm">
-            
-            <!-- Baris 1 -->
             <div class="form-cell form-label">Jenis PK</div>
             <div class="form-cell bg-white">
                 <span class="bg-yellow-400 text-yellow-950 font-bold px-3 py-1 rounded text-xs tracking-wider shadow-sm">PENGHAPUSAN</span>
@@ -53,7 +49,6 @@ $current_action = $_GET['action'] ?? 'form_pk';
                 <input type="date" name="tanggal" value="<?php echo date('Y-m-d'); ?>" class="w-full border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" required>
             </div>
 
-            <!-- Baris 2 -->
             <div class="form-cell form-label">Id Pelanggan</div>
             <div class="form-cell bg-white">
                 <select name="id_pelanggan" class="w-full border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" required>
@@ -66,7 +61,6 @@ $current_action = $_GET['action'] ?? 'form_pk';
             <div class="form-cell form-label">Nomor Form</div>
             <div class="form-cell bg-white text-gray-400 italic">Otomatis sistem</div>
 
-            <!-- Baris 3 (Koordinat & GPS) -->
             <div class="form-cell form-label">Tikor DIL</div>
             <div class="form-cell col-span-3 flex justify-between items-center bg-white gap-4">
                 <div class="flex gap-4 items-center flex-1">
@@ -85,12 +79,11 @@ $current_action = $_GET['action'] ?? 'form_pk';
             </div>
         </div>
 
-        <!-- Container Peta Leaflet -->
+        <!-- Google Maps Container -->
         <div class="mb-6 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
             <div id="map"></div>
         </div>
 
-        <!-- Tabel Perangkat Eksisting -->
         <div class="border border-gray-300 text-sm rounded-lg mb-6 overflow-hidden shadow-sm">
             <div class="grid grid-cols-2 bg-gray-100 font-bold border-b border-gray-300 text-gray-700">
                 <div class="p-3 border-r border-gray-300">PERANGKAT EKSISTING (DIL)</div>
@@ -101,28 +94,30 @@ $current_action = $_GET['action'] ?? 'form_pk';
                     Keterangan Kondisi Perangkat
                 </div>
                 <div class="p-3">
-                     <textarea name="alasan_penghapusan" rows="2" class="w-full border border-gray-300 p-2.5 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ketik alasan penghapusan aset (misal: Mati Total / Rusak Parah)..." required></textarea>
+                     <textarea name="alasan_penghapusan" rows="2" class="w-full border border-gray-300 p-2.5 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ketik alasan penghapusan aset..." required></textarea>
                 </div>
             </div>
         </div>
 
-        <!-- Tombol Aksi Batal & Simpan -->
         <div class="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <a href="?page=penghapusan&action=monitor_pk" class="px-5 py-2 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-50 text-sm no-underline transition-colors">Batal</a>
-            <button type="submit" class="px-6 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold rounded-md shadow-sm text-sm transition-colors border-none cursor-pointer">Simpan FPK</button>
+            <a href="?page=penghapusan&tab=eksekusi&sub=order_penghapusan" class="px-5 py-2 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-50 text-sm no-underline">Batal</a>
+            <button type="submit" class="px-6 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold rounded-md shadow-sm text-sm border-none cursor-pointer">Simpan FPK</button>
         </div>
         
     </form>
 </div>
 
-<!-- Script Peta Leaflet -->
+<!-- Script Google Maps pada Leaflet -->
 <script>
     var initialLat = -6.178306;
     var initialLng = 106.631889;
     var map = L.map('map').setView([initialLat, initialLng], 13);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+    // MENGGUNAKAN TILE GOOGLE MAPS LETS
+    L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: 'Google Maps'
     }).addTo(map);
 
     var marker = L.marker([initialLat, initialLng], {draggable: true}).addTo(map);
@@ -144,11 +139,7 @@ $current_action = $_GET['action'] ?? 'form_pk';
                 let newLatLng = new L.LatLng(uLat, uLng);
                 marker.setLatLng(newLatLng);
                 map.setView(newLatLng, 15);
-            }, function(err) {
-                alert("Gagal mengambil posisi GPS. Pastikan izin lokasi aktif di browser.");
             });
-        } else {
-            alert("Fitur Geolocation tidak didukung browser ini.");
         }
     }
 </script>
