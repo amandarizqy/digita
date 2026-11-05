@@ -234,20 +234,7 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
           ['BA pending',            $pgh_pending,     'alat belum dilepas dari pelanggan',   $pgh_eks ? 'mutasi_penghapusan' : 'monitoring_mutasi', 'red'],
           ['Selesai bulan ini',     $pgh_selesai,     'alat dilepas dan dinonaktifkan',      'monitoring_mutasi',                                   'teal'],
       ]; ?>
-  <h5 class="sec">Alur penghapusan</h5><div class="sub mb-2">Dari FPK sampai alat dilepas dari pelanggan.</div>
-  <div class="row g-3 mb-2">
-    <?php foreach ($pgh_tahap as $t): ?>
-    <div class="col-xl-3 col-md-6"><div class="box pgh t-<?= $t[4] ?>">
-      <div class="n"><?= dash_n($t[1]) ?></div>
-      <div class="t"><?= dash_h($t[0]) ?></div>
-      <div class="d"><?= dash_h($t[2]) ?></div>
-      <a href="<?= dash_h(BASE_URL . '/index.php?page=penghapusan&sub=' . $t[3]) ?>" class="stretched-link" aria-label="<?= dash_h($t[0]) ?>"></a>
-    </div></div>
-    <?php endforeach; ?>
-  </div>
-  <?php if ($pgh_selesai > 0): ?>
-  <div class="sub mb-4"><i class="bi bi-lightbulb me-1"></i><?= dash_n($pgh_lampu_mati) ?> dari <?= dash_n($pgh_selesai) ?> alat yang dibongkar bulan ini berlampu mati (perlu mutasi).</div>
-  <?php else: ?><div class="mb-4"></div><?php endif; ?>
+
 <?php endif; ?>
 
 </div>
