@@ -1,97 +1,107 @@
 <?php
-// File: functions/penghapusan_ui.php
+// functions/penghapusan_ui.php
+// Komponen tampilan modul Penghapusan, disamakan dengan modul Master (functions/master_ui.php):
+// judul + tombol aksi di kanan atas, tab level 2, pill level 3, kartu tabel dengan header/footer yang sama.
+
+require_once __DIR__ . '/penghapusan_helper.php';
+require_once __DIR__ . '/master_ui.php';   // gembok, pop-up "Akses ditolak" (SweetAlert2) dan konfirmasi, sama dengan Master
+
+function pgh_ui_styles(): string
+{
+    static $done = false;
+    if ($done) {
+        return '';
+    }
+    $done = true;
+    return <<<'CSS'
+<style>
+  .ph-label    { font-size:.75rem; letter-spacing:.5px; }
+  .ph-thead th { font-size:.75rem; letter-spacing:.3px; white-space:nowrap; }
+  .ph-table td { font-size:.875rem; }
+  .modal .form-label { font-size:.75rem; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#6c757d; }
+</style>
+CSS;
+}
 
 /**
- * Render Header Utama, Tab Utama (Eksekusi vs Monitoring), & Sub Entitas
+ * Header halaman + tab (Eksekusi / Monitoring) + pill sub entitas.
+ * @param array  $o         title, subtitle, tombol => daftar tombol di kanan atas:
+ *                          ['type'=>'modal','label','icon','target','class'] atau ['type'=>'link','label','icon','href','class']
+ * @param array  $struktur  menu => ['label','icon','sub'=>[kunci => [label, icon, file, terkunci(bool)]]]
+ * @param string $menu      menu aktif
+ * @param string $sub       sub aktif
  */
-function render_header_penghapusan($active_tab = 'eksekusi', $active_sub = 'order_penghapusan') {$can_eksekusi = pga_boleh_hapus('order_penghapusan');
-    ?>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+function pgh_header(array $o, array $struktur, string $menu, string $sub): string
+{
+    $h = ms_styles() . pgh_ui_styles() . ms_skrip_akses();
 
-    <div class="font-sans mb-6">
-        
-        <!-- TOP HEADER: Tajuk Kiri & Butang Modal Kanan -->
-        <div class="flex justify-between items-start mb-6">
-            <div>
-                <?php if ($active_tab === 'eksekusi' &&$active_sub === 'order_penghapusan'): ?>
-                    <h1 class="text-2xl font-bold text-gray-900 tracking-tight">FPK & Order Penghapusan</h1>
-                    <p class="text-gray-500 text-xs mt-1">Langkah 1: Buat FPK Penghapusan &rarr; Langkah 2: Gabungkan FPK ke dalam Surat Perintah Kerja (Order).</p>
-                <?php elseif ($active_tab === 'eksekusi' &&$active_sub === 'mutasi_penghapusan'): ?>
-                    <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Mutasi Penghapusan Aset</h1>
-                    <p class="text-gray-500 text-xs mt-1">Langkah 3: Eksekusi pelepasan aset di lapangan dan terbitkan Berita Acara Mutasi (BAM).</p>
-                <?php else: ?>
-                    <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Monitoring Penghapusan Aset</h1>
-                    <p class="text-gray-500 text-xs mt-1">Pantau status rekapitulasi data penghapusan aset secara real-time.</p>
-                <?php endif; ?>
-            </div>
+    // JUDUL + AKSI (kanan)
+    $h .= '<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3"><div>'
+        . '<h4 class="fw-bold text-dark mb-1">' . pgh_e($o['title'] ?? 'Modul Penghapusan S41') . '</h4>';
+    if (!empty($o['subtitle'])) {
+        $h .= '<p class="text-muted small mb-0">' . pgh_e($o['subtitle']) . '</p>';
+    }
+    $h .= '</div><div class="d-flex flex-wrap gap-2 align-items-center">';
+    foreach ($o['tombol'] ?? [] as $t) {
+        $kelas = 'btn ' . ($t['class'] ?? 'btn-primary') . ' btn-sm px-3 shadow-sm rounded-2';
+        $ikon  = '<i class="bi ' . pgh_e($t['icon'] ?? 'bi-plus-lg') . ' me-1"></i> ' . pgh_e($t['label']);
+        if (($t['type'] ?? 'modal') === 'link') {
+            $h .= '<a href="' . pgh_e($t['href']) . '" target="_blank" rel="noopener" class="' . $kelas . '">' . $ikon . '</a>';
+        } else {
+            $h .= '<button type="button" class="' . $kelas . '" data-bs-toggle="modal" data-bs-target="#' . pgh_e($t['target']) . '">' . $ikon . '</button>';
+        }
+    }
+    $h .= '</div></div>';
 
-            <!-- BUTANG AKSI DENGAN MODAL TRIGGER -->
-            <?php if ($active_tab === 'eksekusi' &&$can_eksekusi): ?>
-                <div class="flex gap-2.5">
-                    <?php if ($active_sub === 'order_penghapusan'): ?>
-                        <button onclick="openModalFpk()" 
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition-all border-none cursor-pointer">
-                            <i class="fa-solid fa-screwdriver-wrench text-xs"></i> Buat FPK
-                        </button>
-                        <button onclick="openModalOrder()" 
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition-all border-none cursor-pointer">
-                            <i class="fa-solid fa-square-plus text-xs"></i> Buat Order
-                        </button>
-                    <?php elseif ($active_sub === 'mutasi_penghapusan'): ?>
-                        <button onclick="openModalBa()" 
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm transition-all border-none cursor-pointer">
-                            <i class="fa-solid fa-file-signature text-xs"></i> Buat BA Mutasi
-                        </button>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        </div>
+    // LEVEL 2: TAB (tab yang seluruh sub-menunya tidak boleh diakses tampil terkunci)
+    $h .= '<ul class="nav nav-pills bg-white p-2 rounded-3 shadow-sm mb-3 border border-light-subtle flex-wrap">';
+    foreach ($struktur as $kunci => $m) {
+        $awal = '';
+        foreach ($m['sub'] as $ks => $info) {
+            if (empty($info[3])) { $awal = (string) $ks; break; }
+        }
+        $terkunci = ($awal === '');
+        if ($terkunci) {
+            $awal = (string) array_key_first($m['sub']);
+        }
+        $url   = 'index.php?page=penghapusan&menu=' . pgh_e($kunci) . '&sub=' . pgh_e($awal);
+        $aktif = ($kunci === $menu);
+        if ($terkunci) {
+            $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium text-secondary" aria-disabled="true" style="opacity:.6;" href="' . $url . '"'
+                . ' onclick="event.preventDefault();tampilkanAksesDitolak();return false;">'
+                . '<i class="bi ' . pgh_e($m['icon']) . ' me-2"></i>' . pgh_e($m['label']) . ' <i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i></a></li>';
+        } else {
+            $h .= '<li class="nav-item"><a class="nav-link py-2 px-3 fw-medium ' . ($aktif ? 'active text-white' : 'text-secondary') . '"'
+                . ($aktif ? ' style="background-color:#0d6efd;"' : '') . ' href="' . $url . '">'
+                . '<i class="bi ' . pgh_e($m['icon']) . ' me-2"></i>' . pgh_e($m['label']) . '</a></li>';
+        }
+    }
+    $h .= '</ul>';
 
-        <!-- TAB UTAMA -->
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-200/80 p-1.5 flex gap-2 mb-6 w-full">
-            <?php if ($can_eksekusi): ?>
-                <a href="?page=penghapusan&tab=eksekusi&sub=order_penghapusan" 
-                   class="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all no-underline flex items-center gap-2 <?php echo ($active_tab === 'eksekusi') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'; ?>">
-                    <i class="fa-solid fa-screwdriver-wrench"></i> Eksekusi
-                </a>
-            <?php else: ?>
-                <span title="Hanya dapat diakses oleh SF.AP dan SF.UP" 
-                      class="px-6 py-2.5 rounded-xl font-semibold text-sm text-gray-400 bg-gray-100 opacity-60 cursor-not-allowed flex items-center gap-2">
-                    <i class="fa-solid fa-lock text-xs"></i> Eksekusi
-                </span>
-            <?php endif; ?>
+    // LEVEL 3: PILL SUB ENTITAS (yang tidak boleh diakses terkunci)
+    $h .= '<div class="d-flex align-items-center flex-wrap gap-2 mb-4">'
+        . '<span class="text-secondary fw-bold text-uppercase me-2 ph-label">SUB ENTITAS:</span>';
+    foreach ($struktur[$menu]['sub'] as $kunci_sub => $info) {
+        $url = 'index.php?page=penghapusan&menu=' . pgh_e($menu) . '&sub=' . pgh_e($kunci_sub);
+        if (!empty($info[3])) {
+            $h .= '<a href="' . $url . '" class="btn btn-sm rounded-pill px-3 py-1 fw-medium btn-outline-secondary text-secondary bg-white"'
+                . ' aria-disabled="true" style="opacity:.6;" onclick="event.preventDefault();tampilkanAksesDitolak();return false;">'
+                . pgh_e($info[0]) . ' <i class="bi bi-lock-fill ms-1" style="font-size:.75em"></i></a>';
+            continue;
+        }
+        $on = ($kunci_sub === $sub);
+        $h .= '<a href="' . $url . '" '
+            . 'class="btn btn-sm rounded-pill px-3 py-1 fw-medium ' . ($on ? 'btn-outline-primary active' : 'btn-outline-secondary text-secondary bg-white') . '"'
+            . ($on ? ' style="border-color:#0d6efd;background-color:#e7f1ff;color:#0d6efd;"' : '') . '>'
+            . ($on ? '<i class="bi bi-check2 me-1"></i>' : '') . pgh_e($info[0]) . '</a>';
+    }
+    return $h . '</div>';
+}
 
-            <a href="?page=penghapusan&tab=monitoring&sub=monitor_order" 
-               class="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all no-underline flex items-center gap-2 <?php echo ($active_tab === 'monitoring') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'; ?>">
-                <i class="fa-solid fa-desktop"></i> Monitoring
-            </a>
-        </div>
-
-        <!-- SUB ENTITAS -->
-        <div class="flex items-center gap-3 text-sm">
-            <span class="font-bold text-gray-700 text-xs uppercase tracking-wider">SUB ENTITAS:</span>
-            
-            <?php if ($active_tab === 'eksekusi' &&$can_eksekusi): ?>
-                <a href="?page=penghapusan&tab=eksekusi&sub=order_penghapusan" 
-                   class="border px-4 py-1.5 rounded-full flex items-center gap-2 transition-all no-underline text-xs <?php echo ($active_sub === 'order_penghapusan') ? 'border-blue-500 text-blue-600 bg-blue-50/80 font-semibold shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50 font-medium'; ?>">
-                    <i class="fa-solid fa-check text-xs"></i> Order Penghapusan
-                </a>
-                <a href="?page=penghapusan&tab=eksekusi&sub=mutasi_penghapusan" 
-                   class="border px-4 py-1.5 rounded-full flex items-center gap-2 transition-all no-underline text-xs <?php echo ($active_sub === 'mutasi_penghapusan') ? 'border-blue-500 text-blue-600 bg-blue-50/80 font-semibold shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50 font-medium'; ?>">
-                    Mutasi Penghapusan
-                </a>
-            <?php else: ?>
-                <a href="?page=penghapusan&tab=monitoring&sub=monitor_order" 
-                   class="border px-4 py-1.5 rounded-full flex items-center gap-2 transition-all no-underline text-xs <?php echo ($active_sub === 'monitor_order') ? 'border-blue-500 text-blue-600 bg-blue-50/80 font-semibold shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50 font-medium'; ?>">
-                    <i class="fa-solid fa-list-check text-xs"></i> Monitoring Order Penghapusan
-                </a>
-                <a href="?page=penghapusan&tab=monitoring&sub=monitor_mutasi" 
-                   class="border px-4 py-1.5 rounded-full flex items-center gap-2 transition-all no-underline text-xs <?php echo ($active_sub === 'monitor_mutasi') ? 'border-blue-500 text-blue-600 bg-blue-50/80 font-semibold shadow-sm' : 'border-gray-300 text-gray-600 bg-white hover:bg-gray-50 font-medium'; ?>">
-                    <i class="fa-solid fa-chart-line text-xs"></i> Monitoring Mutasi Penghapusan
-                </a>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php
+/** Header kartu tabel: judul di kiri, kotak cari di kanan (sama seperti kartu Master). */
+function pgh_card_header(string $judul, string $sub, string $q): string
+{
+    return '<div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">'
+        . '<div class="d-flex align-items-center gap-2"><span class="fw-bold text-primary fs-6">' . pgh_e($judul) . '</span></div>'
+        . pgh_kotak_cari($sub, $q) . '</div>';
 }
