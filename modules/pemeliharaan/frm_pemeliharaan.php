@@ -214,12 +214,13 @@ try {
                     <th>SIM ID</th>
                     <th>MODEM</th>
                     <th>NO ORDER / PETUGAS</th>
-                    <th class="text-end pe-4">TAHAP / STATUS</th>
+                    <th>TAHAP / STATUS</th>
+                    <th class="text-end pe-4">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_pk)): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK pemeliharaan di sistem. Klik tombol "Buat FPK" di kanan atas untuk mulai mencatat.' ?></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK pemeliharaan di sistem. Klik tombol "Buat FPK" di kanan atas untuk mulai mencatat.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_pk as $idx => $row): ?>
                         <tr class="border-bottom">
@@ -235,19 +236,27 @@ try {
                             <td>
                                 <?php if (!empty($row['NoFormOrder'])): ?>
                                     <span class="font-monospace"><?= ph_e($row['NoFormOrder']) ?></span>
-                                    <a href="<?= ph_e($url_cetak_order . '?no_order=' . urlencode($row['NoFormOrder'])) ?>" target="_blank" rel="noopener" class="ms-1 text-decoration-none" title="Cetak Formulir Order"><i class="bi bi-printer"></i></a>
                                     <br><small class="text-muted"><?= ph_e($row['PetugasOrder'] ?? '-') ?></small>
                                 <?php else: ?>
                                     <span class="text-muted fst-italic small">Belum diorderkan</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end pe-4">
+                            <td>
                                 <?php if (!empty($row['NoFba'])): ?>
                                     <?= (($row['StatusBa'] ?? '') === 'AKTIF') ? '<span class="badge bg-success-subtle text-success">BA SELESAI</span>' : '<span class="badge bg-warning-subtle text-warning-emphasis">BA PENDING</span>' ?>
                                 <?php elseif (!empty($row['NoFormOrder'])): ?>
                                     <span class="badge bg-primary-subtle text-primary">MENUNGGU EKSEKUSI</span>
                                 <?php else: ?>
                                     <span class="badge bg-secondary-subtle text-secondary">FPK BARU (TIDAK)</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end pe-4">
+                                <?php if (!empty($row['NoFormOrder'])): ?>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="<?= ph_e($url_cetak_order . '?no_order=' . urlencode($row['NoFormOrder'])) ?>" target="_blank" rel="noopener" class="btn btn-outline-primary py-1 px-2" title="Cetak Formulir Order Perintah Kerja"><i class="bi bi-printer-fill"></i></a>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted small">-</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
