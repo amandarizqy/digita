@@ -140,7 +140,7 @@ if (!empty($pesan_error))  echo pr_alert('danger', $pesan_error);
                         <td class="text-end pe-4">
                             <a href="<?= pr_e($url_survey(['act' => 'delete', 'idpel' => $row['Idpel'], 'hal' => $page])) ?>"
                                class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus data"
-                               onclick="return confirm(<?= pr_e(json_encode('Hapus SELURUH baris kategorisasi IdPel ' . $row['Idpel'] . '? Ini juga menghapus Tingkat Kepentingan dan hasil klasifikasi risikonya.')) ?>);">
+                               data-konfirmasi="<?= pr_e('Hapus SELURUH baris kategorisasi IdPel ' . $row['Idpel'] . '? Ini juga menghapus Tingkat Kepentingan dan hasil klasifikasi risikonya.') ?>" data-judul="Hapus data?" data-ya="Ya, Hapus" data-bahaya="1">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </td>
@@ -162,3 +162,5 @@ document.addEventListener('DOMContentLoaded', function () {
     if (up) up.addEventListener('change', function () { f.submit(); });
 });
 </script>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

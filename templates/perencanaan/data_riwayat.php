@@ -91,7 +91,7 @@ if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
                         <td class="text-end pe-4">
                             <a href="<?= pr_e($url_riwayat(['act' => 'delete', 'idpel' => $row['IdPel'], 'thblrek' => $row['ThBlRek'], 'hal' => $page])) ?>"
                                class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus data"
-                               onclick="return confirm(<?= pr_e(json_encode('Hapus riwayat IdPel ' . $row['IdPel'] . ' (rekening ' . $row['ThBlRek'] . ')?')) ?>);">
+                               data-konfirmasi="<?= pr_e('Hapus riwayat IdPel ' . $row['IdPel'] . ' (rekening ' . $row['ThBlRek'] . ')?') ?>" data-judul="Hapus data?" data-ya="Ya, Hapus" data-bahaya="1">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </td>
@@ -103,3 +103,5 @@ if (!empty($pesan_error))  echo pr_alert('danger', pr_e($pesan_error));
     </div>
     <?= pr_footer_tabel($page, $limit, $total_data, fn($h) => $url_riwayat(['hal' => $h])) ?>
 </div>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

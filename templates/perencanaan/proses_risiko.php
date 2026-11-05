@@ -27,7 +27,7 @@ echo pr_header([
         'label' => 'Proses Semua Data', 'icon' => 'bi-lightning-charge-fill',
         'attrs' => 'type="submit" form="formRisiko" name="proses_semua" value="1"'
                  . ($siap_proses ? '' : ' disabled title="Pilih Unit AP terlebih dahulu"')
-                 . ' onclick="return confirm(' . pr_e(json_encode($msg_semua)) . ');"',
+                 . ' data-konfirmasi="' . pr_e($msg_semua) . '" data-judul="Proses semua data?" data-ya="Ya, Proses"',
     ]],
 ]);
 
@@ -178,7 +178,7 @@ if (!empty($pesan_info))   echo pr_alert('warning', $pesan_info);
             <?php $msg_terpilih = 'Proses hanya data yang dicentang di wilayah ' . $scope_label . '? Data tanpa Posisi SR / Level Kepentingan otomatis dilewati.'; ?>
             <button type="submit" form="formRisiko" name="proses_risiko" value="1" class="btn btn-outline-primary btn-sm px-3"
                     <?= $siap_proses ? '' : 'disabled title="Pilih Unit AP terlebih dahulu"' ?>
-                    onclick="return confirm(<?= pr_e(json_encode($msg_terpilih)) ?>);">
+                    data-konfirmasi="<?= pr_e($msg_terpilih) ?>" data-judul="Proses data terpilih?" data-ya="Ya, Proses">
                 <i class="bi bi-check2-square me-1"></i> Proses Terpilih
             </button>
         </div>
@@ -237,7 +237,7 @@ if (!empty($pesan_info))   echo pr_alert('warning', $pesan_info);
                                 <?php if (!$belum_diproses): ?>
                                     <a href="<?= pr_e($url_daftar(['action_crud' => 'hapus', 'idpel' => $row['Idpel'], 'hal' => $hal])) ?>"
                                        class="btn btn-outline-danger btn-sm py-1 px-2" title="Reset hasil klasifikasi"
-                                       onclick="return confirm(<?= pr_e(json_encode('Reset hasil klasifikasi Periode ' . $periode_filter . ' untuk IDPel ' . $row['Idpel'] . '?')) ?>);">
+                                       data-konfirmasi="<?= pr_e('Reset hasil klasifikasi Periode ' . $periode_filter . ' untuk IDPel ' . $row['Idpel'] . '?') ?>" data-judul="Reset hasil klasifikasi?" data-ya="Ya, Reset" data-bahaya="1">
                                         <i class="bi bi-arrow-counterclockwise"></i>
                                     </a>
                                 <?php else: ?>
@@ -325,3 +325,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

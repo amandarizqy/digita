@@ -125,7 +125,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                     <?php if ($boleh_ubah): ?>
                     <td class="text-end pe-4 text-nowrap">
                         <form method="POST" action="<?= pg_e(pg_url('monitor_tul')) ?>" class="d-inline"
-                              onsubmit="return confirm('<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> TUL <?= pg_e($r['NoTul']) ?>?');">
+                              data-konfirmasi="<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> TUL <?= pg_e($r['NoTul']) ?>?" data-judul="<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> data?" data-ya="Ya, <?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?>"<?= $aktif ? ' data-bahaya="1"' : '' ?>>
                             <?= $tetap ?>
                             <input type="hidden" name="notul" value="<?= pg_e($r['NoTul']) ?>">
                             <input type="hidden" name="status_baru" value="<?= $aktif ? 'TIDAK' : 'AKTIF' ?>">
@@ -142,3 +142,5 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
     </div>
     <?= pg_footer_tabel($hal, $limit, $total_data, fn($h) => $url_tul(['hal' => $h > 1 ? $h : ''])) ?>
 </div>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

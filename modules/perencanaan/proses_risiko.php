@@ -156,9 +156,6 @@ $ambil_pelanggan_dalam_upi = function (string $idpel) use ($conn, $unitUpi) {
 // ==========================================
 // CATATAN PENTING: PosisiSR HANYA berarti "apakah lokasi pelanggan ini saling
 // tergantung/paralel dengan pelanggan lain" (0 = mandiri, 1 = tergantung).
-// Ia TIDAK ADA hubungannya dengan LevelKepentingan (yang berasal dari modul
-// input_kepentingan.php terpisah), sehingga aksi ini murni hanya mengubah
-// PosisiSR dan tidak pernah menyentuh kolom LevelKepentingan.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && $_POST['action_type'] === 'update_sr') {
     $idpel_target = trim($_POST['idpel_target'] ?? '');
     $posisi_sr    = trim($_POST['posisi_sr'] ?? '0');

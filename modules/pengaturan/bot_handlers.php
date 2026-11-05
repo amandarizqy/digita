@@ -312,11 +312,11 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $peta_unit = bh_peta_unit($conn, $upi, trim((string) ($bot['UnitAp'] ?? '')), trim((string) ($bot['UnitUp'] ?? '')));
 
     $kolom   = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                'NomorKwh', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
+                'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
     $transit = array_values(array_diff($kolom, ['StatusData']));   // transit_dil tidak punya StatusData
     $header  = [
         'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
-        'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorKwh',
+        'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter',
         'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
     ];
     $norm_id = function ($v): string {
@@ -399,7 +399,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
             $idpel, $nama, $g('Alamat', 100), $g('JenisMk', 10), $g('NomorTlp', 20), $g('NomorHp', 20),
             $g('GolTar', 5), (int) round((float) str_replace(',', '.', $g('Daya', 15))),
             in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-            $g('KdPembMeter', 1), $g('NomorKwh', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
+            $g('KdPembMeter', 1), $g('NomorMeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
             $akun, $r_up, $r_ap, $r_upi,
         ];
         if (count($batch) >= BH_CHUNK) { $kirim($batch); $batch = []; }

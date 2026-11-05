@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/input_dil.php  -  Input DIL (tabel `dil`)
-// Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorKwh
+// Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorMeter
 //            | Aktifasi | ProdukPrabayar | IndexPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
 // Fitur: tambah manual (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
 // Import: baris Excel dimasukkan ke tabel penampung `transit_dil`, dipindahkan ke `dil`, lalu transit_dil dikosongkan lagi.
@@ -26,16 +26,16 @@ if (!function_exists('pg_norm_idpel')) {
 
 /** Kolom tabel dil yang diisi dari Excel (urutan = urutan INSERT). */
 const DIL_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                   'NomorKwh', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
+                   'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
 
 /** transit_dil tidak punya StatusData: kolomnya sama dengan dil tanpa StatusData. StatusData (AKTIF) diberikan saat pindah ke dil. */
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                       'NomorKwh', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
+                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
 /** Judul kolom Excel (huruf besar, tanpa spasi/simbol) => kolom dil. */
 const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
-    'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorKwh',
+    'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter',
     'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
 
@@ -84,13 +84,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Tegangan ukur harus TR, TM, atau TT.';
         } else {
             try {
-                $st = $conn->prepare("INSERT INTO dil (IdPel, Nama, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorKwh,
+                $st = $conn->prepare("INSERT INTO dil (IdPel, Nama, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorMeter,
                                                        Aktifasi, ProdukPrabayar, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', NOW())");
                 $st->execute([
                     $idpel, $nama, $t('alamat', 100), $t('jenismk', 10), $t('nomortlp', 20), $t('nomorhp', 20),
                     strtoupper($t('goltar', 5)), $daya_mentah === '' ? 0 : (int) $daya_mentah, $teg === '' ? null : $teg, $kdp,
-                    $t('nomorkwh', 15), $t('aktifasi', 15), $t('produkprabayar', 50),
+                    $t('nomormeter', 15), $t('aktifasi', 15), $t('produkprabayar', 50),
                     mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20),
                     $t('unitup', 5), $t('unitap', 5), $t('unitupi', 2),
                 ]);
@@ -174,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $idpel, $nama, $g('Alamat', 100), $g('JenisMk', 10), $g('NomorTlp', 20), $g('NomorHp', 20),
                         $g('GolTar', 5), (int) round((float) str_replace(',', '.', $g('Daya', 15))),
                         in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-                        $g('KdPembMeter', 1), $g('NomorKwh', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
+                        $g('KdPembMeter', 1), $g('Nomormeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
                         $akun, $g('UnitUp', 5), $g('UnitAp', 5), $g('UnitUpi', 2),
                     ];
                     if (count($batch) >= 500) { $kirim($batch); $batch = []; }

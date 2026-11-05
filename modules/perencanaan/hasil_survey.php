@@ -147,7 +147,7 @@ if (isset($_GET['act']) && $_GET['act'] == 'delete') {
 // 2. PARAMETER FILTER, PENCARIAN & PAGINASI
 // ---------------------------------------------------------
 $keyword   = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
-$posisi_sr = isset($_GET['posisi_sr']) && in_array($_GET['posisi_sr'], ['0', '1']) ? $_GET['posisi_sr'] : '';
+$posisi_sr = isset($_GET['PosisiSR']) && in_array($_GET['PosisiSR'], ['0', '1']) ? $_GET['PosisiSR'] : '';
 $limit     = isset($_GET['limit']) && in_array((int)$_GET['limit'], [10, 25, 50, 100]) ? (int)$_GET['limit'] : 10;
 $page      = isset($_GET['hal']) && (int)$_GET['hal'] > 0 ? (int)$_GET['hal'] : 1;   // `page` dipakai router utama
 $offset    = ($page - 1) * $limit;
@@ -170,8 +170,8 @@ if (!empty($keyword)) {
 
 // Filter Posisi SR (0 = Mandiri, 1 = Terhubung)
 if ($posisi_sr !== '') {
-    $where_clauses[] = "k.PosisiSR = :posisi_sr";
-    $params[':posisi_sr'] = $posisi_sr;
+    $where_clauses[] = "k.PosisiSR = :PosisiSR";
+    $params[':PosisiSR'] = $posisi_sr;
 }
 
 $where_sql = " WHERE " . implode(" AND ", $where_clauses);

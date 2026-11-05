@@ -43,7 +43,7 @@ $root_tampil  = $root_bot !== '' ? $root_bot : str_replace('\\', '/', (string) $
                         <th>Bot</th>
                         <th>Jenis</th>
                         <th>Folder (relatif)</th>
-                        <th>Wilayah (AP/UP)</th>
+                        <th>Wilayah</th>
                         <th class="text-center">Status</th>
                         <th>Terakhir Jalan</th>
                         <th class="text-end">Aksi</th>

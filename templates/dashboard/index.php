@@ -202,16 +202,4 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
     <?php endforeach; ?>
   </div>
 
-  <div class="box">
-    <h5 class="sec">Perlu tindakan</h5><div class="sub mb-2">Item yang menunggu penanganan di wilayah Anda</div>
-    <?php if ($todo): foreach ($todo as $t): ?>
-      <a class="row-i" href="<?= dash_h(dash_link($t[3], $kode_hak)) ?>"><span class="ic"><i class="bi <?= $t[0] ?>"></i></span><?= dash_h($t[1]) ?><span class="cnt"><?= dash_n($t[2]) ?></span></a>
-    <?php endforeach; else: ?><div class="empty"><i class="bi bi-check2-circle me-1"></i>Tidak ada yang perlu ditindaklanjuti.</div><?php endif; ?>
-  </div>
-
-  <?php if ($kode_hak === 'SA.KP' && $err): ?>
-  <details class="mt-4 small"><summary class="text-danger">Query dashboard gagal (<?= count($err) ?>) - cek nama tabel/kolom</summary>
-    <ul class="mt-2 mb-0"><?php foreach ($err as $e): ?><li><strong><?= dash_h($e[0]) ?></strong>: <code><?= dash_h($e[1]) ?></code></li><?php endforeach; ?></ul>
-  </details>
-  <?php endif; ?>
 </div>
