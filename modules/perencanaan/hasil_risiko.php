@@ -181,7 +181,7 @@ try {
 
     $st = $conn->prepare("
         SELECT k.IdPel AS Idpel, d.Nama AS NamaPelanggan, k.Periode, k.PosisiSR, k.LevelKeterlambatan, k.LevelKepentingan,
-               k.LevelKemungkinan, k.LevelDampak, k.Kuadran, k.SkalaPrioritas,
+               k.LevelKemungkinan, k.LevelDampak, k.KuadranKemungkinan, k.SkalaPrioritas,
                COALESCE(NULLIF(mu.SingkatanNama, ''), k.UnitUp) AS NamaUnitUp
         FROM kategorisasi_risiko k
         LEFT JOIN dil d ON d.Idpel = k.IdPel

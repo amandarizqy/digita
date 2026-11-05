@@ -333,7 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
             $sql_bulk_upsert = "
                 INSERT INTO kategorisasi_risiko (
                     Periode, IdPel, LevelKeterlambatan, LevelKepentingan, 
-                    LevelKemungkinan, LevelDampak, Kuadran, PosisiSR, 
+                    LevelKemungkinan, LevelDampak, KuadranKemungkinan, PosisiSR, 
                     SkalaPrioritas, UnitUp, UnitAp, UnitUpi
                 )
                 SELECT 
@@ -342,8 +342,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                     kd.lvKeterlambatan,
                     kd.lvKepentingan,
                     CASE 
-                        WHEN kd.kuadran IN (1, 2) THEN 'SANGAT JARANG TERJADI'
-                        WHEN kd.kuadran IN (3, 4, 5) THEN 'BISA TERJADI'
+                        WHEN kd.kuadranKemungkinan IN (1, 2) THEN 'SANGAT JARANG TERJADI'
+                        WHEN kd.kuadranKemungkinan IN (3, 4, 5) THEN 'BISA TERJADI'
                         ELSE 'SANGAT MUNGKIN TERJADI'
                     END AS lvKemungkinan,
                     CASE 
@@ -351,23 +351,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                         WHEN kd.total_amount > :p70 THEN 'SANGAT TINGGI'
                         ELSE 'MODERAT'
                     END AS lvDampak,
-                    kd.kuadran,
+                    kd.kuadranKemungkinan,
                     kd.posisi_sr,
                     CASE 
-                        WHEN kd.kuadran IN (1,2) AND kd.total_amount <= :p10 THEN 1
-                        WHEN kd.kuadran IN (1,2) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 2
-                        WHEN kd.kuadran IN (1,2) AND kd.total_amount > :p70 THEN 3
-                        WHEN kd.kuadran IN (3,4,5) AND kd.total_amount <= :p10 THEN 4
-                        WHEN kd.kuadran IN (3,4,5) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 5
-                        WHEN kd.kuadran IN (3,4,5) AND kd.total_amount > :p70 THEN 6
-                        WHEN kd.kuadran IN (6,7,8,9) AND kd.total_amount <= :p10 THEN 7
-                        WHEN kd.kuadran IN (6,7,8,9) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 8
-                        WHEN kd.kuadran IN (6,7,8,9) AND kd.total_amount > :p70 THEN 9
+                        WHEN kd.kuadranKemungkinan IN (1,2) AND kd.total_amount <= :p10 THEN 1
+                        WHEN kd.kuadranKemungkinan IN (1,2) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 2
+                        WHEN kd.kuadranKemungkinan IN (1,2) AND kd.total_amount > :p70 THEN 3
+                        WHEN kd.kuadranKemungkinan IN (3,4,5) AND kd.total_amount <= :p10 THEN 4
+                        WHEN kd.kuadranKemungkinan IN (3,4,5) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 5
+                        WHEN kd.kuadranKemungkinan IN (3,4,5) AND kd.total_amount > :p70 THEN 6
+                        WHEN kd.kuadranKemungkinan IN (6,7,8,9) AND kd.total_amount <= :p10 THEN 7
+                        WHEN kd.kuadranKemungkinan IN (6,7,8,9) AND (kd.total_amount > :p10 AND kd.total_amount <= :p70) THEN 8
+                        WHEN kd.kuadranKemungkinan IN (6,7,8,9) AND kd.total_amount > :p70 THEN 9
                         ELSE 0
                     END AS skalaPrioritas,
                     kd.unit_up, kd.unit_ap, kd.unit_upi
                 FROM (
-                    -- LEVEL C: Kuadran = matriks penuh 3x3 (LevelKepentingan x LevelKeterlambatan)
+                    -- LEVEL C: KuadranKemungkinan = matriks penuh 3x3 (LevelKepentingan x LevelKeterlambatan)
                     SELECT
                         ket.IdPel,
                         ket.periode_val,
@@ -389,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                             WHEN ket.lvKepentingan = 'TINGGI'  AND ket.lvKeterlambatan = 'MODERAT' THEN 8
                             WHEN ket.lvKepentingan = 'TINGGI'  AND ket.lvKeterlambatan = 'TINGGI'  THEN 9
                             ELSE 0
-                        END AS kuadran
+                        END AS kuadranKemungkinan
                     FROM (
                         -- LEVEL B: LevelKeterlambatan dari counter mentah (sama seperti helper::hitungKeterlambatan)
                         SELECT
@@ -435,7 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['proses_risiko']) || 
                     LevelKepentingan   = VALUES(LevelKepentingan),
                     LevelKemungkinan   = VALUES(LevelKemungkinan),
                     LevelDampak        = VALUES(LevelDampak),
-                    Kuadran            = VALUES(Kuadran),
+                    KuadranKemungkinan = VALUES(KuadranKemungkinan),
                     PosisiSR           = VALUES(PosisiSR),
                     SkalaPrioritas     = VALUES(SkalaPrioritas),
                     UnitUp             = VALUES(UnitUp),
@@ -559,7 +559,7 @@ try {
             k.LevelKepentingan,
             k.LevelKemungkinan, 
             k.LevelDampak, 
-            k.Kuadran, 
+            k.KuadranKemungkinan, 
             k.SkalaPrioritas 
         FROM $unit_map u
         LEFT JOIN dil d ON d.IdPel = u.IdPel
