@@ -34,7 +34,7 @@ function dash_scope($kode, $c, $up, $ap, $upi) {
 }
 
 // ===== DATA (dengan cache sesi) ==================================================================
-$kunci = $kode_hak . '|' . $u_up . '|' . $u_ap . '|' . $u_upi;
+$kunci = 'v3|' . $kode_hak . '|' . $u_up . '|' . $u_ap . '|' . $u_upi;
 $c = $_SESSION['dash_cache'] ?? null;
 if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refresh'])) {
     $D = $c['d'];
@@ -72,6 +72,21 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
            LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
           WHERE b.JenisPekerjaan = 'PEMELIHARAAN' AND b.StatusData = 'AKTIF'" . $sp,
         array_merge([$awal, $akhir], $pp));
+    // Penghapusan: FPK (JenisPk 'BERHENTI') -> Order -> BA 'BONGKAR'.
+    // Status FPK/BA: 'TIDAK' = belum selesai (terbuka / pending), 'AKTIF' = selesai (alat sudah dilepas dari pelanggan).
+    // Lampu 'TIDAK' pada BA bongkar = "perlu mutasi" (lihat PGH_LAMPU di penghapusan_helper.php).
+    $h = dash_q($conn, $err, 'Penghapusan',
+        "SELECT COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NULL),0) AS belum_order,
+                COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NOT NULL AND b.NoFba IS NULL),0) AS menunggu,
+                COALESCE(SUM(p.StatusData = 'TIDAK' AND b.NoFba IS NOT NULL),0) AS pending,
+                COALESCE(SUM(b.StatusData = 'AKTIF' AND b.TglFba >= ? AND b.TglFba < ?),0) AS selesai_bln,
+                COALESCE(SUM(b.StatusData = 'AKTIF' AND b.TglFba >= ? AND b.TglFba < ? AND bd.LampuIndikator = 'TIDAK'),0) AS lampu_mati
+           FROM frm_pk p
+           LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
+           LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'BONGKAR'
+           LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'BONGKAR'
+          WHERE p.JenisPk = 'BERHENTI'" . $sp,
+        array_merge([$awal, $akhir, $awal, $akhir], $pp));
     $k = dash_q($conn, $err, 'Pengiriman',
         "SELECT COUNT(*) AS n FROM formulir_pengiriman WHERE StatusPengiriman = 'DIKIRIM'" . $s2, $p2);
     $r = dash_q($conn, $err, 'Prioritas',
@@ -102,11 +117,14 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
         'tunggakan' => (float)($l['tunggakan'] ?? 0), 'lunas' => (int)($l['lunas'] ?? 0),
         'rusak' => (int)($m['rusak'] ?? 0), 'pml' => (int)($m['bulan_ini'] ?? 0),
         'kirim' => (int)($k['n'] ?? 0), 'prio' => (int)($r['n'] ?? 0), 'periode_prio' => $periode_prio ?? null,
+        'pgh_belum_order' => (int)($h['belum_order'] ?? 0), 'pgh_menunggu' => (int)($h['menunggu'] ?? 0), 'pgh_pending' => (int)($h['pending'] ?? 0),
+        'pgh_selesai' => (int)($h['selesai_bln'] ?? 0), 'pgh_lampu_mati' => (int)($h['lampu_mati'] ?? 0),
         'izin' => $izin, 'err' => $err, 'waktu' => time(),
     ];
     $_SESSION['dash_cache'] = ['k' => $kunci, 't' => time(), 'd' => $D];
 }
 extract($D, EXTR_SKIP);
+$pgh_terbuka = $pgh_belum_order + $pgh_menunggu + $pgh_pending;   // FPK penghapusan yang belum selesai
 
 // ===== TAMPILAN ==================================================================================
 $modul = [
@@ -115,7 +133,7 @@ $modul = [
     'pemasangan'   => ['Pemasangan',       'bi-tools',                  dash_n($pasang), 'S41 terpasang',          dash_n($gudang) . ' belum terpasang',    3],
     'penggunaan'   => ['Penggunaan',       'bi-people',                 dash_n($dil),    'pelanggan DIL aktif',    dash_n($lunas) . ' pelunasan bulan ini', 4],
     'pemeliharaan' => ['Pemeliharaan',     'bi-wrench-adjustable',      dash_n($pml),    'pemeliharaan bulan ini', dash_n($rusak) . ' relay rusak',         5],
-    'penghapusan'  => ['Penghapusan',      'bi-trash3',                 '-',             'modul belum tersedia',   'segera hadir',                          6],
+    'penghapusan'  => ['Penghapusan',      'bi-trash3',                 dash_n($pgh_terbuka), 'FPK penghapusan terbuka', dash_n($pgh_selesai) . ' alat dibongkar bulan ini', 6],
     'master'       => ['Master Data',      'bi-database',               'Kelola',        'unit, pengguna, modem',  'data acuan aplikasi',                   0],
     'laporan'      => ['Laporan',          'bi-file-earmark-bar-graph', 'Lihat',         'rekap & ekspor',         'seluruh modul',                         0],
 ];
@@ -168,6 +186,12 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
 .dash .row-i .ic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:#f1f4f7;color:var(--teal);flex:none}
 .dash .row-i .cnt{margin-left:auto;font-weight:700;background:#fdf0cc;color:#8a6200;border-radius:999px;padding:.1rem .6rem;font-size:.8rem}
 .dash .empty{color:var(--mute);font-size:.85rem;padding:1rem 0;text-align:center}
+/* Alur penghapusan */
+.dash .pgh{position:relative;border-top:3px solid var(--c,var(--teal));transition:box-shadow .15s}
+.dash .pgh:hover{box-shadow:0 6px 18px rgba(11,37,58,.14)}
+.dash .pgh .n{font-size:1.6rem;font-weight:700;color:var(--ink);line-height:1}
+.dash .pgh .t{font-weight:700;color:var(--ink);font-size:.9rem;margin-top:.5rem}
+.dash .pgh .d{font-size:.78rem;color:var(--mute)}
 </style>
 
 <div class="dash">
@@ -189,7 +213,7 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
   <div class="row g-3 mb-4">
     <?php foreach ($modul as $key => $m):
         if ($izin !== null && !isset($izin[$key])) continue;
-        $off = $key === 'penghapusan';
+        $off = false;
         $ikon = ($izin[$key]['icon'] ?? '') ?: $m[1];   // ikon dari menu DB, cadangan = bawaan dashboard
         $judul = ($izin[$key]['nama'] ?? '') ?: $m[0]; ?>
     <div class="col-xl-3 col-md-6"><div class="box mod <?= $off ? 'off' : '' ?>">
@@ -201,5 +225,29 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
     </div></div>
     <?php endforeach; ?>
   </div>
+
+<?php if ($izin === null || isset($izin['penghapusan'])):
+      $pgh_eks = in_array($kode_hak, ['SF.AP', 'SF.UP', 'SA.KP'], true);   // yang boleh eksekusi, sama dengan modules/penghapusan/akses.php
+      $pgh_tahap = [
+          ['Belum masuk order',     $pgh_belum_order, 'FPK menunggu digabung ke order',      $pgh_eks ? 'order_penghapusan'  : 'monitoring_order',  'amber'],
+          ['Menunggu pembongkaran', $pgh_menunggu,    'sudah di order, belum ada BA',        $pgh_eks ? 'mutasi_penghapusan' : 'monitoring_mutasi', 'navy'],
+          ['BA pending',            $pgh_pending,     'alat belum dilepas dari pelanggan',   $pgh_eks ? 'mutasi_penghapusan' : 'monitoring_mutasi', 'red'],
+          ['Selesai bulan ini',     $pgh_selesai,     'alat dilepas dan dinonaktifkan',      'monitoring_mutasi',                                   'teal'],
+      ]; ?>
+  <h5 class="sec">Alur penghapusan</h5><div class="sub mb-2">Dari FPK sampai alat dilepas dari pelanggan.</div>
+  <div class="row g-3 mb-2">
+    <?php foreach ($pgh_tahap as $t): ?>
+    <div class="col-xl-3 col-md-6"><div class="box pgh t-<?= $t[4] ?>">
+      <div class="n"><?= dash_n($t[1]) ?></div>
+      <div class="t"><?= dash_h($t[0]) ?></div>
+      <div class="d"><?= dash_h($t[2]) ?></div>
+      <a href="<?= dash_h(BASE_URL . '/index.php?page=penghapusan&sub=' . $t[3]) ?>" class="stretched-link" aria-label="<?= dash_h($t[0]) ?>"></a>
+    </div></div>
+    <?php endforeach; ?>
+  </div>
+  <?php if ($pgh_selesai > 0): ?>
+  <div class="sub mb-4"><i class="bi bi-lightbulb me-1"></i><?= dash_n($pgh_lampu_mati) ?> dari <?= dash_n($pgh_selesai) ?> alat yang dibongkar bulan ini berlampu mati (perlu mutasi).</div>
+  <?php else: ?><div class="mb-4"></div><?php endif; ?>
+<?php endif; ?>
 
 </div>

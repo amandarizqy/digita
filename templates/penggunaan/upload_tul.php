@@ -166,7 +166,7 @@ $contoh_baris = [
                     <li><strong>Nama Pelanggan</strong> melengkapi DIL hanya bila nama di DIL masih kosong.</li>
                     <li><strong>Stand Pemutusan</strong> &rarr; Stand Baca dan <strong>Tgl Pelaksanaan Putus</strong> &rarr; Tgl Baca; bila kosong, nilai lama tidak ditimpa.</li>
                     <li>Baris <em>TOTAL</em> di akhir laporan dilewati otomatis; kolom lain diabaikan; huruf besar/kecil judul tidak berpengaruh.</li>
-                    <li>Pelanggan yang belum ada di DIL ditambahkan otomatis (AKTIF). Status TUL lama tidak berubah saat diunggah ulang.</li>
+                    <li>Id Pelanggan tidak dicek ke master barang; seluruh baris valid langsung disimpan ke data TUL. Status TUL lama tidak berubah saat diunggah ulang.</li>
                     <li>UnitUpi dari akun yang login; UnitAp dan UnitUp sesuai pilihan Wilayah Tujuan.</li>
                 </ul>
             </div>

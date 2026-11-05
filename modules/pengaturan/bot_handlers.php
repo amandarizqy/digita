@@ -424,7 +424,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 }
 
 // ============================================================
-// TUL -> tul_601   [penggunaan/upload_tul.php]
+// TUL -> tul_601   [penggunaan/upload_tul.php]  (IdPel tidak dicek ke master_barang)
 // ============================================================
 function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
@@ -451,7 +451,7 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                  'awal' => 'Bulan Rekening Awal', 'akhir' => 'Bulan Rekening Akhir', 'lembar' => 'Jumlah Lembar', 'rptag' => 'Rp. Tagihan'];
 
     $baris = []; $nama_dil = []; $detail = [];
-    $dibaca = $tolak = $dup = $bentrok = $tanpaBarang = 0;
+    $dibaca = $tolak = $dup = $bentrok = 0;
     $peta = null;
 
     foreach (xlsx_baris($file) as $no => $sel) {
@@ -519,22 +519,8 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
             }
         }
 
-        // c1. FK tul_601.IdPel -> master_barang.IdPel: hanya pelanggan yang sudah punya perangkat terpasang.
-        $ada_barang = [];
-        foreach (array_chunk(array_values(array_unique(array_column($baris, 3))), BH_CHUNK) as $paket) {
-            $st = $conn->prepare('SELECT DISTINCT IdPel FROM master_barang WHERE IdPel IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
-            $st->execute($paket);
-            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $idp) $ada_barang[(string) $idp] = true;
-        }
-        foreach ($baris as $notul => $b) {
-            if (isset($ada_barang[$b[3]])) continue;
-            unset($baris[$notul]);
-            $tanpaBarang++; $tolak++;
-            if (count($detail) < 50) $detail[] = "Baris $b[0]: Tul $b[1] / IdPel $b[3] - IdPel belum terpasang perangkat (tidak ada di master_barang)";
-        }
-
-        // c1b. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong.
-        foreach (array_chunk(array_intersect_key($nama_dil, $ada_barang), BH_CHUNK, true) as $paket) {
+        // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong. IdPel tidak dicek ke master_barang.
+        foreach (array_chunk($nama_dil, BH_CHUNK, true) as $paket) {
             $case = $param = [];
             foreach ($paket as $idn => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $idn, $nm); }
             $in = implode(',', array_fill(0, count($paket), '?'));
@@ -558,13 +544,11 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     }
 
     if (!$baris) {
-        return bh_hasil('gagal', $tanpaBarang
-            ? "Tidak ada baris yang bisa disimpan: $tanpaBarang baris ditolak karena IdPel belum terpasang perangkat (tidak ada di master_barang)."
-            : 'Tidak ada baris valid yang bisa disimpan' . ($tolak ? " ($tolak baris ditolak)." : '.'), 0, $tolak, $detail);
+        return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($tolak ? " ($tolak baris ditolak)." : '.'), 0, $tolak, $detail);
     }
     $pesan = count($baris) . ' baris TUL VI-01' . ($dup ? ", $dup dobel dalam file" : '')
-           . ($tanpaBarang ? ", $tanpaBarang ditolak (IdPel belum terpasang perangkat)" : '') . ($bentrok ? ", $bentrok ditolak (wilayah lain)" : '')
-           . (($tolak - $tanpaBarang - $bentrok) > 0 ? ', ' . ($tolak - $tanpaBarang - $bentrok) . ' tidak valid' : '');
+           . ($bentrok ? ", $bentrok ditolak (wilayah lain)" : '')
+           . (($tolak - $bentrok) > 0 ? ', ' . ($tolak - $bentrok) . ' tidak valid' : '');
     return bh_hasil('sukses', $pesan, count($baris), $tolak, $detail);
 }
 
