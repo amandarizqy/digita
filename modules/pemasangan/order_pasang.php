@@ -31,7 +31,7 @@ if ($view === 'daftar') {
     $list_fpk = $stmt_fpk->fetchAll(PDO::FETCH_ASSOC);
 
     // Ambil Data Pelanggan untuk Modal FPK
-    $sql_pel = "SELECT IdPel, Peringkat, TotalTagihan, SkalaPrioritas FROM hasil_prioritas 
+    $sql_pel = "SELECT IdPel, Peringkat, SkalaPrioritas FROM dil 
                 WHERE IdPel NOT IN (SELECT IdPel FROM master_barang WHERE IdPel IS NOT NULL AND IdPel != '')
                   AND IdPel NOT IN (SELECT IdPel FROM frm_pk WHERE JenisPk = 'PASANG')";
     $params_pel = [];
