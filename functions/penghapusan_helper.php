@@ -79,6 +79,9 @@ function pgh_flash_html(): string
 function pgh_redirect(string $sub, string $tipe, string $pesan): void
 {
     pgh_flash_set($tipe, $pesan);
+    if ($tipe === 'sukses') {
+        unset($_SESSION['dash_cache']);   // dashboard langsung memuat angka terbaru setelah ada perubahan Penghapusan
+    }
     header('Location: index.php?page=penghapusan&menu=' . pgh_menu_dari_sub($sub) . '&sub=' . urlencode($sub));
     exit;
 }

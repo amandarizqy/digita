@@ -186,9 +186,6 @@ try {
 <?php if ($pesan_error): ?>
     <div class="alert alert-danger rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= pgh_e($pesan_error) ?></div>
 <?php endif; ?>
-<?php if (empty($pesan_error) && !pgh_pk_punya_alasan($conn)): ?>
-    <div class="alert alert-warning rounded-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Kolom <code>frm_pk.Alasan</code> belum ada. Jalankan <code>sql/01_penghapusan.sql</code> sebelum membuat FPK.</div>
-<?php endif; ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white">
     <?= pgh_card_header('Daftar FPK & Order Penghapusan', $sub_ini, $q) ?>

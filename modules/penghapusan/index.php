@@ -75,8 +75,8 @@ $halaman = [
 $tombol = [];
 if ($sub === 'order_penghapusan') {
     $tombol = [
-        ['type' => 'modal', 'label' => '1. Buat FPK',   'icon' => 'bi-tools',              'target' => 'modalBuatPK',    'class' => 'btn-primary'],
-        ['type' => 'modal', 'label' => '2. Buat Order', 'icon' => 'bi-file-earmark-plus',  'target' => 'modalBuatOrder', 'class' => 'btn-primary'],
+        ['type' => 'modal', 'label' => ' Buat FPK',   'icon' => 'bi-tools',              'target' => 'modalBuatPK',    'class' => 'btn-primary'],
+        ['type' => 'modal', 'label' => ' Buat Order', 'icon' => 'bi-file-earmark-plus',  'target' => 'modalBuatOrder', 'class' => 'btn-primary'],
     ];
 } elseif ($sub === 'monitoring_order' || $sub === 'monitoring_mutasi') {
     $tombol = [[
