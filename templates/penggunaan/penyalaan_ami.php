@@ -36,7 +36,7 @@ $baris = function (string $label, string $id, string $nilai, string $tambah = ''
          . '<div class="col-sm-9"><input type="text" class="form-control font-monospace" id="' . $id . '" value="' . pg_e($nilai) . '" placeholder="' . pg_e($kosong) . '" readonly>' . $tambah . '</div></div>';
 };
 ?>
-<div class="card border-0 shadow-sm rounded-4" style="max-width:900px;">
+<div class="card border-0 shadow-sm rounded-4 d-flex align-items-stretch">
     <div class="card-body p-4">
         <form id="formTiket" method="POST" action="<?= pg_e(pg_url($halaman)) ?>" autocomplete="off">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
