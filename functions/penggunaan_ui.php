@@ -36,14 +36,30 @@ function pg_hidden(string $action, array $extra = []): string
 function pg_menu(): array
 {
     return [
-        'input' => [
-            'label' => 'Input', 'icon' => 'bi-box-arrow-in-right', 'items' => [
+        'kartu' => [
+            'label' => 'Kartu', 'icon' => 'bi-credit-card', 'items' => [
+                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
+            ],
+        ],
+        'S41' => [
+            'label' => 'S41', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'input_dil'       => ['DIL', 'bi-journal-text'],
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'upload_tul'      => ['Upload TUL', 'bi-type'],
-                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
-                'input_perintah'  => ['Perintah', 'bi-terminal'],
+                'input_perintah_s41'  => ['Perintah', 'bi-terminal'],
+            ],
+        ],
+        'AMI' => [
+            'label' => 'AMI', 'icon' => 'bi-robot', 'items' => [
+                'pemutusan_ami'       => ['Pemutusan', 'bi-plug'],
+                'penyalaan_ami'       => ['Penyalaan', 'bi-lightning-charge'],
+            ],
+        ],
+        'AMR' => [
+            'label' => 'AMR', 'icon' => 'bi-person-gear', 'items' => [
+                'pemutusan_amr'       => ['Pemutusan', 'bi-plug'],
+                'penyalaan_amr'       => ['Penyalaan', 'bi-lightning-charge'],
             ],
         ],
         'monitoring' => [
@@ -52,7 +68,7 @@ function pg_menu(): array
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
                 'monitor_tul'       => ['TUL', 'bi-type'],
-                'monitor_perintah'  => ['Perintah', 'bi-terminal'],
+                'monitor_perintah_s41'  => ['Perintah', 'bi-terminal'],
                 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],

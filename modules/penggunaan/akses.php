@@ -17,19 +17,26 @@ if (!function_exists('pga_matriks')) {
         $input    = ['TL.UP', 'SF.UI', 'SF.UP'];             
 
         return [
-            // INPUT
+            // KARTU
+            'isi_pulsa'         => $input,      // Isi Pulsa
+            // S41
             'input_dil'         => $input,      // DIL
             'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
             'upload_tul'        => $input,      // Upload TUL
-            'isi_pulsa'         => $input,      // Isi Pulsa
-            'input_perintah'    => $input,      // Perintah
+            'input_perintah_s41'    => $input,      // Perintah
+            // AMI
+            'pemutusan_ami'     => $input,      // Pemutusan AMI
+            'penyalaan_ami'      => $input,      // Penyalaan AMI
+            // AMR
+            'pemutusan_amr'     => $input,      // Pemutusan AMR
+            'penyalaan_amr'      => $input,      // Penyalaan AMR
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL
             'monitor_pelunasan' => $tanpa_vd,   // Pelunasan
             'monitor_isi_pulsa' => $tanpa_vd,   // Isi Pulsa
             'monitor_tul'       => $tanpa_vd,   // TUL
-            'monitor_perintah'  => $tanpa_vd,   // Perintah
+            'monitor_perintah_s41'  => $tanpa_vd,   // Perintah
             'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
         ];
     }

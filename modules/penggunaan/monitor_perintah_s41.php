@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/monitor_perintah.php  -  Monitoring Perintah (hanya baca)
-// Tab: Tiket Putus (trx_order_putus) | Tiket Nyala (trx_order_nyala) | SMS Keluar (sms_outbox) | SMS Masuk (sms_inbox)
+// Tab: Tiket Putus (trx_order_putus_s41) | Tiket Nyala (trx_order_nyala_s41) | SMS Keluar (sms_outbox) | SMS Masuk (sms_inbox)
 // Wilayah: selalu mengikuti kode unit session akun (pg_scope()). Tiket: kolom Unit* pada tabel tiket.
 //          SMS: dicocokkan ke perangkat lewat 9 digit terakhir nomor (NomorBarang pada view) lalu difilter unit perangkat;
 //          SMS yang tidak cocok dengan perangkat di wilayah Anda tidak ditampilkan. Hanya $batas_sms SMS terakhir yang diperiksa.
@@ -38,7 +38,7 @@ if (!$unit_siap) {
         if ($tab === 'putus' || $tab === 'nyala') {
             // ------------------------- TIKET -------------------------
             if (!in_array($status, ['AKTIF', 'TIDAK', ''], true)) $status = '';
-            [$tb, $pk] = $tab === 'putus' ? ['trx_order_putus', 'TiketPutus'] : ['trx_order_nyala', 'TiketNyala'];
+            [$tb, $pk] = $tab === 'putus' ? ['trx_order_putus_s41', 'TiketPutusS41'] : ['trx_order_nyala_s41', 'TiketNyala'];
             $p = []; $scope = pg_scope($u, 't', 'Unit', $p);
 
             $st = $conn->prepare("SELECT COUNT(*), SUM(t.StatusData = 'AKTIF'), SUM(t.StatusData = 'TIDAK') FROM `$tb` t WHERE $scope");
@@ -52,7 +52,7 @@ if (!$unit_siap) {
                 $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.Nama LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
-            $join_n = $tab === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '';
+            $join_n = $tab === 'putus' ? " LEFT JOIN trx_order_nyala_s41 n ON n.TiketPutusS41 = t.TiketPutusS41" : '';
             $from = "FROM `$tb` t LEFT JOIN dil l ON l.IdPel = t.IdPel$join_n WHERE " . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(DISTINCT t.$pk) $from");
@@ -60,9 +60,9 @@ if (!$unit_siap) {
             $total_data = (int) $st->fetchColumn();
             $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-            $extra = $tab === 'putus' ? ", MIN(n.TiketNyala) AS Rujukan" : ", t.TiketPutus AS Rujukan";
+            $extra = $tab === 'putus' ? ", MIN(n.TiketNyala) AS Rujukan" : ", t.TiketPutusS41 AS Rujukan";
             $st = $conn->prepare("SELECT t.$pk AS Kode, t.JenisTiket, t.IdPel, NULLIF(l.Nama,'') AS NamaPelanggan, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData $extra
-                                  $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.Nama, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData" . ($tab === 'nyala' ? ", t.TiketPutus" : '') . "
+                                  $from GROUP BY t.$pk, t.JenisTiket, t.IdPel, l.Nama, t.ThBlRek, t.NomorBarang, t.UnitUp, t.NamaAkun, t.StatusData, t.WaktuData" . ($tab === 'nyala' ? ", t.TiketPutusS41" : '') . "
                                   ORDER BY t.WaktuData DESC, t.$pk DESC LIMIT :lim OFFSET :off");
         } else {
             // ------------------------- SMS (smsd) -------------------------

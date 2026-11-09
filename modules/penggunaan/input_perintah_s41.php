@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/input_perintah.php  -  Input Perintah (kirim manual ke perangkat lewat SMS Gateway)
-// Sumber (tab) : 'putus' = tabel trx_order_putus, 'nyala' = tabel trx_order_nyala (tiket otomatis dari trigger saldo / pelunasan),
+// Sumber (tab) : 'putus' = tabel trx_order_putus_s41, 'nyala' = tabel trx_order_nyala_s41 (tiket otomatis dari trigger saldo / pelunasan),
 //                'barang' = VIEW `vw_terpasang` (perangkat manual, tanpa tiket). Semua dibatasi wilayah akun (kode unit session, pg_scope()).
 //                Nomor tujuan = NomorBarang (pada tiket / view). Tabel tiket HANYA DIBACA; status tiket diubah oleh trigger.
 // Perintah  : pilihan tetap di bawah (PLNOFF, PLNON, PLNSTATUS); TIDAK lagi dari tabel baku_outbox.
@@ -16,8 +16,8 @@ $maks_kirim   = 50;      // batas perangkat per sekali kirim
 $sumber_barang = 'vw_terpasang';
 $db_gateway    = 'smsd';
 $tiket_cfg = [   // sumber tiket: tabel, kolom kunci, label, perintah yang disarankan
-    'putus' => ['tabel' => 'trx_order_putus', 'pk' => 'TiketPutus', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus'],
-    'nyala' => ['tabel' => 'trx_order_nyala', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala'],
+    'putus' => ['tabel' => 'trx_order_putus_s41', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus'],
+    'nyala' => ['tabel' => 'trx_order_nyala_s41', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala'],
 ];
 $sumber = (string) ($_POST['sumber'] ?? $_GET['sumber'] ?? 'putus');
 if (!isset($tiket_cfg[$sumber]) && $sumber !== 'barang') $sumber = 'putus';
@@ -219,7 +219,7 @@ if ($unit_siap) {
                 $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.Nama LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
-            $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '') . " WHERE " . implode(' AND ', $w);
+            $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala_s41 n ON n.TiketPutusS41 = t.TiketPutusS41" : '') . " WHERE " . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(DISTINCT t.$pk) $from");
             $st->execute($p);
