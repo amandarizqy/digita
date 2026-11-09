@@ -1,20 +1,36 @@
 <?php
-// modules/penggunaan/pemutusan_amr.php  -  Pemutusan AMR (tabel trx_order_putus_amr)
-// Form tiket: Sesi ID + [Create], lalu data tiket dan 8 tombol bantu (salin / buka PPOB / Lunas / buka MDMS / Ready / Gagal).
-// Halaman ini berdiri sendiri (tidak memakai file bersama); tampilan: templates/penggunaan/pemutusan_amr.php
-// Alur: isi No TUL (tabel tul_601) -> IdPel & periode dari TUL, Nomor Meter & HP dari DIL (masih bisa diubah) -> [Create] membuat tiket + Sesi ID baru.
-// Dibatasi wilayah akun (pg_scope). NamaAkun tiket = akun login.
+// modules/penggunaan/pemutusan_amr.php  -  Pemutusan AMR (tiket: trx_order_putus_amr, hasil tindakan: trx_tindakan_putus_amr)
+// Halaman berdiri sendiri; tampilan: templates/penggunaan/pemutusan_amr.php
+//
+// Alur:
+//   1. [Create]  -> buat SessionID baru (disimpan di session login, per halaman).
+//   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
+//        UPDATE trx_order_putus_amr SET Sesi = SessionID ... ORDER BY TiketPutusAmr ASC LIMIT 1
+//      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari TUL (tul_601) di wilayah akun yang belum punya tiket
+//   3. Tampilkan tiket milik SessionID yang belum ditindak.
+//   4. Tombol hasil menulis ke trx_tindakan_putus_amr:  Ready OFF = PADAM, Gagal OFF = GAGAL, Lunas = LUNAS
+//   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
+// ID tiket: T11. + UnitUp(5) + YYYYMMDD + nomor urut 4 digit per UnitUp per hari (0001, 0002, ...).
+// Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
 
 // ---- PENGATURAN ----
-$halaman    = 'pemutusan_amr';
-$judul      = 'Pemutusan AMR';
-$tabel      = 'trx_order_putus_amr';
-$pk         = 'TiketPutusAmr';
-$pk_len     = 23;
-$prefix_id  = 'PAR';
-
+$halaman        = 'pemutusan_amr';
+$judul          = 'Pemutusan AMR';
+$tabel          = 'trx_order_putus_amr';          // tabel tiket
+$pk             = 'TiketPutusAmr';             // kunci tiket
+$pk_len         = 23;            // panjang kolom kunci tiket
+$thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
+$awalan_tiket   = 'T11.';         // awalan ID tiket
+$tindakan_tabel = 'trx_tindakan_putus_amr';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
+$jenis_tindakan = [                     // tombol => nilai JenisTindakan
+    'ready' => 'PADAM',             // tombol Ready OFF
+    'gagal' => 'GAGAL',                 // tombol Gagal OFF
+    'lunas' => 'LUNAS',                 // tombol Lunas
+];
+// Syarat tambahan sumber TUL (opsional), mis. membedakan pelanggan AMI/AMR lewat DIL: "AND d.JenisMk = 'AMI'"  (alias: t = tul_601, d = dil)
+$syarat_sumber = '';
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => '#', 'mdms' => '#', 'lunas' => '#'];
+$link = ['ppob' => '#', 'mdms' => '#'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
@@ -23,44 +39,84 @@ $u         = pg_unit_akun($conn);
 $unit_siap = $u['upi'] !== '';
 $akun      = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
 $putus     = true;
+$kunci_sesi = 'pg_sesi_' . $halaman;                  // SessionID aktif halaman ini
+$sesi       = (string) ($_SESSION[$kunci_sesi] ?? '');
 
 // ---- pembantu lokal ----
-$teks = fn($v, int $maks) => mb_substr(trim(preg_replace('/\s+/u', ' ', (string) $v)), 0, $maks);
-/** ID Sesi: S + yymmddHHMMSS + '-' + 6 hex. ID tiket: prefix + YmdHis + hex acak, tepat $pk_len karakter. */
+/** SessionID: S + yymmddHHMMSS + '-' + 6 hex acak. Contoh: S261106153012-A1B2C3 */
 $buat_sesi = fn() => 'S' . date('ymdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
-$buat_id   = function () use ($prefix_id, $pk_len) {
-    $dasar = $prefix_id . date('YmdHis');
-    return $dasar . strtoupper(substr(bin2hex(random_bytes(8)), 0, max(0, $pk_len - strlen($dasar))));
-};
-/** Nama, nomor meter (NomorKwh) dan nomor HP dari DIL. */
-$ambil_dil = function (string $idpel) use ($conn): array {
-    $st = $conn->prepare("SELECT Nama, NomorKwh, NomorHp FROM dil WHERE IdPel = ?");
-    $st->execute([$idpel]);
-    $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
-    return ['nama' => trim((string) ($r['Nama'] ?? '')), 'meter' => trim((string) ($r['NomorKwh'] ?? '')), 'hp' => trim((string) ($r['NomorHp'] ?? ''))];
+
+/** ID tiket: awalan + UnitUp + YYYYMMDD + urutan 4 digit (urutan terakhir hari itu + 1 + $coba). */
+$buat_id = function (string $unit_up, int $coba) use ($conn, $tabel, $pk, $awalan_tiket): string {
+    $dasar = $awalan_tiket . $unit_up . date('Ymd');
+    $st = $conn->prepare("SELECT COALESCE(MAX(CAST(SUBSTRING(`$pk`, " . (strlen($dasar) + 1) . ", 4) AS UNSIGNED)), 0) FROM `$tabel` WHERE `$pk` LIKE :pola");
+    $st->execute([':pola' => $dasar . '%']);
+    return $dasar . str_pad((string) ((int) $st->fetchColumn() + 1 + $coba), 4, '0', STR_PAD_LEFT);
 };
 
-/**
- * Cari bahan form dari No TUL (tabel tul_601): IdPel & periode dari TUL, nama/meter/HP dari DIL. Dibatasi wilayah akun.
- * @return array ['ok' => bool, 'pesan' => string, 'data' => array]
- */
-$cari = function (string $kunci) use ($conn, $u, $tabel, $pk, $ambil_dil): array {
-    $kunci = trim($kunci);
-    if ($kunci === '') return ['ok' => false, 'pesan' => '', 'data' => []];
+/** Langkah 2a: tandai tiket AKTIF terlama yang belum diambil & belum ditindak dengan SessionID. true bila ada yang terambil. */
+$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel): bool {
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT t.NoTul, t.IdPel, t.ThBlRekAkhir AS ThblRek, t.UnitUp, t.UnitAp, t.UnitUpi FROM tul_601 t WHERE t.NoTul = :k AND $sc LIMIT 1");
-    $st->execute([':k' => $kunci] + $p);
-    $r = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$r) return ['ok' => false, 'pesan' => 'No TUL tidak ditemukan di wilayah Anda. Pastikan TUL sudah diunggah (Input > Upload TUL).', 'data' => []];
-    $dil = $ambil_dil((string) $r['IdPel']);
-    $st  = $conn->prepare("SELECT `$pk` FROM `$tabel` WHERE NoTul = ? AND StatusData = 'AKTIF' LIMIT 1");
-    $st->execute([$r['NoTul']]);
-    $ada = $st->fetchColumn();
-    return ['ok' => true, 'pesan' => $ada ? "Sudah ada tiket AKTIF untuk TUL ini ($ada)." : '', 'data' => [
-        'notul' => $r['NoTul'], 'idpel' => $r['IdPel'], 'thblrek' => (string) $r['ThblRek'], 'nama' => $dil['nama'],
-        'meter' => $dil['meter'], 'hp' => $dil['hp'], 'unit' => [$r['UnitUp'], $r['UnitAp'], $r['UnitUpi']], 'duplikat' => (bool) $ada,
-    ]];
+    $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = :sesi
+                          WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
+                            AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)
+                          ORDER BY t.`$pk` ASC LIMIT 1");
+    $st->execute([':sesi' => $sesi_id] + $p);
+    return $st->rowCount() === 1;
 };
+
+/** Langkah 2b: BUAT tiket baru atas nama SessionID. Mengembalikan ID tiket, atau '' bila tidak ada sumber. Panggil di dalam transaksi. */
+$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $pk_len, $thbl_len, $buat_id, $syarat_sumber): string {
+    // Sumber: TUL (tul_601) di wilayah akun yang belum punya tiket di tabel ini. Tidak ada pengecekan lain.
+    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+    $st = $conn->prepare("SELECT t.NoTul, t.IdPel, t.ThBlRekAkhir AS ThblRek, t.UnitUp, t.UnitAp, t.UnitUpi, d.NomorMeter, d.NomorHp
+                          FROM tul_601 t LEFT JOIN dil d ON d.IdPel = t.IdPel
+                          WHERE $sc AND NOT EXISTS (SELECT 1 FROM `$tabel` o WHERE o.NoTul = t.NoTul) $syarat_sumber
+                          ORDER BY t.NoTul ASC LIMIT 1 FOR UPDATE");
+    $st->execute($p);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$r) return '';
+    $meter = mb_substr(trim((string) $r['NomorMeter']), 0, 15);
+    $hp    = mb_substr(trim((string) $r['NomorHp']), 0, 20);
+    $ins = $conn->prepare("INSERT INTO `$tabel` (`$pk`, JenisTiket, NoTul, IdPel, ThblRek, NomorMeter, NomorHp, Sesi, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
+                           VALUES (?, 'PREVENTIF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', NOW())");
+    for ($coba = 0; $coba < 10; $coba++) {
+        $id = $buat_id((string) $r['UnitUp'], $coba);
+        if (strlen($id) > $pk_len) throw new RuntimeException('ID tiket melebihi panjang kolom ' . $pk . '.');
+        try {
+            $ins->execute([$id, $r['NoTul'], $r['IdPel'], mb_substr((string) $r['ThblRek'], 0, $thbl_len), $meter, $hp, $sesi_id, $akun, $r['UnitUp'], $r['UnitAp'], $r['UnitUpi']]);
+            return $id;
+        } catch (PDOException $e) {
+            if (($e->errorInfo[1] ?? 0) !== 1062) throw $e;          // nomor urut kembar -> coba nomor berikutnya
+        }
+    }
+    throw new RuntimeException('Gagal mendapatkan nomor tiket unik. Coba lagi.');
+};
+
+/** Langkah 2: ambil tiket antrean; bila tak ada, buat baru. Hasil: '' (tidak ada) | 'ambil' | 'baru'. */
+$ambil_berikutnya = function (string $sesi_id) use ($klaim, $buat_tiket): string {
+    if ($klaim($sesi_id)) return 'ambil';
+    return $buat_tiket($sesi_id) !== '' ? 'baru' : '';
+};
+
+/** Langkah 3: tiket milik SessionID yang belum ditindak (null bila tidak ada). */
+$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel): ?array {
+    if ($sesi_id === '') return null;
+    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+    $st = $conn->prepare("SELECT t.*, t.NoTul AS NoTulTampil FROM `$tabel` t WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF' AND $sc AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`) ORDER BY t.`$pk` ASC LIMIT 1");
+    $st->execute([':sesi' => $sesi_id] + $p);
+    return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+};
+
+/** Nama, nomor meter (NomorMeter) dan nomor HP dari DIL (cadangan bila kolom di tiket kosong). */
+$ambil_dil = function (string $idpel) use ($conn): array {
+    $st = $conn->prepare("SELECT Nama, NomorMeter, NomorHp FROM dil WHERE IdPel = ?");
+    $st->execute([$idpel]);
+    $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    return ['nama' => trim((string) ($r['Nama'] ?? '')), 'meter' => trim((string) ($r['NomorMeter'] ?? '')), 'hp' => trim((string) ($r['NomorHp'] ?? ''))];
+};
+
+$pesan_habis = 'Tidak ada TUL di wilayah Anda yang belum dibuatkan tiket. Unggah TUL dahulu (S41 > Upload TUL).';
 
 // ---- hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {
@@ -68,127 +124,107 @@ if (!empty($_SESSION['pg_flash'])) {
     $pesan_sukses = $fl['sukses'] ?? ''; $pesan_error = $fl['error'] ?? ''; $pesan_info = $fl['info'] ?? '';
 }
 
-// ---- pencarian bahan form (JSON, dipanggil JavaScript halaman) ----
-if (isset($_GET['cari'])) {
-    while (ob_get_level()) ob_end_clean();
-    header('Content-Type: application/json; charset=utf-8');
-    try {
-        echo json_encode($unit_siap ? $cari((string) $_GET['cari']) : ['ok' => false, 'pesan' => 'Unit akun belum diatur.', 'data' => []], JSON_UNESCAPED_UNICODE);
-    } catch (Throwable $e) {
-        echo json_encode(['ok' => false, 'pesan' => 'Gagal mencari: ' . $e->getMessage(), 'data' => []], JSON_UNESCAPED_UNICODE);
-    }
-    exit;
-}
-
-// ---- isian form (dipulihkan bila Create ditolak) ----
-$isi = ['jenis' => 'PREVENTIF', 'notul' => '', 'tiket_putus' => '', 'meter' => '', 'hp' => ''];
-
 // ---------------------------------------------------------
-// POST: create | ready | gagal
+// POST: create | ready | gagal | lunas
 // ---------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = (string) ($_POST['aksi'] ?? '');
-    $tiket_tuju = '';
-    $info_post  = '';
-    if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
-        $pesan_error = 'Sesi formulir tidak valid. Muat ulang halaman lalu coba lagi.';
-    } elseif (!$unit_siap) {
-        $pesan_error = 'Unit akun Anda belum diatur, sehingga tidak bisa membuat tiket.';
-    } elseif ($aksi === 'create') {
-        $isi['jenis']       = strtoupper(trim((string) ($_POST['jenis'] ?? 'PREVENTIF')));
-        $isi['notul']       = $teks($_POST['notul'] ?? '', 30);
-        $isi['tiket_putus'] = $teks($_POST['tiket_putus'] ?? '', 23);
-        $isi['meter']       = $teks($_POST['meter'] ?? '', 15);
-        $isi['hp']          = $teks($_POST['hp'] ?? '', 20);
-        $kunci = $isi['notul'];
-        try {
-            if (!in_array($isi['jenis'], ['PREVENTIF', 'KOREKTIF'], true)) {
-                $pesan_error = 'Jenis tiket harus PREVENTIF atau KOREKTIF.';
-            } elseif ($kunci === '') {
-                $pesan_error = 'No TUL wajib diisi.';
+    $info_baru = '';
+    try {
+        if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
+            $pesan_error = 'Sesi formulir tidak valid. Muat ulang halaman lalu coba lagi.';
+        } elseif (!$unit_siap) {
+            $pesan_error = 'Unit akun Anda belum diatur, sehingga tidak bisa membuat tiket.';
+        } elseif ($aksi === 'create') {
+            if ($tiket_sekarang($sesi)) {
+                $pesan_error = 'Masih ada tiket yang sedang diproses pada sesi ini. Selesaikan dengan salah satu tombol hasil dahulu.';
             } else {
-                $h = $cari($kunci);
-                if (!$h['ok'])                  $pesan_error = pg_e($h['pesan']);
-                elseif ($h['data']['duplikat']) $pesan_error = pg_e($h['pesan']) . ' Tiket baru tidak dibuat.';
-                else {
-                    $d     = $h['data'];
-                    $meter = $isi['meter'] !== '' ? $isi['meter'] : $teks($d['meter'], 15);
-                    $hp    = $isi['hp'] !== ''    ? $isi['hp']    : $teks($d['hp'], 20);
-                    $st    = $conn->prepare("INSERT INTO `$tabel` (`$pk`, JenisTiket, NoTul, IdPel, ThblRek, NomorMeter, NomorHp, Sesi, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
-                                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', NOW())");
-                    $sesi   = $buat_sesi();
-                    $dibuat = '';
-                    for ($i = 0; $i < 5 && $dibuat === ''; $i++) {
-                        $id = $buat_id();
-                        try {
-                            $st->execute([$id, $isi['jenis'], $d['notul'], $d['idpel'], $teks($d['thblrek'], 8), $meter, $hp, $sesi, $akun, $d['unit'][0], $d['unit'][1], $d['unit'][2]]);
-                            $dibuat = $id;
-                        } catch (PDOException $e) {
-                            if (($e->errorInfo[1] ?? 0) !== 1062) throw $e;     // ID kembar -> coba ID baru; error lain -> lempar
-                        }
-                    }
-                    if ($dibuat === '') {
-                        $pesan_error = 'Gagal membuat ID tiket unik (atau kunci tiket sudah dipakai). Coba lagi.';
-                    } else {
-                        $pesan_sukses = 'Tiket <strong>' . pg_e($dibuat) . '</strong> berhasil dibuat dengan Sesi ID <strong>' . pg_e($sesi) . '</strong>.';
-                        $tiket_tuju   = $dibuat;
-                        if ($d['hp'] === '' && $hp === '')       $info_post = 'Nomor HP kosong (belum ada di DIL).';
-                        if ($d['meter'] === '' && $meter === '') $info_post = trim($info_post . ' Nomor meter kosong (belum ada di DIL).');
-                    }
+                $sesi_baru = $buat_sesi();                                          // langkah 1
+                $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                $conn->beginTransaction();
+                try {
+                    $asal = $ambil_berikutnya($sesi_baru);                          // langkah 2
+                    $conn->commit();
+                } catch (Throwable $e) {
+                    if ($conn->inTransaction()) $conn->rollBack();
+                    throw $e;
+                }
+                if ($asal !== '') {
+                    $_SESSION[$kunci_sesi] = $sesi_baru;
+                    $t = $tiket_sekarang($sesi_baru);                               // langkah 3
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_baru) . '</strong> dimulai. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> '
+                                  . ($asal === 'baru' ? 'dibuat dan siap diproses.' : 'diambil dari antrean dan siap diproses.');
+                } else {
+                    unset($_SESSION[$kunci_sesi]);
+                    $info_baru = $pesan_habis;
                 }
             }
-        } catch (PDOException $e) {
-            $pesan_error = ($e->errorInfo[1] ?? 0) === 1452
-                ? 'Tiket ditolak database: data rujukan (No TUL / akun / unit) tidak valid.'
-                : 'Gagal menyimpan tiket: ' . pg_e($e->getMessage());
-        } catch (Throwable $e) {
-            $pesan_error = 'Gagal memproses: ' . pg_e($e->getMessage());
-        }
-    } elseif ($aksi === 'ready' || $aksi === 'gagal') {
-        $t = $teks($_POST['tiket'] ?? '', 23);
-        try {
-            $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-            $st = $conn->prepare("SELECT t.StatusData FROM `$tabel` t WHERE t.`$pk` = :id AND $sc LIMIT 1");
-            $st->execute([':id' => $t] + $p);
-            $status = $st->fetchColumn();
-            if ($status === false)       $pesan_error = 'Tiket tidak ditemukan di wilayah Anda.';
-            elseif ($status !== 'AKTIF') $pesan_error = 'Tiket ini sudah tidak aktif.';
-            else {
-                // >>> TITIK SAMBUNG: simpan hasil tindakan di sini ($aksi = 'ready' | 'gagal', $t = ID tiket, $akun = akun login).
-                //     Belum ada tujuan penyimpanan (tabel tiket hanya punya StatusData), jadi belum ada data yang diubah.
-                $label = ($aksi === 'ready' ? 'Ready ' : 'Gagal ') . 'OFF';
-                $pesan_info = "Tombol <strong>$label</strong> untuk tiket <strong>" . pg_e($t) . '</strong> belum terhubung ke penyimpanan (tujuan tabel/kolom belum ditentukan), sehingga belum ada data yang diubah.';
+        } elseif (isset($jenis_tindakan[$aksi])) {
+            $t = $tiket_sekarang($sesi);
+            if (!$t || (string) $t[$pk] !== trim((string) ($_POST['tiket'] ?? ''))) {
+                $pesan_error = 'Tiket yang Anda tindak bukan tiket aktif pada sesi ini (mungkin sudah diproses atau halaman kedaluwarsa). Muat ulang halaman.';
+            } else {
+                $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                $conn->beginTransaction();
+                try {
+                    // langkah 4: catat hasil tindakan
+                    $conn->prepare("INSERT INTO `$tindakan_tabel` (`$pk`, JenisTindakan, NamaAkun, WaktuData) VALUES (?, ?, ?, NOW())")
+                         ->execute([$t[$pk], $jenis_tindakan[$aksi], $akun]);
+                    $asal = $ambil_berikutnya($sesi);                               // langkah 5 -> langkah 2
+                    $conn->commit();
+                } catch (Throwable $e) {
+                    if ($conn->inTransaction()) $conn->rollBack();
+                    throw $e;
+                }
+                $pesan_sukses = 'Tindakan <strong>' . pg_e($jenis_tindakan[$aksi]) . '</strong> dicatat untuk tiket <strong>' . pg_e($t[$pk]) . '</strong>.';
+                $info_baru = $asal !== '' ? '' : $pesan_habis;
             }
-            $tiket_tuju = $t;
-        } catch (Throwable $e) {
-            $pesan_error = 'Gagal memproses: ' . pg_e($e->getMessage());
+        } else {
+            $pesan_error = 'Aksi tidak dikenal.';
         }
-    } else {
-        $pesan_error = 'Aksi tidak dikenal.';
+    } catch (PDOException $e) {
+        if ($conn->inTransaction()) $conn->rollBack();
+        $kode = $e->errorInfo[1] ?? 0;
+        $pesan_error = $kode === 1062 ? 'Tiket ini sudah pernah dicatat tindakannya.'
+                     : ($kode === 1452 ? 'Ditolak database (data rujukan tiket/akun/unit tidak valid).'
+                     : 'Gagal memproses: ' . pg_e($e->getMessage()));
+    } catch (Throwable $e) {
+        if ($conn->inTransaction()) $conn->rollBack();
+        $pesan_error = 'Gagal memproses: ' . pg_e($e->getMessage());
     }
 
-    // Post-Redirect-Get: berhasil -> buka tiketnya. Ditolak -> tetap di form dengan isian terpulihkan (tanpa redirect).
-    if ($pesan_error === '' && !headers_sent()) {
-        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => '', 'info' => trim($pesan_info . ' ' . $info_post)];
-        header('Location: ' . pg_url($halaman, ['tiket' => $tiket_tuju]));
+    // Post-Redirect-Get: refresh tidak mengulang proses.
+    if (!headers_sent()) {
+        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'info' => $info_baru];
+        header('Location: ' . pg_url($halaman));
         exit;
     }
-    if ($aksi !== 'create') $isi = ['jenis' => 'PREVENTIF', 'notul' => '', 'tiket_putus' => '', 'meter' => '', 'hp' => ''];
 }
 
 // ---------------------------------------------------------
-// TAMPIL: tiket yang dibuka (?tiket=ID) atau form kosong
+// TAMPIL: tiket yang sedang diproses pada SessionID aktif
 // ---------------------------------------------------------
-$row = null;
-$tiket_id = $teks($_GET['tiket'] ?? '', 23);
-if ($unit_siap && $tiket_id !== '') {
+$row = null; $sisa = null;
+if ($unit_siap) {
     try {
+        $row = $tiket_sekarang($sesi);
+        if ($row) {
+            $d = $ambil_dil((string) $row['IdPel']);
+            $row['nama']       = $d['nama'];
+            $row['meter_tpl']  = trim((string) $row['NomorMeter']) !== '' ? trim((string) $row['NomorMeter']) : $d['meter'];
+            $row['hp_tpl']     = trim((string) $row['NomorHp']) !== '' ? trim((string) $row['NomorHp']) : $d['hp'];
+        }
+        // jumlah yang masih bisa diambil/dibuat di wilayah akun
         $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-        $st = $conn->prepare("SELECT t.*, t.NoTul AS NoTulTampil FROM `$tabel` t WHERE t.`$pk` = :id AND $sc LIMIT 1");
-        $st->execute([':id' => $tiket_id] + $p);
-        $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
-        if ($row) $row['nama'] = $ambil_dil((string) $row['IdPel'])['nama'];
-        else      $pesan_error = trim($pesan_error . ' Tiket ' . pg_e($tiket_id) . ' tidak ditemukan di wilayah Anda.');
+        $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
+                              AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+        $st->execute($p);
+        $sisa = (int) $st->fetchColumn();
+        // ditambah TUL yang belum punya tiket (akan dibuatkan tiket saat Create)
+        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+        $st = $conn->prepare("SELECT COUNT(*) FROM tul_601 t LEFT JOIN dil d ON d.IdPel = t.IdPel WHERE $sc AND NOT EXISTS (SELECT 1 FROM `$tabel` o WHERE o.NoTul = t.NoTul) $syarat_sumber");
+        $st->execute($p);
+        $sisa += (int) $st->fetchColumn();
     } catch (PDOException $e) {
         $pesan_error = trim($pesan_error . ' Gagal memuat tiket: ' . pg_e($e->getMessage()));
     }
