@@ -42,6 +42,15 @@ $baris = function (string $label, string $id, string $nilai, string $tambah = ''
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="tiket" value="<?= pg_e($v['tiket']) ?>">
 
+            <!-- Pilihan IDPEL / No TUL (opsional) -->
+            <div class="row g-2 align-items-center mb-3">
+                <label for="f_target" class="col-sm-3 col-form-label fw-semibold text-secondary">Pilih IDPEL / No TUL :</label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control font-monospace" id="f_target" name="target" maxlength="30" value="" placeholder="Opsional, kosongkan untuk tiket terlama" <?= $ada || !$unit_siap ? 'disabled' : 'autofocus' ?>>
+                    <div class="form-text">Isi IDPEL atau No TUL yang ingin diproses lebih dulu, lalu klik Create. Tiket sesudahnya tetap diambil otomatis berurutan.</div>
+                </div>
+            </div>
+
             <!-- Sesi ID + Create -->
             <div class="row g-2 align-items-center mb-3">
                 <label for="f_sesi" class="col-sm-3 col-form-label fw-semibold text-secondary">Sesi ID :</label>
