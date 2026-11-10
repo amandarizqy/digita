@@ -1,24 +1,20 @@
 <?php
-// modules/pengaturan/bot.php -> LOGIKA halaman Daftar Bot (tambah, ubah, aktif/nonaktif, hapus)
-// Dipanggil oleh modules/pengaturan/index.php (?page=pengaturan&sub=bot)
+// modules/pengaturan/bot.php -> LOGIKA halaman Daftar Bot (tabel bot_akses)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../../config/database.php';   // $conn (PDO)
 require_once __DIR__ . '/../../functions/csrf.php';
-require_once __DIR__ . '/bot_helper.php';               // bot_root(), bot_norm_folder(), bot_jenis_daftar(), dst.
+require_once __DIR__ . '/bot_helper.php';
 
 $base_url = defined('BASE_URL') ? BASE_URL : '';
 $url_bot  = $base_url . '/index.php?page=pengaturan&sub=bot';
 
-// Jenis bot = ENUM pengaturan_bot.JenisBot ('PELUNASAN','DIL','TUL','SURVEY','KEPENTINGAN')
 $jenis_info = bot_jenis_daftar();
 $jenis_opsi = array_map(fn($j) => $j['label'], $jenis_info);
-$pola_opsi  = ['*.xlsx' => '*.xlsx (Excel)'];
 
 // ---------- Cakupan Batas Data (Scope) ----------
 if (!function_exists('bot_scope')) {
-    /** Batas data sesuai unit akun: SA.KP semua; lainnya hanya bot di unit (dan turunannya) miliknya. */
     function bot_scope(): array
     {
         if (($_SESSION['KodeHak'] ?? '') === 'SA.KP') return ['1=1', []];
@@ -36,39 +32,6 @@ if (!function_exists('bot_scope')) {
 [$root_bot, $root_konfig] = bot_root();
 [$w_scope, $p_scope]      = bot_scope();
 
-// ---------- Ambil Master Unit AP & UP untuk Dropdown Form ----------
-$daftar_ap = [];
-$daftar_up = [];
-try {
-    $upi_user = trim((string) ($_SESSION['UnitUpi'] ?? ''));
-    
-    // Ambil Master AP
-    $sql_ap = "SELECT UnitAp, NamaAp FROM master_ap WHERE StatusData = 'AKTIF'";
-    $prm_ap = [];
-    if ($upi_user !== '') {
-        $sql_ap .= " AND UnitUpi = ?";
-        $prm_ap[] = $upi_user;
-    }
-    $sql_ap .= " ORDER BY UnitAp ASC";
-    $st_ap = $conn->prepare($sql_ap);
-    $st_ap->execute($prm_ap);
-    $daftar_ap = $st_ap->fetchAll(PDO::FETCH_ASSOC);
-
-    // Ambil Master UP
-    $sql_up = "SELECT UnitUp, NamaUp, UnitAp FROM master_up WHERE StatusData = 'AKTIF'";
-    $prm_up = [];
-    if ($upi_user !== '') {
-        $sql_up .= " AND UnitUpi = ?";
-        $prm_up[] = $upi_user;
-    }
-    $sql_up .= " ORDER BY UnitUp ASC";
-    $st_up = $conn->prepare($sql_up);
-    $st_up->execute($prm_up);
-    $daftar_up = $st_up->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log('Error ambil master unit: ' . $e->getMessage());
-}
-
 // Pesan flash dari proses sebelumnya
 $pesan = $_SESSION['bot_flash'] ?? null;
 unset($_SESSION['bot_flash']);
@@ -85,57 +48,38 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
     try {
         if ($aksi === 'simpan') {
-            $id    = (int) ($_POST['id'] ?? 0);
-            $kode  = strtolower(trim((string) ($_POST['kode'] ?? '')));
-            $nama  = trim((string) ($_POST['nama'] ?? ''));
-            $jenis = (string) ($_POST['jenis'] ?? $_POST['JenisBot'] ?? '');
-            $ket   = trim((string) ($_POST['keterangan'] ?? ''));
-            $pola  = (string) ($_POST['pola'] ?? '*.xlsx');
-            $stat  = (($_POST['status'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
-            $fm    = bot_norm_folder((string) ($_POST['folder_masuk'] ?? ''));
-            $fb    = bot_norm_folder((string) ($_POST['folder_berhasil'] ?? ''));
-            $fg    = bot_norm_folder((string) ($_POST['folder_gagal'] ?? ''));
+            $id          = (int) ($_POST['id'] ?? 0);
+            $jenis       = (string) ($_POST['jenis'] ?? $_POST['JenisBot'] ?? '');
+            $stat        = (($_POST['status'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
+            $dir_utama   = bot_norm_folder((string) ($_POST['direktori_utama'] ?? $_POST['folder_masuk'] ?? ''));
+            $dir_arsip   = bot_norm_folder((string) ($_POST['direktori_arsip'] ?? $_POST['folder_berhasil'] ?? ''));
 
-            // Penentuan Unit: Prioritas Sesi -> Input Form -> Default Null
-            $unit_upi = trim((string) ($_SESSION['UnitUpi'] ?? $_POST['unit_upi'] ?? ''));
-            $unit_ap  = trim((string) ($_SESSION['UnitAp'] ?? $_POST['unit_ap'] ?? ''));
-            $unit_up  = trim((string) ($_SESSION['UnitUp'] ?? $_POST['unit_up'] ?? ''));
+            $unit_upi    = trim((string) ($_SESSION['UnitUpi'] ?? $_POST['unit_upi'] ?? ''));
+            $unit_ap     = trim((string) ($_SESSION['UnitAp'] ?? $_POST['unit_ap'] ?? ''));
+            $unit_up     = trim((string) ($_SESSION['UnitUp'] ?? $_POST['unit_up'] ?? ''));
 
             $form_isi = [
-                'id' => $id, 'kode' => $kode, 'nama' => $nama, 'jenis' => $jenis, 'keterangan' => $ket,
-                'folder_masuk' => (string) ($_POST['folder_masuk'] ?? ''),
-                'folder_berhasil' => (string) ($_POST['folder_berhasil'] ?? ''),
-                'folder_gagal' => (string) ($_POST['folder_gagal'] ?? ''),
-                'pola' => $pola, 'status' => $stat,
-                'unit_upi' => $unit_upi, 'unit_ap' => $unit_ap, 'unit_up' => $unit_up
+                'id' => $id, 'jenis' => $jenis,
+                'direktori_utama' => (string) ($_POST['direktori_utama'] ?? ''),
+                'direktori_arsip' => (string) ($_POST['direktori_arsip'] ?? ''),
+                'status' => $stat, 'unit_upi' => $unit_upi, 'unit_ap' => $unit_ap, 'unit_up' => $unit_up
             ];
 
-            $lama = null;
             if ($id > 0) {
-                $s = $conn->prepare("SELECT * FROM pengaturan_bot WHERE IdBot = ? AND ($w_scope)");
+                $s = $conn->prepare("SELECT * FROM bot_akses WHERE IdBot = ? AND ($w_scope)");
                 $s->execute(array_merge([$id], $p_scope));
-                $lama = $s->fetch(PDO::FETCH_ASSOC);
-                if (!$lama) {
+                if (!$s->fetch()) {
                     $errors[] = 'Bot tidak ditemukan atau bukan milik unit Anda.';
-                } else {
-                    $kode = $lama['KodeBot']; // kode bot lama tidak boleh diubah
                 }
-            } elseif (!preg_match('/^[a-z0-9_]{3,30}$/', $kode)) {
-                $errors[] = 'Kode bot 3-30 karakter: huruf kecil, angka, dan garis bawah (_).';
             }
 
-            if (mb_strlen($nama) < 3 || mb_strlen($nama) > 100) $errors[] = 'Nama bot 3-100 karakter.';
-            if (!isset($jenis_opsi[$jenis])) $errors[] = 'Jenis bot tidak valid.';
-            if (mb_strlen($ket) > 255) $errors[] = 'Keterangan maksimal 255 karakter.';
-            if (!isset($pola_opsi[$pola])) $errors[] = 'Pola file tidak valid.';
-
-            foreach (['Folder masuk' => $fm, 'Folder berhasil' => $fb, 'Folder gagal' => $fg] as $nm => $v) {
-                if ($v === null) $errors[] = "$nm tidak valid. Pakai huruf, angka, _ dan -, dipisah / (contoh: riwayat/masuk).";
-            }
-            if ($fm !== null && $fb !== null && $fg !== null) {
-                if (strtolower($fb) === strtolower($fg)) $errors[] = 'Folder berhasil dan folder gagal harus berbeda.';
-                if (bot_di_dalam($fb, $fm) || bot_di_dalam($fg, $fm)) $errors[] = 'Folder berhasil/gagal tidak boleh sama dengan atau berada di dalam folder masuk.';
-                if (bot_di_dalam($fm, $fb) || bot_di_dalam($fm, $fg)) $errors[] = 'Folder masuk tidak boleh berada di dalam folder berhasil/gagal.';
+            if (!isset($jenis_info[$jenis])) $errors[] = 'Jenis bot tidak valid.';
+            if ($dir_utama === null) $errors[] = "Direktori Utama tidak valid.";
+            if ($dir_arsip === null) $errors[] = "Direktori Arsip tidak valid.";
+            if ($dir_utama !== null && $dir_arsip !== null) {
+                if (strtolower($dir_utama) === strtolower($dir_arsip)) $errors[] = 'Direktori Utama dan Direktori Arsip harus berbeda.';
+                if (bot_di_dalam($dir_arsip, $dir_utama)) $errors[] = 'Direktori Arsip tidak boleh berada di dalam Direktori Utama.';
+                if (bot_di_dalam($dir_utama, $dir_arsip)) $errors[] = 'Direktori Utama tidak boleh berada di dalam Direktori Arsip.';
             }
 
             if ($id === 0 && $unit_upi === '') {
@@ -143,40 +87,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             }
 
             if (!$errors) {
-                // Cek ketersediaan kolom Keterangan di tabel database
-                $has_ket_col = false;
-                try {
-                    $chk = $conn->query("SHOW COLUMNS FROM pengaturan_bot LIKE 'Keterangan'");
-                    $has_ket_col = (bool) $chk->fetch();
-                } catch (Exception $ex) { $has_ket_col = false; }
-
                 if ($id > 0) {
-                    if ($has_ket_col) {
-                        $conn->prepare("UPDATE pengaturan_bot SET NamaBot=?, JenisBot=?, Keterangan=?, FolderMasuk=?, FolderBerhasil=?, FolderGagal=?, PolaFile=?, StatusData=?, UnitAp=?, UnitUp=? WHERE IdBot=?")
-                             ->execute([$nama, $jenis, $ket !== '' ? $ket : null, $fm, $fb, $fg, $pola, $stat, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null, $id]);
-                    } else {
-                        $conn->prepare("UPDATE pengaturan_bot SET NamaBot=?, JenisBot=?, FolderMasuk=?, FolderBerhasil=?, FolderGagal=?, PolaFile=?, StatusData=?, UnitAp=?, UnitUp=? WHERE IdBot=?")
-                             ->execute([$nama, $jenis, $fm, $fb, $fg, $pola, $stat, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null, $id]);
-                    }
+                    $conn->prepare("UPDATE bot_akses SET JenisBot=?, DirektoriUtama=?, DirektoriArsip=?, StatusData=?, UnitUpi=?, UnitAp=?, UnitUp=?, WaktuData=NOW() WHERE IdBot=?")
+                         ->execute([$jenis, $dir_utama, $dir_arsip, $stat, $unit_upi, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null, $id]);
                 } else {
-                    $nama_akun = mb_substr((string) ($_SESSION['NamaAkun'] ?? 'admin'), 0, 20);
-                    if ($has_ket_col) {
-                        $conn->prepare("INSERT INTO pengaturan_bot (KodeBot, NamaBot, JenisBot, Keterangan, FolderMasuk, FolderBerhasil, FolderGagal, PolaFile, StatusData, UnitUpi, UnitAp, UnitUp, NamaAkun)
-                                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                             ->execute([$kode, $nama, $jenis, $ket !== '' ? $ket : null, $fm, $fb, $fg, $pola, $stat,
-                                        $unit_upi, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null, $nama_akun]);
-                    } else {
-                        $conn->prepare("INSERT INTO pengaturan_bot (KodeBot, NamaBot, JenisBot, FolderMasuk, FolderBerhasil, FolderGagal, PolaFile, StatusData, UnitUpi, UnitAp, UnitUp, NamaAkun)
-                                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-                             ->execute([$kode, $nama, $jenis, $fm, $fb, $fg, $pola, $stat,
-                                        $unit_upi, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null, $nama_akun]);
-                    }
+                    $conn->prepare("INSERT INTO bot_akses (JenisBot, DirektoriUtama, DirektoriArsip, StatusData, UnitUpi, UnitAp, UnitUp, WaktuData)
+                                    VALUES (?,?,?,?,?,?,?,NOW())")
+                         ->execute([$jenis, $dir_utama, $dir_arsip, $stat, $unit_upi, $unit_ap !== '' ? $unit_ap : null, $unit_up !== '' ? $unit_up : null]);
                 }
 
-                $teks = "Bot <strong>" . htmlspecialchars($nama) . "</strong> berhasil disimpan.";
+                $teks = "Konfigurasi Bot <strong>" . htmlspecialchars($jenis) . "</strong> berhasil disimpan.";
                 if ($root_bot === '') {
                     $teks .= ' Folder belum dibuat karena folder bot tidak ditemukan (' . htmlspecialchars($root_konfig) . ').';
-                } elseif ($gagal = bot_buat_folder($root_bot, [$fm, $fb, $fg])) {
+                } elseif ($gagal = bot_buat_folder($root_bot, [$dir_utama, $dir_arsip])) {
                     $teks .= ' Folder gagal dibuat: ' . htmlspecialchars(implode(', ', $gagal)) . '.';
                 }
                 $flash = ['tipe' => 'success', 'teks' => $teks];
@@ -186,32 +109,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         } elseif ($aksi === 'status') {
             $ke = (($_POST['ke'] ?? '') === 'AKTIF') ? 'AKTIF' : 'TIDAK';
-            $s  = $conn->prepare("SELECT NamaBot FROM pengaturan_bot WHERE IdBot = ? AND ($w_scope)");
-            $s->execute(array_merge([(int) ($_POST['id'] ?? 0)], $p_scope));
-            $nama_bot = $s->fetchColumn();
-
-            if ($nama_bot === false) {
-                $flash = ['tipe' => 'danger', 'teks' => 'Bot tidak ditemukan atau bukan milik unit Anda.'];
-            } else {
-                $conn->prepare("UPDATE pengaturan_bot SET StatusData = ? WHERE IdBot = ?")->execute([$ke, (int) $_POST['id']]);
-                $flash = ['tipe' => 'success', 'teks' => 'Bot <strong>' . htmlspecialchars((string) $nama_bot) . '</strong> '
-                          . ($ke === 'AKTIF' ? 'dimulai.' : 'dihentikan.')];
-            }
+            $conn->prepare("UPDATE bot_akses SET StatusData = ? WHERE IdBot = ? AND ($w_scope)")
+                 ->execute(array_merge([$ke, (int) ($_POST['id'] ?? 0)], $p_scope));
+            $flash = ['tipe' => 'success', 'teks' => 'Status bot berhasil diperbarui.'];
 
         } elseif ($aksi === 'hapus') {
-            $s = $conn->prepare("DELETE FROM pengaturan_bot WHERE IdBot = ? AND ($w_scope)");
+            $s = $conn->prepare("DELETE FROM bot_akses WHERE IdBot = ? AND ($w_scope)");
             $s->execute(array_merge([(int) ($_POST['id'] ?? 0)], $p_scope));
-            $flash = $s->rowCount() ? ['tipe' => 'success', 'teks' => 'Bot dihapus. Folder dan file di dalamnya tidak ikut dihapus.']
+            $flash = $s->rowCount() ? ['tipe' => 'success', 'teks' => 'Bot dihapus dari tabel bot_akses.']
                                     : ['tipe' => 'danger', 'teks' => 'Bot tidak ditemukan atau bukan milik unit Anda.'];
         }
     } catch (PDOException $e) {
-        if ($e->getCode() === '23000') {
-            $errors[]  = 'Kode bot sudah dipakai. Gunakan kode lain.';
-            $buka_form = true;
-        } else {
-            error_log('pengaturan_bot: ' . $e->getMessage());
-            $flash = ['tipe' => 'danger', 'teks' => 'Terjadi kesalahan pada server: ' . htmlspecialchars($e->getMessage())];
-        }
+        error_log('bot_akses: ' . $e->getMessage());
+        $flash = ['tipe' => 'danger', 'teks' => 'Terjadi kesalahan pada server: ' . htmlspecialchars($e->getMessage())];
     }
 
     if ($flash !== null && !$errors) {
@@ -223,16 +133,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
 // ---------- Ambil Daftar Bot ----------
 try {
-    $s = $conn->prepare("SELECT * FROM pengaturan_bot WHERE $w_scope ORDER BY StatusData ASC, NamaBot ASC");
+    $s = $conn->prepare("SELECT * FROM bot_akses WHERE $w_scope ORDER BY StatusData ASC, IdBot ASC");
     $s->execute($p_scope);
     $bots = $s->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $ex) {
-    error_log('pengaturan_bot (daftar): ' . $ex->getMessage());
+    error_log('bot_akses (daftar): ' . $ex->getMessage());
     echo '<div class="alert alert-danger border-0 shadow-sm m-4"><i class="bi bi-database-exclamation me-2"></i>'
-       . ($ex->getCode() === '42S02'
-            ? '<strong>Tabel <code>pengaturan_bot</code> belum ada.</strong> Jalankan <code>sql/pengaturan_bot.sql</code> di HeidiSQL, lalu muat ulang halaman ini.'
-            : '<strong>Data bot tidak bisa dibaca.</strong> Periksa log error PHP untuk rinciannya.')
-       . '</div>';
+       . '<strong>Data bot tidak bisa dibaca.</strong> Pastikan tabel <code>bot_akses</code> tersedia.</div>';
     return;
 }
 

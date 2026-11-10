@@ -1,10 +1,7 @@
 <?php
 // modules/pengaturan/bot_helper.php
 // Fungsi bersama: halaman Daftar Bot (bot.php, web) dan pelaksana cron (bot_cron.php, CLI).
-// Tidak memakai $_SESSION supaya aman dipanggil dari command line.
 
-// Lokasi folder bot bisa diatur di config/bot.php (opsional):  <?php define('BOT_ROOT', 'D:/ftp/digita');
-// File itu dibaca oleh web DAN cron, jadi keduanya selalu memakai folder yang sama.
 if (!defined('BOT_ROOT') && is_file(__DIR__ . '/../../config/bot.php')) {
     require_once __DIR__ . '/../../config/bot.php';
 }
@@ -12,8 +9,7 @@ if (!defined('BOT_ROOT') && is_file(__DIR__ . '/../../config/bot.php')) {
 if (!function_exists('bot_jenis_daftar')) {
 
     /**
-     * Jenis bot = nilai ENUM kolom pengaturan_bot.JenisBot. SATU-SATUNYA sumber label & petunjuk format.
-     * Tabel tujuan mengikuti halaman web yang sudah ada (file di kolom 'sumber' = logika yang dipindahkan ke bot).
+     * Jenis bot = nilai ENUM kolom bot_akses.JenisBot.
      */
     function bot_jenis_daftar(): array
     {
@@ -27,7 +23,7 @@ if (!function_exists('bot_jenis_daftar')) {
             'DIL' => [
                 'label'  => 'Upload DIL',
                 'tabel'  => 'dil',
-                'format' => 'Excel "Monitoring DIL Detail": IDPEL, NAMA, ALAMAT, TARIF, DAYA, UNITUP, UNITAP, UNITUPI, dst. Kolom unit boleh kosong (diisi dari folder/bot).',
+                'format' => 'Excel "Monitoring DIL Detail": IDPEL, NAMA, ALAMAT, TARIF, DAYA, UNITUP, UNITAP, UNITUPI, dst.',
                 'sumber' => 'penggunaan/input_dil.php',
             ],
             'TUL' => [
@@ -39,13 +35,13 @@ if (!function_exists('bot_jenis_daftar')) {
             'SURVEY' => [
                 'label'  => 'Upload Survey SR',
                 'tabel'  => 'kategorisasi_risiko (PosisiSR)',
-                'format' => 'Kolom: Idpel, PosisiSR (0/1), Periode (tahun; opsional). Tanpa kolom Periode: tahun dari nama file (mis. survey_2026.xlsx), jika tidak ada = tahun berjalan.',
+                'format' => 'Kolom: Idpel, PosisiSR (0/1), Periode (tahun; opsional).',
                 'sumber' => 'perencanaan/input_survey.php',
             ],
             'KEPENTINGAN' => [
                 'label'  => 'Upload Tingkat Kepentingan',
                 'tabel'  => 'kategorisasi_risiko (LevelKepentingan)',
-                'format' => 'Kolom: Idpel, LevelKepentingan (RENDAH/MODERAT/TINGGI), Periode (tahun; opsional, aturan sama dengan Survey SR).',
+                'format' => 'Kolom: Idpel, LevelKepentingan (RENDAH/MODERAT/TINGGI), Periode (tahun; opsional).',
                 'sumber' => 'perencanaan/input_kepentingan.php',
             ],
         ];
@@ -54,17 +50,17 @@ if (!function_exists('bot_jenis_daftar')) {
     /** Folder bot di server: htdocs/ftp/digita (atau isi BOT_ROOT bila ingin lokasi lain). */
     function bot_root(): array
     {
-        clearstatcache(true);   // buang cache realpath: folder yang baru dihapus/dibuat langsung terbaca
+        clearstatcache(true);
         $dasar = defined('BOT_ROOT') ? BOT_ROOT : __DIR__ . '/../../../../ftp/digita';
         $nyata = realpath($dasar);
         return [$nyata !== false ? str_replace('\\', '/', $nyata) : '', $dasar];
     }
 
-    /** Rapikan folder relatif. null = tidak valid (kosong, ada "..", huruf aneh, atau terlalu panjang). */
+    /** Rapikan folder relatif. null = tidak valid. */
     function bot_norm_folder(string $s): ?string
     {
         $s = trim(str_replace('\\', '/', $s), " \t\n\r\0\x0B/");
-        if ($s === '' || strlen($s) > 150) return null;
+        if ($s === '' || strlen($s) > 255) return null;
         return preg_match('~^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$~', $s) ? $s : null;
     }
 
@@ -76,10 +72,10 @@ if (!function_exists('bot_jenis_daftar')) {
         return $a === $i || strpos($a, $i . '/') === 0;
     }
 
-    /** Buat folder bila belum ada (hanya di dalam folder bot). Kembalikan daftar yang gagal dibuat. */
+    /** Buat folder bila belum ada (hanya di dalam folder bot). */
     function bot_buat_folder(string $root, array $relatif): array
     {
-        if (!is_dir($root)) return $relatif;   // jangan pernah membuat folder induk bot sendiri
+        if (!is_dir($root)) return $relatif;
         $gagal = [];
         foreach ($relatif as $r) {
             $abs = $root . '/' . $r;
