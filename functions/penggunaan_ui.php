@@ -36,17 +36,17 @@ function pg_hidden(string $action, array $extra = []): string
 function pg_menu(): array
 {
     return [
-        'kartu' => [
-            'label' => 'Kartu', 'icon' => 'bi-credit-card', 'items' => [
-                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
-            ],
-        ],
-        'S41' => [
-            'label' => 'S41', 'icon' => 'bi-box-arrow-in-right', 'items' => [
+            'ap2t' => [
+            'label' => 'AP2T', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'input_dil'       => ['DIL', 'bi-journal-text'],
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'upload_tul'      => ['Upload TUL', 'bi-type'],
+            ],
+        ],
+        'S41' => [
+            'label' => 'S41', 'icon' => 'bi-credit-card', 'items' => [
+                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
                 'input_perintah_s41'  => ['Perintah', 'bi-terminal'],
             ],
         ],
@@ -62,6 +62,12 @@ function pg_menu(): array
                 'penyalaan_amr'       => ['Penyalaan', 'bi-lightning-charge'],
             ],
         ],
+        'SDU' => [
+            'label' => 'SDU', 'icon' => 'bi-person-gear', 'items' => [
+                'pemutusan_sdu'       => ['Pemutusan', 'bi-plug'],
+                'penyalaan_sdu'       => ['Penyalaan', 'bi-lightning-charge'],
+            ],
+        ],
         'monitoring' => [
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
@@ -69,7 +75,7 @@ function pg_menu(): array
                 'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
                 'monitor_tul'       => ['TUL', 'bi-type'],
                 'monitor_perintah_s41'  => ['Perintah', 'bi-terminal'],
-                'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
+                // 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],
     ];

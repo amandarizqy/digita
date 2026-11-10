@@ -43,13 +43,16 @@ switch ($action) {
     // AMR  
     case 'pemutusan_amr':      include __DIR__ . '/pemutusan_amr.php'; break;   
     case 'penyalaan_amr':      include __DIR__ . '/penyalaan_amr.php'; break;
+    // SDU
+    case 'pemutusan_sdu':      include __DIR__ . '/pemutusan_sdu.php'; break;
+    case 'penyalaan_sdu':      include __DIR__ . '/penyalaan_sdu.php'; break;
     // MONITORING
     case 'monitor_dil':        include __DIR__ . '/monitor_dil.php'; break;
     case 'monitor_pelunasan':  include __DIR__ . '/monitor_pelunasan.php'; break;
     case 'monitor_isi_pulsa':      include __DIR__ . '/monitor_isi_pulsa.php'; break;
     case 'monitor_tul':        include __DIR__ . '/monitor_tul.php'; break;
     case 'monitor_perintah_s41':   include __DIR__ . '/monitor_perintah_s41.php'; break;
-    case 'monitor_status_barang': include __DIR__ . '/monitor_status_barang.php'; break;
+    // case 'monitor_status_barang': include __DIR__ . '/monitor_status_barang.php'; break;
     default:
         include __DIR__ . '/' . ($menu_pertama ?: 'monitor_dil') . '.php';
 }
