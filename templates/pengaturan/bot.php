@@ -160,7 +160,7 @@ $root_tampil  = $root_bot !== '' ? $root_bot : str_replace('\\', '/', (string) $
                             <option value="">-- Semua Unit AP --</option>
                             <?php if (!empty($daftar_ap)): ?>
                                 <?php foreach ($daftar_ap as $ap): ?>
-                                    <option value="<?= $e($ap['UnitAp']) ?>"><?= $e($ap['UnitAp'] . ' - ' . ($ap['NamaAp'] ?? '')) ?></option>
+                                    <option value="<?= $e($ap['UnitAp']) ?>"><?= $e($ap['UnitAp'] . ' - ' . ($ap['NamaUnit'] ?? '')) ?></option>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </select>
@@ -171,7 +171,7 @@ $root_tampil  = $root_bot !== '' ? $root_bot : str_replace('\\', '/', (string) $
                             <option value="">-- Semua Unit UP --</option>
                             <?php if (!empty($daftar_up)): ?>
                                 <?php foreach ($daftar_up as $up): ?>
-                                    <option value="<?= $e($up['UnitUp']) ?>" data-ap="<?= $e($up['UnitAp'] ?? '') ?>"><?= $e($up['UnitUp'] . ' - ' . ($up['NamaUp'] ?? '')) ?></option>
+                                    <option value="<?= $e($up['UnitUp']) ?>" data-ap="<?= $e($up['UnitAp'] ?? '') ?>"><?= $e($up['UnitUp'] . ' - ' . ($up['NamaUnit'] ?? '')) ?></option>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </select>
@@ -183,11 +183,11 @@ $root_tampil  = $root_bot !== '' ? $root_bot : str_replace('\\', '/', (string) $
                     
                     <div class="col-md-6">
                         <label class="form-label fw-semibold" for="botDirUtama"><i class="bi bi-folder-symlink text-primary me-1"></i> Direktori Utama</label>
-                        <input type="text" class="form-control font-monospace" id="botDirUtama" name="direktori_utama" maxlength="255" placeholder="contoh: bot/pelunasan" required>
+                        <input type="text" class="form-control font-monospace" id="botDirUtama" name="direktori_utama" maxlength="255" placeholder="contoh: 56/56610/pelunasan" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold" for="botDirArsip"><i class="bi bi-archive text-success me-1"></i> Direktori Arsip</label>
-                        <input type="text" class="form-control font-monospace" id="botDirArsip" name="direktori_arsip" maxlength="255" placeholder="contoh: bot/pelunasan/arsip" required>
+                        <input type="text" class="form-control font-monospace" id="botDirArsip" name="direktori_arsip" maxlength="255" placeholder="contoh: 56/56610/pelunasan/Arsip" required>
                     </div>
                 </div>
             </div>
@@ -220,6 +220,39 @@ document.addEventListener('DOMContentLoaded', function () {
     function tampilJenis() { jenisEl.textContent = jenisInfo[f.jenis.value] || ''; }
     f.jenis.addEventListener('change', tampilJenis);
 
+    // Fungsi otomatisasi format direktori: [unitupi]/[unitup]/[jenisbot] dan [unitupi]/[unitup]/[jenisbot]/Arsip
+    function updateOtomatisDirektori() {
+        if (f.id.value == '0') {
+            var upi = f.unitUpi.value.trim() || '13';
+            var up = f.unitUp.value.trim() || 'umum';
+            var jenis = f.jenis.value.trim();
+
+            if (jenis) {
+                var basePath = upi + '/' + up + '/' + jenis;
+                f.dirUtama.value = basePath;
+                f.dirArsip.value = basePath + '/Arsip';
+            }
+        }
+    }
+
+    function filterUnitUp() {
+        var selectedAp = f.unitAp.value;
+        var options = f.unitUp.querySelectorAll('option');
+        
+        options.forEach(function (opt) {
+            if (opt.value === '') {
+                opt.style.display = '';
+                return;
+            }
+            var apAttr = opt.getAttribute('data-ap');
+            if (!selectedAp || apAttr === selectedAp) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+    }
+
     function isi(d) {
         f.id.value = d.id || 0;
         f.jenis.value = d.jenis || 'PELUNASAN'; 
@@ -231,22 +264,34 @@ document.addEventListener('DOMContentLoaded', function () {
         f.unitUp.value = d.unit_up || ''; 
         f.unitUpi.value = d.unit_upi || '<?= $_SESSION['UnitUpi'] ?? '13' ?>';
         
+        filterUnitUp();
+
         var ubah = (d.id || 0) > 0;
         judul.textContent = ubah ? 'Ubah Akses Bot #' + d.id : 'Tambah Akses Bot';
+
+        if (!ubah && !f.dirUtama.value) {
+            updateOtomatisDirektori();
+        }
     }
 
-    // Saran folder otomatis dari Jenis Bot jika masih baru
-    f.jenis.addEventListener('change', function () {
-        if (f.id.value == '0' && !f.dirUtama.value) {
-            var j = f.jenis.value.toLowerCase();
-            f.dirUtama.value = 'bot/' + j;
-            f.dirArsip.value = 'bot/' + j + '/arsip';
-        }
+    f.jenis.addEventListener('change', updateOtomatisDirektori);
+    f.unitUp.addEventListener('change', updateOtomatisDirektori);
+    f.unitAp.addEventListener('change', function () {
+        filterUnitUp();
+        updateOtomatisDirektori();
     });
 
-    document.getElementById('btnTambahBot').addEventListener('click', function () { isi({}); modal.show(); });
+    document.getElementById('btnTambahBot').addEventListener('click', function () { 
+        isi({}); 
+        updateOtomatisDirektori();
+        modal.show(); 
+    });
+
     document.querySelectorAll('.btn-ubah-bot').forEach(function (b) {
-        b.addEventListener('click', function () { isi(JSON.parse(b.getAttribute('data-bot'))); modal.show(); });
+        b.addEventListener('click', function () { 
+            isi(JSON.parse(b.getAttribute('data-bot'))); 
+            modal.show(); 
+        });
     });
 
     // Konfirmasi hapus
