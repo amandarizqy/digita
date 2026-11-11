@@ -320,7 +320,21 @@ function pgh_lepas_barang(PDO $conn, string $no_ref, string $id_pel): void
     $st->execute([PGH_STATUS_BARANG_NONAKTIF, $no_ref, $id_pel]);
 }
 
-/** Kebalikan pgh_lepas_barang (dipakai saat BA diubah kembali menjadi PENDING). */
+/**
+ * Efek BA PENGHAPUSAN SELESAI: alat yang sudah rusak / tidak dipakai lagi DIHAPUS PERMANEN dari master_barang.
+ * Jejak historis tetap ada di frm_pk_detil dan frm_ba_detil (NoRef, SimId, ImeiModem tersimpan di sana).
+ * Tidak bisa dibatalkan, sehingga BA yang sudah SELESAI dikunci dan tidak boleh diubah lagi.
+ */
+function pgh_hapus_barang(PDO $conn, string $no_ref, string $id_pel): void
+{
+    $st = $conn->prepare("DELETE FROM master_barang WHERE NoRef = ? AND (IdPel = ? OR IdPel IS NULL OR IdPel = '')");
+    $st->execute([$no_ref, $id_pel]);
+    if ($st->rowCount() === 0) {
+        throw new RuntimeException("Perangkat $no_ref gagal dihapus dari master barang (tidak ditemukan atau terpasang di pelanggan lain).");
+    }
+}
+
+/** Kebalikan pgh_lepas_barang (dipakai saat BA diubah kembali menjadi PENDING). Tidak lagi dipakai oleh eksekusi penghapusan. */
 function pgh_pasang_kembali_barang(PDO $conn, string $no_ref, string $id_pel): void
 {
     $st = $conn->prepare("UPDATE master_barang SET IdPel = ?, StatusData = 'AKTIF' WHERE NoRef = ? AND (IdPel IS NULL OR IdPel = '' OR IdPel = ?)");
