@@ -5,32 +5,52 @@ if (!isset($conn)) require_once __DIR__ . '/../../config/database.php';
 $data_mon_order = [];
 $q = trim($_GET['q'] ?? '');
 
+$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+$page  = isset($_GET['p']) ? (int)$_GET['p'] : 1;
+if ($limit < 1) $limit = 10;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
 try {
     $unit_up = $_SESSION['UnitUp'] ?? '';
     $is_sa   = ($_SESSION['KodeHak'] ?? '') === 'SA.KP';
     
-    $sql = "SELECT o.NoFormOrder, o.TglOrder, o.NamaAkun, o.StatusData, p.NoFpk, p.IdPel, p.NomorBarang as NoRef, p.SimId, p.ImeiModem
-            FROM frm_order o
-            JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder
-            JOIN frm_pk p ON p.NoFpk = od.NoFpk
-            WHERE p.JenisPk = 'PEMASANGAN'";
+    $where_clause = "WHERE p.JenisPk = 'PASANG'";
     $params = [];
+    
     if (!$is_sa && !empty($unit_up)) {
-        $sql .= " AND o.UnitUp = ?";
+        $where_clause .= " AND o.UnitUp = ?";
         $params[] = $unit_up;
     }
     if (!empty($q)) {
-        $sql .= " AND (o.NoFormOrder LIKE ? OR p.IdPel LIKE ? OR p.NoFpk LIKE ?)";
+        $where_clause .= " AND (o.NoFormOrder LIKE ? OR p.IdPel LIKE ? OR p.NoFpk LIKE ?)";
         $params[] = "%$q%";
         $params[] = "%$q%";
         $params[] = "%$q%";
     }
-    $sql .= " ORDER BY o.WaktuData DESC LIMIT 50";
+    
+    $sql_count = "SELECT COUNT(*) FROM frm_order o JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder JOIN frm_pk p ON p.NoFpk = od.NoFpk $where_clause";
+    $stmt_count = $conn->prepare($sql_count);
+    $stmt_count->execute($params);
+    $total_data = $stmt_count->fetchColumn();
+    $total_pages = ceil($total_data / $limit);
+    
+    // PERBAIKAN: Menambahkan LEFT JOIN frm_pk_detil pd, lalu mengambil data NoRef, SimId, Imei dari pd
+    $sql = "SELECT o.NoFormOrder, o.TglOrder, o.NamaAkun, o.StatusData, p.NoFpk, p.IdPel, pd.NoRef, pd.SimId, pd.ImeiModem
+            FROM frm_order o
+            JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder
+            JOIN frm_pk p ON p.NoFpk = od.NoFpk
+            LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk
+            $where_clause
+            ORDER BY o.WaktuData DESC LIMIT $limit OFFSET $offset";
     
     $stmt = $conn->prepare($sql);
     $stmt->execute($params);
     $data_mon_order = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {}
+} catch (PDOException $e) {
+    // Tampilkan pesan error sementara jika masih ada kegagalan query
+    echo "<div class='alert alert-danger'>Error SQL: " . $e->getMessage() . "</div>";
+}
 ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white p-3">
@@ -44,6 +64,7 @@ try {
                 <input type="hidden" name="page" value="pemasangan">
                 <input type="hidden" name="menu" value="monitoring">
                 <input type="hidden" name="sub" value="monitoring_order">
+                <?php if(isset($_GET['limit'])): ?><input type="hidden" name="limit" value="<?= htmlspecialchars($_GET['limit']) ?>"><?php endif; ?>
                 <input type="text" class="form-control" name="q" placeholder="Cari Order / IdPel..." value="<?= htmlspecialchars($q) ?>">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
             </form>
@@ -68,7 +89,7 @@ try {
                 <?php else: ?>
                     <?php foreach ($data_mon_order as $idx => $row): ?>
                         <tr>
-                            <td class="ps-3 text-muted"><?= $idx + 1 ?></td>
+                            <td class="ps-3 text-muted"><?= $offset + $idx + 1 ?></td>
                             <td>
                                 <div class="font-monospace text-secondary small">ORDER: <?= htmlspecialchars($row['NoFormOrder']) ?></div>
                                 <div class="fw-bold font-monospace text-primary">FPK: <?= htmlspecialchars($row['NoFpk']) ?></div>
@@ -85,5 +106,30 @@ try {
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3 px-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">Tampilkan</span>
+            <select class="form-select form-select-sm w-auto" onchange="window.location.href=this.value">
+                <option value="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=5&q=<?= urlencode($q) ?>" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
+                <option value="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=10&q=<?= urlencode($q) ?>" <?= $limit == 10 ? 'selected' : '' ?>>10</option>
+                <option value="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=20&q=<?= urlencode($q) ?>" <?= $limit == 20 ? 'selected' : '' ?>>20</option>
+                <option value="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=30&q=<?= urlencode($q) ?>" <?= $limit == 30 ? 'selected' : '' ?>>30</option>
+            </select>
+            <span class="small text-muted">dari <?= $total_data ?> data</span>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=<?= $limit ?>&p=<?= $page - 1 ?>&q=<?= urlencode($q) ?>">Prev</a></li>
+                <?php 
+                $start_page = max(1, $page - 2); $end_page = min($total_pages, $page + 2);
+                for($i = $start_page; $i <= $end_page; $i++): 
+                ?>
+                    <li class="page-item <?= $i == $page ? 'active' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=<?= $limit ?>&p=<?= $i ?>&q=<?= urlencode($q) ?>"><?= $i ?></a></li>
+                <?php endfor; ?>
+                <li class="page-item <?= $page >= $total_pages ? 'disabled' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=monitoring&sub=monitoring_order&limit=<?= $limit ?>&p=<?= $page + 1 ?>&q=<?= urlencode($q) ?>">Next</a></li>
+            </ul>
+        </nav>
     </div>
 </div>

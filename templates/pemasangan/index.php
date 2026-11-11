@@ -19,6 +19,9 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
                     <i class="bi bi-plus-lg me-1"></i> Formulir Pengujian Baru
                 </a>
             <?php elseif ($menu === 'eksekusi' && $sub === 'order_pasang' && $view === 'daftar' && $can_order_pasang): ?>
+                <button type="button" class="btn btn-info fw-bold text-white px-3 rounded-3 shadow-sm btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalCetakOrder">
+                    <i class="bi bi-printer me-1"></i> Cetak Order
+                </button>
                 <button type="button" class="btn btn-warning fw-bold text-dark px-3 rounded-3 shadow-sm btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalTambahFpk">
                     <i class="bi bi-file-earmark-plus me-1"></i> Buat FPK
                 </button>

@@ -27,10 +27,13 @@ try {
 
     $rows = [];
     if ($order) {
-        $st = $conn->prepare("SELECT p.NoFpk, p.IdPel, pd.NoRef, pd.SimId, pd.NomorBarang, b.TglFba
+        $st = $conn->prepare("SELECT p.NoFpk, p.TglFpk, p.JenisPk, p.IdPel, p.LongDil, p.LatDil,
+                                     pd.NoRef, pd.SimId, pd.ImeiModem, pd.NomorBarang,
+                                     d.Nama, b.TglFba
                               FROM frm_order_detil od
                               JOIN frm_pk p ON p.NoFpk = od.NoFpk
-                              LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'STOK'
+                              LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk
+                              LEFT JOIN dil d ON d.IdPel = p.IdPel
                               LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMASANGAN'
                               WHERE od.NoFormOrder = ?
                               ORDER BY p.NoFpk ASC");
@@ -50,47 +53,52 @@ if (!$order) {
 $tgl  = $order['TglOrder'] ? date('d-m-Y', strtotime($order['TglOrder'])) : '-';
 $unit = trim((string) ($order['NamaUnit'] ?? '')) !== '' ? $order['NamaUnit'] : ($order['UnitUp'] ?? '-');
 $total_baris = max(CO_BARIS_MIN, count($rows));
+
+function v($val) { return htmlspecialchars(trim((string)$val) === '' ? '' : $val); }
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Cetak Order Pemasangan - <?= htmlspecialchars($order['NoFormOrder']) ?></title>
+    <title>Cetak Order SPK & FPK - <?= htmlspecialchars($order['NoFormOrder']) ?></title>
     <style>
         @page { size: A4; margin: 10mm; }
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 12px; color: #000; }
-        .kertas { width: 100%; max-width: 780px; margin: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        td, th { border: 1px solid #000; padding: 3px 6px; vertical-align: middle; }
-        .judul td { text-align: center; }
-        .lbl { width: 18%; white-space: nowrap; }
+        body { font-family: Arial, sans-serif; font-size: 11px; margin: auto; max-width: 780px; color: #000; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+        td, th { border: 1px solid #000; padding: 4px 6px; vertical-align: middle; }
+        .judul { text-align: center; font-weight: bold; }
+        .lbl { width: 18%; font-weight: normal; }
+        .lbl-fpk { width: 22%; font-weight: normal; }
         .daftar th { font-weight: 700; text-align: center; }
-        .daftar td { height: 19px; font-size: 10.5px; }
-        .daftar .no { width: 4%; text-align: left; }
+        .daftar td { height: 21px; font-size: 10.5px; }
+        .daftar .no { width: 4%; text-align: center; }
         .mono { font-family: "Courier New", monospace; }
-        .ttd td { height: 100px; text-align: center; vertical-align: top; width: 33.33%; }
-        .ttd .nama { display: block; margin-top: 66px; }
-        tr { page-break-inside: avoid; }
-        .no-print { text-align: right; margin-bottom: 10px; }
+        
+        .page-break { page-break-before: always; margin-top: 30px; }
+        .no-print { text-align: right; margin-bottom: 15px; }
+        .bg-light { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; }
         @media print { .no-print { display: none; } body { padding: 0; } }
     </style>
 </head>
 <body onload="window.print()">
-<div class="kertas">
+    <!-- TOMBOL PRINT -->
     <div class="no-print">
-        <button onclick="window.print()" style="padding:8px 15px;background:#0d6efd;color:#fff;border:none;cursor:pointer;font-weight:bold;">Cetak / Simpan PDF</button>
+        <button onclick="window.print()" style="padding:8px 15px;background:#0d6efd;color:#fff;border:none;cursor:pointer;font-weight:bold;border-radius:4px;">Cetak / Simpan PDF</button>
     </div>
 
+    <!-- ========================================================================= -->
+    <!-- HALAMAN 1: REKAP FORMULIR ORDER PERINTAH KERJA (SPK)                      -->
+    <!-- ========================================================================= -->
     <table>
         <tr class="judul">
             <td style="width:25%;text-align:left;">PT PLN (PERSERO)<br>UID BANTEN<br><?= htmlspecialchars($unit) ?></td>
-            <td style="width:50%;">FORMULIR<br>ORDER PERINTAH KERJA PEMASANGAN</td>
-            <td style="width:25%;">NOMOR<br>DOKUMEN<br>FM-2026-Z</td>
+            <td style="width:50%; font-size:13px;">FORMULIR<br>ORDER PERINTAH KERJA</td>
+            <td style="width:25%; font-weight:normal;">NOMOR DOKUMEN<br>FM-2026-Z</td>
         </tr>
     </table>
     <table>
-        <tr><td class="lbl">Nomor Order</td><td>: <span class="mono"><?= htmlspecialchars($order['NoFormOrder']) ?></span></td></tr>
+        <tr><td class="lbl">Nomor Order</td><td>: <?= htmlspecialchars($order['NoFormOrder']) ?></td></tr>
         <tr><td class="lbl">Unit</td><td>: <?= htmlspecialchars($unit) ?></td></tr>
         <tr><td class="lbl">Nama Petugas</td><td>: <?= htmlspecialchars($order['KdPetugas'] ?? '-') ?></td></tr>
         <tr><td class="lbl">Tanggal</td><td>: <?= htmlspecialchars($tgl) ?></td></tr>
@@ -118,11 +126,11 @@ $total_baris = max(CO_BARIS_MIN, count($rows));
                     $knt = trim((string) ($r['NomorBarang'] ?? ''));
                     $sim_kontak = ($sim === '' && $knt === '') ? '' : ($sim !== '' ? $sim : '-') . ' &ndash; ' . ($knt !== '' ? $knt : '-');
                     ?>
-                    <td class="mono"><?= htmlspecialchars($r['NoFpk']) ?></td>
-                    <td><?= htmlspecialchars($r['IdPel']) ?></td>
-                    <td class="mono"><?= htmlspecialchars($r['NoRef'] ?? '') ?></td>
-                    <td class="mono"><?= $sim_kontak ?></td>
-                    <td><?= !empty($r['TglFba']) ? htmlspecialchars(date('d-m-Y', strtotime($r['TglFba']))) : '' ?></td>
+                    <td class="mono" style="text-align:center;"><?= htmlspecialchars($r['NoFpk']) ?></td>
+                    <td style="text-align:center;"><?= htmlspecialchars($r['IdPel']) ?></td>
+                    <td class="mono" style="text-align:center;"><?= htmlspecialchars($r['NoRef'] ?? '') ?></td>
+                    <td class="mono" style="text-align:center;"><?= $sim_kontak ?></td>
+                    <td style="text-align:center;"><?= !empty($r['TglFba']) ? date('d-m-Y', strtotime($r['TglFba'])) : '' ?></td>
                 <?php else: ?>
                     <td></td><td></td><td></td><td></td><td></td>
                 <?php endif; ?>
@@ -131,13 +139,94 @@ $total_baris = max(CO_BARIS_MIN, count($rows));
         </tbody>
     </table>
 
-    <table class="ttd">
+    <table style="text-align:center;">
         <tr>
-            <td>Memeriksa,<br>Team Leader Pengendalian Piutang<span class="nama">( ____________________ )</span></td>
-            <td>Memeriksa,<br>Team Leader Pengendalian Piutang<span class="nama">( ____________________ )</span></td>
-            <td>Menerima,<br>Petugas<span class="nama">( <?= htmlspecialchars($order['KdPetugas'] ?? '____________________') ?> )</span></td>
+            <td style="width:33%; vertical-align:top; height:100px; padding-top:10px;">
+                Memeriksa,<br>Team Leader Pengendalian Piutang<br><br><br><br><br>(____________________)
+            </td>
+            <td style="width:34%; vertical-align:top; height:100px; padding-top:10px;">
+                Memeriksa,<br>Team Leader Pengendalian Piutang<br><br><br><br><br>(____________________)
+            </td>
+            <td style="width:33%; vertical-align:top; height:100px; padding-top:10px;">
+                Menerima,<br>Petugas<br><br><br><br><br>( <?= htmlspecialchars($order['KdPetugas'] ?? '____________________') ?> )
+            </td>
         </tr>
     </table>
-</div>
+
+    <!-- ========================================================================= -->
+    <!-- HALAMAN SELANJUTNYA: LOOPING FORMULIR PERINTAH KERJA (FPK) SATU PERSATU   -->
+    <!-- ========================================================================= -->
+    <?php foreach ($rows as $d): ?>
+        <?php
+        $cb_pasang   = ($d['JenisPk'] === 'PASANG') ? '&#9745;' : '&#9744;';
+        $cb_bongkar  = ($d['JenisPk'] === 'BONGKAR') ? '&#9745;' : '&#9744;';
+        $cb_pelihara = ($d['JenisPk'] === 'PEMELIHARAAN') ? '&#9745;' : '&#9744;';
+        ?>
+        <div class="page-break"></div>
+        <table>
+            <tr class="judul">
+                <td style="width:25%; text-align:left;">PT PLN (PERSERO)<br>UID BANTEN<br><?= v($unit) ?></td>
+                <td style="width:50%; font-size:14px;">FORMULIR<br>PERINTAH KERJA</td>
+                <td style="width:25%; font-weight:normal;">NOMOR DOKUMEN<br>FM-2026-Z</td>
+            </tr>
+        </table>
+        <table>
+            <tr><td class="lbl-fpk">Unit</td><td colspan="2">: <?= v($unit) ?></td></tr>
+            <tr><td class="lbl-fpk">Tanggal</td><td colspan="2">: <?= date('d-m-Y', strtotime($d['TglFpk'])) ?></td></tr>
+            <tr><td class="lbl-fpk">Jenis PK</td><td colspan="2">: <?= $cb_pasang ?> PASANG &nbsp;&nbsp;&nbsp;&nbsp; <?= $cb_bongkar ?> BONGKAR &nbsp;&nbsp;&nbsp;&nbsp; <?= $cb_pelihara ?> PEMELIHARAAN</td></tr>
+            <tr><td class="lbl-fpk">Nomor Form</td><td colspan="2">: <?= v($d['NoFpk']) ?></td></tr>
+            <tr><td class="lbl-fpk">Id Pelanggan</td><td colspan="2">: <?= v($d['IdPel']) ?></td></tr>
+            <tr><td class="lbl-fpk">Nama</td><td colspan="2">: <?= v($d['Nama']) ?></td></tr>
+            <tr><td class="lbl-fpk">Tikor DIL</td><td colspan="2">: Long: <?= v($d['LongDil']) ?> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Lat: <?= v($d['LatDil']) ?></td></tr>
+            
+            <tr class="judul bg-light"><td class="lbl-fpk"></td><td style="width:39%;">BONGKAR</td><td style="width:39%;">PASANG</td></tr>
+            
+            <tr><td class="judul" style="text-align:center;" colspan="3">MODEM</td></tr>
+            <tr><td class="lbl-fpk">IMEI</td><td>: </td><td>: <?= v($d['ImeiModem']) ?></td></tr>
+            <tr><td class="lbl-fpk">Nomor SIM</td><td>: </td><td>: <?= v($d['SimId']) ?></td></tr>
+            <tr><td class="lbl-fpk">Nomor Kontak</td><td>: </td><td>: <?= v($d['NomorBarang']) ?></td></tr>
+            
+            <tr><td class="judul" style="text-align:center;" colspan="3">S41</td></tr>
+            <tr><td class="lbl-fpk">NoRef IMEI</td><td>: </td><td>: <?= v($d['NoRef']) ?></td></tr>
+            <tr><td class="lbl-fpk">Nomor SIM</td><td>: </td><td>: <?= v($d['SimId']) ?></td></tr>
+            <tr><td class="lbl-fpk">Nomor Kontak</td><td>: </td><td>: <?= v($d['NomorBarang']) ?></td></tr>
+            <tr><td class="lbl-fpk">Tikor</td><td>: Long: ....................... Lat: .......................</td><td>: Long: ....................... Lat: .......................</td></tr>
+            <tr><td class="lbl-fpk">Posisi</td>
+                <td>&#9744; Pangkal &nbsp; &#9744; Tengah &nbsp; &#9744; Ujung</td>
+                <td>&#9744; Pangkal &nbsp; &#9744; Tengah &nbsp; &#9744; Ujung</td>
+            </tr>
+            <tr><td class="lbl-fpk">Lampu indikator</td>
+                <td>&#9744; Menyala &nbsp;&nbsp;&nbsp;&nbsp; &#9744; Tidak Menyala</td>
+                <td>&#9744; Menyala &nbsp;&nbsp;&nbsp;&nbsp; &#9744; Tidak Menyala</td>
+            </tr>
+            <tr><td class="lbl-fpk">Foto Barang</td>
+                <td>&#9744; Ada Dilampirkan &nbsp; &#9744; Tidak Dilampirkan</td>
+                <td>&#9744; Ada Dilampirkan &nbsp; &#9744; Tidak Dilampirkan</td>
+            </tr>
+            <tr><td class="lbl-fpk">Foto Terpasang</td>
+                <td>&#9744; Ada Dilampirkan &nbsp; &#9744; Tidak Dilampirkan</td>
+                <td>&#9744; Ada Dilampirkan &nbsp; &#9744; Tidak Dilampirkan</td>
+            </tr>
+        </table>
+
+        <table style="text-align:center;">
+            <tr>
+                <td style="width:33%; vertical-align:top; height:100px; padding-top:10px;">
+                    Memasang,<br>Petugas<br><br><br><br><br>(____________________)
+                </td>
+                <td style="width:34%; vertical-align:top; height:100px; padding-top:10px;">
+                    Memeriksa,<br>Staf Pengendalian Piutang<br><br><br><br><br>(____________________)
+                </td>
+                <td style="width:33%; vertical-align:top; height:100px; padding-top:10px;">
+                    Menyetujui,<br>Team Leader Pengendalian Piutang<br><br><br><br><br>(____________________)
+                </td>
+            </tr>
+        </table>
+        <table>
+            <tr>
+                <td style="height:70px; vertical-align:top; font-weight:bold;">Catatan Pemasangan:<br></td>
+            </tr>
+        </table>
+    <?php endforeach; ?>
 </body>
 </html>

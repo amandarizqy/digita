@@ -5,63 +5,80 @@ $view    = $_GET['view'] ?? 'daftar';
 $q       = trim($_GET['q'] ?? '');
 
 if ($view === 'daftar') {
-    // Ambil Data FPK & Order Pemasangan (JenisPk = 'PASANG')
-    $sql_fpk = "SELECT f.*, 
-                       pd.NoRef as NomorBarangDetil, pd.SimId as SimIdDetil, pd.ImeiModem as ImeiModemDetil,
-                       (SELECT NoFormOrder FROM frm_order_detil d WHERE d.NoFpk = f.NoFpk LIMIT 1) as TerikatOrder,
-                       (SELECT o.TglOrder FROM frm_order o JOIN frm_order_detil d ON d.NoFormOrder = o.NoFormOrder WHERE d.NoFpk = f.NoFpk LIMIT 1) as TglOrder,
-                       (SELECT o.NoFormOrder FROM frm_order_detil d JOIN frm_order o ON o.NoFormOrder = d.NoFormOrder WHERE d.NoFpk = f.NoFpk LIMIT 1) as NoFormOrder
-                FROM frm_pk f 
-                LEFT JOIN frm_pk_detil pd ON pd.NoFpk = f.NoFpk
-                WHERE f.JenisPk = 'PASANG'";
-    $params_fpk = [];
+    // Setup Paginasi
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
+    $page  = isset($_GET['p']) ? (int)$_GET['p'] : 1;
+    if ($limit < 1) $limit = 10;
+    if ($page < 1) $page = 1;
+    $offset = ($page - 1) * $limit;
+
+    $where_clause = "WHERE f.JenisPk = 'PASANG'";
+    $params = [];
+    
     if (!$is_sa && !empty($unit_up)) {
-        $sql_fpk .= " AND f.UnitUp = ?";
-        $params_fpk[] = $unit_up;
+        $where_clause .= " AND f.UnitUp = ?";
+        $params[] = $unit_up;
     }
     if (!empty($q)) {
-        $sql_fpk .= " AND (f.NoFpk LIKE ? OR f.IdPel LIKE ?)";
-        $params_fpk[] = "%$q%";
-        $params_fpk[] = "%$q%";
+        $where_clause .= " AND (f.NoFpk LIKE ? OR f.IdPel LIKE ?)";
+        $params[] = "%$q%";
+        $params[] = "%$q%";
     }
-    $sql_fpk .= " ORDER BY f.WaktuData DESC";
+
+    $sql_count = "SELECT COUNT(*) FROM frm_pk f $where_clause";
+    $stmt_count = $conn->prepare($sql_count);
+    $stmt_count->execute($params);
+    $total_data = $stmt_count->fetchColumn();
+    $total_pages = ceil($total_data / $limit);
+
+    // 1. Ambil Data FPK dengan Paginasi Limit
+    $sql_fpk = "SELECT f.*, 
+                       pd.NoRef as NomorBarangDetil, pd.SimId as SimIdDetil, pd.ImeiModem as ImeiModemDetil,
+                       od.NoFormOrder as TerikatOrder, o.TglOrder
+                FROM frm_pk f 
+                LEFT JOIN frm_pk_detil pd ON pd.NoFpk = f.NoFpk
+                LEFT JOIN frm_order_detil od ON od.NoFpk = f.NoFpk
+                LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
+                $where_clause
+                ORDER BY f.WaktuData DESC LIMIT $limit OFFSET $offset";
     
     $stmt_fpk = $conn->prepare($sql_fpk);
-    $stmt_fpk->execute($params_fpk);
+    $stmt_fpk->execute($params);
     $list_fpk = $stmt_fpk->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil Data Pelanggan untuk Modal FPK
-    $sql_pel = "SELECT IdPel, Peringkat, SkalaPrioritas FROM dil 
-                WHERE IdPel NOT IN (SELECT IdPel FROM master_barang WHERE IdPel IS NOT NULL AND IdPel != '')
-                  AND IdPel NOT IN (SELECT IdPel FROM frm_pk WHERE JenisPk = 'PASANG')";
+    // 2. Ambil Data Pelanggan (Untuk Form Create FPK, Dibatasi limit 300 agar browser ringan)
+    $sql_pel = "SELECT d.IdPel, d.Peringkat, d.SkalaPrioritas 
+                FROM dil d
+                LEFT JOIN master_barang mb ON d.IdPel = mb.IdPel
+                LEFT JOIN frm_pk pk ON d.IdPel = pk.IdPel AND pk.JenisPk = 'PASANG'
+                WHERE (mb.IdPel IS NULL OR mb.IdPel = '') 
+                  AND pk.IdPel IS NULL";
     $params_pel = [];
     if (!$is_sa && !empty($unit_up)) {
-        $sql_pel .= " AND UnitUp = ?";
+        $sql_pel .= " AND d.UnitUp = ?";
         $params_pel[] = $unit_up;
     }
-    $sql_pel .= " ORDER BY SkalaPrioritas DESC, Peringkat ASC";
+    $sql_pel .= " ORDER BY d.SkalaPrioritas DESC, d.Peringkat ASC LIMIT 300";
     $stmt_pelanggan = $conn->prepare($sql_pel);
     $stmt_pelanggan->execute($params_pel);
     $list_pelanggan = $stmt_pelanggan->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ambil Data Alat untuk Modal FPK
+    // 3. Ambil Data Alat S41 yang lolos uji
     $sql_al = "SELECT ed.NoRef, ed.ImeiModem, ed.SimId 
                FROM formulir_pengujian_detil ed
                JOIN formulir_pengujian e ON ed.NoFormulir = e.NoFormulir
                JOIN master_barang mb ON mb.NoRef = ed.NoRef
+               LEFT JOIN frm_pk_detil pd ON pd.NoRef = ed.NoRef
+               LEFT JOIN frm_pk f ON f.NoFpk = pd.NoFpk AND f.JenisPk = 'PASANG'
                WHERE e.StatusData = 'AKTIF'
                  AND (mb.IdPel IS NULL OR mb.IdPel = '')
-                 AND ed.NoRef NOT IN (
-                    SELECT pd.NoRef FROM frm_pk_detil pd 
-                    JOIN frm_pk f ON pd.NoFpk = f.NoFpk 
-                    WHERE f.JenisPk = 'PASANG' AND pd.NoRef IS NOT NULL
-                 )";
+                 AND f.NoFpk IS NULL";
     $params_al = [];
     if (!$is_sa && !empty($unit_up)) {
         $sql_al .= " AND e.UnitUp = ?";
         $params_al[] = $unit_up;
     }
-    $sql_al .= " GROUP BY ed.NoRef ORDER BY ed.NoRef ASC";
+    $sql_al .= " GROUP BY ed.NoRef ORDER BY ed.NoRef ASC LIMIT 200";
     $stmt_alat = $conn->prepare($sql_al);
     $stmt_alat->execute($params_al);
     $list_alat = $stmt_alat->fetchAll(PDO::FETCH_ASSOC);
@@ -89,6 +106,7 @@ if ($view === 'daftar') {
             <input type="hidden" name="page" value="pemasangan">
             <input type="hidden" name="menu" value="eksekusi">
             <input type="hidden" name="sub" value="order_pasang">
+            <?php if(isset($_GET['limit'])): ?><input type="hidden" name="limit" value="<?= htmlspecialchars($_GET['limit']) ?>"><?php endif; ?>
             <input type="text" class="form-control" name="q" placeholder="Cari no form, idpel..." value="<?= htmlspecialchars($q) ?>">
             <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
         </form>
@@ -114,7 +132,7 @@ if ($view === 'daftar') {
                 <?php else: ?>
                     <?php foreach ($list_fpk as $idx => $fpk): ?>
                         <tr>
-                            <td class="ps-3 text-muted"><?= $idx + 1 ?></td>
+                            <td class="ps-3 text-muted"><?= $offset + $idx + 1 ?></td>
                             <td class="fw-bold font-monospace text-primary"><?= htmlspecialchars($fpk['NoFpk']) ?></td>
                             <td><?= htmlspecialchars($fpk['TglFpk']) ?></td>
                             <td class="font-monospace small">
@@ -138,12 +156,9 @@ if ($view === 'daftar') {
                                         <span class="text-muted small">-</span>
                                     <?php endif; ?>
 
-                                    <!-- Tombol Cetak SPK PDF -->
-                                    <?php if (!empty($fpk['TerikatOrder'])): ?>
-                                        <a href="modules/pemasangan/cetak_order.php?no_order=<?= urlencode($fpk['TerikatOrder']) ?>" target="_blank" class="btn btn-sm btn-outline-primary px-2 py-1" title="Cetak SPK Order PDF">
-                                            <i class="bi bi-printer-fill"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                    <a href="modules/pemasangan/cetak_fpk.php?no_fpk=<?= urlencode($fpk['NoFpk']) ?>" target="_blank" class="btn btn-sm btn-outline-primary px-2 py-1" title="Cetak FPK">
+                                        <i class="bi bi-printer-fill"></i>
+                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -151,6 +166,32 @@ if ($view === 'daftar') {
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Paginasi UI -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">Tampilkan</span>
+            <select class="form-select form-select-sm w-auto" onchange="window.location.href=this.value">
+                <option value="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=5&q=<?= urlencode($q) ?>" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
+                <option value="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=10&q=<?= urlencode($q) ?>" <?= $limit == 10 ? 'selected' : '' ?>>10</option>
+                <option value="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=20&q=<?= urlencode($q) ?>" <?= $limit == 20 ? 'selected' : '' ?>>20</option>
+                <option value="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=30&q=<?= urlencode($q) ?>" <?= $limit == 30 ? 'selected' : '' ?>>30</option>
+            </select>
+            <span class="small text-muted">dari <?= $total_data ?> data</span>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=<?= $limit ?>&p=<?= $page - 1 ?>&q=<?= urlencode($q) ?>">Prev</a></li>
+                <?php 
+                $start_page = max(1, $page - 2); $end_page = min($total_pages, $page + 2);
+                for($i = $start_page; $i <= $end_page; $i++): 
+                ?>
+                    <li class="page-item <?= $i == $page ? 'active' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=<?= $limit ?>&p=<?= $i ?>&q=<?= urlencode($q) ?>"><?= $i ?></a></li>
+                <?php endfor; ?>
+                <li class="page-item <?= $page >= $total_pages ? 'disabled' : '' ?>"><a class="page-link" href="?page=pemasangan&menu=eksekusi&sub=order_pasang&view=daftar&limit=<?= $limit ?>&p=<?= $page + 1 ?>&q=<?= urlencode($q) ?>">Next</a></li>
+            </ul>
+        </nav>
     </div>
 </div>
 
@@ -193,6 +234,44 @@ if ($view === 'daftar') {
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Batal</button>
                 <button type="submit" class="btn btn-warning fw-bold px-4">Simpan FPK</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php
+// Ambil list order untuk dropdown Modal Cetak
+$sql_orders = "SELECT NoFormOrder, TglOrder FROM frm_order WHERE StatusData = 'AKTIF'";
+if (!$is_sa && !empty($unit_up)) $sql_orders .= " AND UnitUp = '$unit_up'";
+$sql_orders .= " ORDER BY WaktuData DESC LIMIT 100";
+$list_orders = $conn->query($sql_orders)->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<!-- MODAL CETAK ORDER -->
+<div class="modal fade" id="modalCetakOrder" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="modules/pemasangan/cetak_order.php" method="GET" target="_blank" class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="bi bi-printer me-2"></i>Cetak Order & FPK</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Pilih Order Perintah Kerja</label>
+                    <select name="no_order" class="form-select" required>
+                        <option value="">-- Pilih Nomor Order --</option>
+                        <?php foreach ($list_orders as $ord): ?>
+                            <option value="<?= htmlspecialchars($ord['NoFormOrder']) ?>">
+                                <?= htmlspecialchars($ord['NoFormOrder']) ?> (Tgl: <?= date('d/m/Y', strtotime($ord['TglOrder'])) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Sistem akan mencetak 1 halaman Formulir Order ditambah dengan semua halaman FPK yang tergabung di dalamnya.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-info text-white fw-bold px-4"><i class="bi bi-printer me-1"></i> Cetak Sekarang</button>
             </div>
         </form>
     </div>
