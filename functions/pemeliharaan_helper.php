@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/csrf.php';
+require_once __DIR__ . '/penghapusan_helper.php';   // dipakai untuk mengantrikan alat lama ke modul Penghapusan
 
 const PH_PETUGAS = ['IPM.001', 'IPM.002'];          
 const PH_LAMPU   = ['MENYALA' => 'MENYALA (BERFUNGSI)', 'TIDAK' => 'TIDAK (PERLU MUTASI)'];  
@@ -266,6 +267,9 @@ function ph_alat_pasang_tersedia(PDO $conn): array
                             AND NOT EXISTS (SELECT 1 FROM frm_pk_detil d
                                             JOIN frm_pk pk ON pk.NoFpk = d.NoFpk
                                             WHERE d.StatusBarang = 'STOK' AND d.NoRef = mb.NoRef AND pk.StatusData = 'TIDAK')
+                            AND NOT EXISTS (SELECT 1 FROM frm_pk_detil dh
+                                            JOIN frm_pk ph ON ph.NoFpk = dh.NoFpk
+                                            WHERE dh.StatusBarang = 'DIL' AND dh.NoRef = mb.NoRef AND ph.JenisPk = 'BERHENTI')
                             AND NOT EXISTS (SELECT 1 FROM frm_ba_detil x
                                             WHERE x.StatusPekerjaan = 'BONGKAR' AND x.NoRef = mb.NoRef
                                               AND NOT EXISTS (SELECT 1 FROM frm_ba_detil y
@@ -341,6 +345,54 @@ function ph_buat_pk(PDO $conn, array $p, array $b, ?array $pasang = null): strin
     }
 
     return $no_fpk;
+}
+
+const PH_ALASAN_GANTI = 'Perangkat diganti pada pemeliharaan ';
+
+/**
+ * Alat lama hasil penggantian (SIM ID / IMEI modem) otomatis masuk ke modul Penghapusan sebagai FPK BERHENTI
+ * (status TIDAK), tinggal diorderkan lalu dieksekusi. Setelah BA Penghapusan SELESAI, alat lama dihapus dari database.
+ * Aman diulang: bila alat itu sudah punya FPK Penghapusan, tidak dibuat lagi.
+ * @return string|null No FPK penghapusan yang baru dibuat, atau null bila sudah ada.
+ */
+function ph_antri_penghapusan(PDO $conn, array $pk, array $lama, string $no_fpk_asal, string $nama_akun): ?string
+{
+    $st = $conn->prepare("SELECT COUNT(*) FROM frm_pk p JOIN frm_pk_detil d ON d.NoFpk = p.NoFpk AND d.StatusBarang = 'DIL'
+                          WHERE p.JenisPk = 'BERHENTI' AND d.NoRef = ?");
+    $st->execute([$lama['NoRef']]);
+    if ((int) $st->fetchColumn() > 0) {
+        return null;
+    }
+    $b = [
+        'NoRef' => $lama['NoRef'], 'SimId' => $lama['SimId'], 'ImeiModem' => $lama['ImeiModem'],
+        'UnitUp' => $pk['UnitUp'], 'UnitAp' => $pk['UnitAp'], 'UnitUpi' => $pk['UnitUpi'],
+    ];
+    return pgh_buat_pk($conn, [
+        'tgl' => date('Y-m-d'), 'id_pel' => $pk['IdPel'],
+        'long' => ($pk['LongDil'] ?? '') !== '' ? $pk['LongDil'] : null,
+        'lat'  => ($pk['LatDil'] ?? '') !== '' ? $pk['LatDil'] : null,
+        'nama_akun' => $nama_akun, 'alasan' => PH_ALASAN_GANTI . $no_fpk_asal,
+    ], $b);
+}
+
+/**
+ * Kebalikan ph_antri_penghapusan, dipakai saat BA pemeliharaan diubah sehingga alat lama tidak jadi diganti.
+ * Hanya FPK otomatis (ditandai kolom Alasan) yang belum diorderkan dan belum punya BA yang dibatalkan.
+ */
+function ph_batal_antri_penghapusan(PDO $conn, string $no_ref_lama, string $no_fpk_asal): void
+{
+    if (!pgh_pk_punya_alasan($conn)) {
+        return;
+    }
+    $st = $conn->prepare("SELECT p.NoFpk FROM frm_pk p JOIN frm_pk_detil d ON d.NoFpk = p.NoFpk AND d.StatusBarang = 'DIL'
+                          WHERE p.JenisPk = 'BERHENTI' AND p.StatusData = 'TIDAK' AND d.NoRef = ? AND p.Alasan = ?
+                            AND NOT EXISTS (SELECT 1 FROM frm_order_detil od WHERE od.NoFpk = p.NoFpk)
+                            AND NOT EXISTS (SELECT 1 FROM frm_ba b WHERE b.NoFpk = p.NoFpk)");
+    $st->execute([$no_ref_lama, PH_ALASAN_GANTI . $no_fpk_asal]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $no) {
+        $conn->prepare('DELETE FROM frm_pk_detil WHERE NoFpk = ?')->execute([$no]);
+        $conn->prepare('DELETE FROM frm_pk WHERE NoFpk = ?')->execute([$no]);
+    }
 }
 
 function ph_kolom_cari(PDO $conn, bool $ada_pk = true, bool $ada_order = false, array $kolom_perangkat = ['bd.NoRef', 'bd.SimId', 'bd.ImeiModem']): array
@@ -436,6 +488,6 @@ function ph_badge_status($status): string
         : '<span class="badge bg-warning-subtle text-warning-emphasis">PENDING</span>';
 }
 
-function ph_akses_order(): bool { return in_array(ph_role(), ['SA.KP', 'TL.UP'], true); }
+function ph_akses_order(): bool { return in_array(ph_role(), ['SA.KP', 'TL.UP', 'SF.UP'], true); }
 function ph_akses_mutasi(): bool { return in_array(ph_role(), ['SA.KP', 'SF.UP'], true); }
 function ph_akses_monitoring(): bool { return true; }
