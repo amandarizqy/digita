@@ -2,6 +2,17 @@
 /**
  * modules/pengaturan/bot_cron.php - Pelaksana cron bot_akses.
  * Membaca daftar bot dari tabel bot_akses.
+ *
+ * Struktur folder (semua di dalam ftp/digitas):
+ *   <UnitUpi>/<UnitUp>/<JenisBot>/          <- direktori utama: taruh file .xlsx di sini
+ *   <UnitUpi>/<UnitUp>/<JenisBot>/Arsip/    <- direktori arsip: berhasil/<tanggal>/ dan gagal/<tanggal>/
+ * Tingkat AP dilewati (tidak dibuat sebagai folder); kode AP hanya dipakai saat mengunggah.
+ *
+ * Pemakaian (command line):
+ *   php bot_cron.php            -> sama dengan "jalan"
+ *   php bot_cron.php jalan      -> siapkan folder, lalu unggah file yang ada
+ *   php bot_cron.php kering     -> hanya tampilkan file yang akan diunggah (tanpa membuat folder / mengunggah)
+ *   php bot_cron.php siapkan    -> hanya membuat folder untuk semua bot (aktif maupun tidak)
  */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -14,6 +25,8 @@ if (!ini_get('date.timezone')) date_default_timezone_set('Asia/Jakarta');
 require_once __DIR__ . '/../../config/database.php';   // $conn (PDO)
 require_once __DIR__ . '/bot_helper.php';
 require_once __DIR__ . '/bot_handlers.php';
+
+const BC_NAMA_ARSIP = 'Arsip';
 
 function bc_log(string $level, string $pesan): void
 {
@@ -28,14 +41,22 @@ function bc_log(string $level, string $pesan): void
     @file_put_contents($berkas, $baris . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
-function bc_subfolder(string $dir): array
+/** Folder paling atas: htdocs/ftp/digitas (atau isi konstanta BOT_ROOT). Dibuat bila belum ada. */
+function bc_root(bool $buat = true): string
 {
-    $hasil = [];
-    foreach (@scandir($dir) ?: [] as $n) {
-        if ($n === '.' || $n === '..' || !is_dir("$dir/$n")) continue;
-        $hasil[$n] = "$dir/$n";
+    $dasar = defined('BOT_ROOT') ? BOT_ROOT : __DIR__ . '/../../../../ftp/digitas';
+    if (!is_dir($dasar)) {
+        if (!$buat) return str_replace('\\', '/', $dasar);
+        if (!@mkdir($dasar, 0775, true) && !is_dir($dasar)) throw new RuntimeException("Folder bot tidak bisa dibuat: $dasar");
+        bc_log('INFO', 'Folder dibuat: ' . str_replace('\\', '/', realpath($dasar) ?: $dasar));
     }
-    return $hasil;
+    return str_replace('\\', '/', realpath($dasar) ?: $dasar);
+}
+
+/** Kode unit/jenis dipakai sebagai nama folder: hanya huruf dan angka (mencegah "..", "/", dsb). */
+function bc_kode_valid(string $kode): bool
+{
+    return (bool) preg_match('/^[A-Za-z0-9]{1,20}$/', $kode);
 }
 
 function bc_file_di(string $dir, int $stabil): array
@@ -52,50 +73,109 @@ function bc_file_di(string $dir, int $stabil): array
     return ['siap' => $siap, 'belum_stabil' => $tunggu];
 }
 
-function bc_cari_tugas(PDO $conn, array $bot, string $dir_masuk, int $stabil): array
+/**
+ * UP yang termasuk cakupan bot: [['up' => kode UP, 'ap' => kode AP], ...]
+ *  - bot level UP  : hanya UP miliknya
+ *  - bot level AP  : semua UP di bawah AP-nya
+ *  - bot level UPI : semua UP di bawah UPI-nya
+ * Kode AP tidak menjadi folder, hanya dibawa untuk keperluan unggah.
+ */
+function bc_daftar_up(array $bot, array $peta): array
 {
-    $upi = trim((string) $bot['UnitUpi']); 
-    $ap_b = trim((string) $bot['UnitAp']); 
+    $ap_b = trim((string) $bot['UnitAp']);
     $up_b = trim((string) $bot['UnitUp']);
-    $jenis = $bot['JenisBot'];
-    $peta = bh_peta_unit($conn, $upi, $ap_b, $up_b);
 
-    $tugas = $salah = $tunggu = [];
-    $ambil = function (string $dir, string $ap, string $up) use (&$tugas, &$salah, &$tunggu, $stabil, $jenis) {
-        $r = bc_file_di($dir, $stabil);
-        foreach ($r['belum_stabil'] as $n) $tunggu[] = $n;
-        foreach ($r['siap'] as $f) {
-            if ($jenis !== 'DIL' && ($ap === '' || $up === '')) { $salah[] = $f; continue; }
-            $tugas[] = ['file' => $f, 'ap' => $ap, 'up' => $up];
+    if ($up_b !== '') {
+        if ($ap_b === '') $ap_b = (string) ($peta['up'][strtoupper($up_b)]['ap'] ?? '');
+        return bc_kode_valid($up_b) ? [['up' => $up_b, 'ap' => $ap_b]] : [];
+    }
+
+    $hasil = [];
+    foreach ($peta['up'] ?? [] as $e) {
+        $kode = (string) ($e['kode'] ?? '');
+        $ap   = (string) ($e['ap'] ?? '');
+        if ($kode === '') continue;
+        if ($ap_b !== '') {
+            if (strcasecmp($ap, $ap_b) !== 0) continue;
+        } elseif (!isset($peta['ap'][strtoupper($ap)])) {
+            continue;                                   // bot level UPI: hanya UP di bawah UPI ini
         }
+        if (!bc_kode_valid($kode)) { bc_log('WARN', "[Bot #{$bot['IdBot']}] Kode UP '$kode' tidak valid untuk nama folder, dilewati."); continue; }
+        $hasil[] = ['up' => $kode, 'ap' => $ap];
+    }
+    usort($hasil, fn($a, $b) => strcmp($a['up'], $b['up']));
+    return $hasil;
+}
+
+/** Siapkan data yang dibutuhkan satu bot. Kembalikan ['upi','jenis','daftar_up'] atau ['error' => pesan]. */
+function bc_konteks_bot(PDO $conn, array $bot): array
+{
+    $jenis = (string) $bot['JenisBot'];
+    $upi   = trim((string) $bot['UnitUpi']);
+
+    if (!isset(bot_jenis_daftar()[$jenis])) return ['error' => "Jenis bot '$jenis' tidak dikenal."];
+    if ($upi === '') return ['error' => 'Bot belum punya Unit UPI.'];
+    if (!bc_kode_valid($upi) || !bc_kode_valid($jenis)) return ['error' => 'Kode UPI/jenis bot tidak valid untuk nama folder.'];
+
+    $peta      = bh_peta_unit($conn, $upi, trim((string) $bot['UnitAp']), trim((string) $bot['UnitUp']));
+    $daftar_up = bc_daftar_up($bot, $peta);
+    if (!$daftar_up) return ['error' => 'Tidak ada UP dalam cakupan bot ini.'];
+
+    return ['upi' => $upi, 'jenis' => $jenis, 'daftar_up' => $daftar_up];
+}
+
+/**
+ * Pastikan <root>/<UPI>/<UP>/<JENIS>/ dan <root>/<UPI>/<UP>/<JENIS>/Arsip/ ada.
+ * Urutan: folder UPI -> folder UP -> folder jenis bot -> Arsip. Yang sudah ada dilewati, yang belum dibuat.
+ * Kembalikan [daftar folder yang baru dibuat, daftar folder yang gagal dibuat] (path relatif terhadap root).
+ */
+function bc_siapkan_folder(string $root, string $upi, string $jenis, array $daftar_up): array
+{
+    $dibuat = $gagal = [];
+    $pastikan = function (string $rel) use ($root, &$dibuat, &$gagal): bool {
+        $abs = $root . '/' . $rel;
+        if (is_dir($abs)) return true;                                    // sudah ada -> lewati
+        if (@mkdir($abs, 0775, true) || is_dir($abs)) { $dibuat[] = $rel; return true; }
+        $gagal[] = $rel;
+        return false;
     };
-    $up_valid = fn(string $kode, string $ap) => ($e = $peta['up'][strtoupper($kode)] ?? null) && ($ap === '' || strcasecmp($e['ap'], $ap) === 0) ? $e : null;
 
-    if ($up_b !== '' && $ap_b !== '') {
-        $ambil($dir_masuk, $ap_b, $up_b);
-    } elseif ($ap_b !== '') {
-        $ap_kanon = $peta['ap'][strtoupper($ap_b)] ?? $ap_b;
-        $ambil($dir_masuk, $ap_kanon, '');
-        foreach (bc_subfolder($dir_masuk) as $n => $p) {
-            if ($e = $up_valid($n, $ap_kanon)) $ambil($p, $ap_kanon, $e['kode']);
-        }
-    } else {
-        $ambil($dir_masuk, '', '');
-        foreach (bc_subfolder($dir_masuk) as $n => $p) {
-            if (!isset($peta['ap'][strtoupper($n)])) continue;
-            $ap = $peta['ap'][strtoupper($n)];
-            $ambil($p, $ap, '');
-            foreach (bc_subfolder($p) as $n2 => $p2) {
-                if ($e = $up_valid($n2, $ap)) $ambil($p2, $ap, $e['kode']);
-            }
+    if (!$pastikan($upi)) return [$dibuat, $gagal];                       // 1. folder UPI
+    foreach ($daftar_up as $u) {
+        $rel_up = $upi . '/' . $u['up'];
+        if (!$pastikan($rel_up)) continue;                                // 2. folder UP (tingkat AP dilewati)
+        if (!$pastikan($rel_up . '/' . $jenis)) continue;                 // 3. folder jenis bot
+        $pastikan($rel_up . '/' . $jenis . '/' . BC_NAMA_ARSIP);          // 4. folder Arsip
+    }
+    return [$dibuat, $gagal];
+}
+
+/** Cari file di <root>/<UPI>/<UP>/<JENIS>/ untuk semua UP dalam cakupan bot. */
+function bc_cari_tugas(string $root, string $upi, string $jenis, array $daftar_up, int $stabil): array
+{
+    $tugas = $salah = $tunggu = [];
+    foreach ($daftar_up as $u) {
+        $dir_up = "$root/$upi/{$u['up']}";
+
+        // file .xlsx yang diletakkan langsung di folder UP (bukan di folder jenis bot) = salah tempat
+        foreach (bc_file_di($dir_up, 0)['siap'] as $f) $salah[] = $f;
+
+        $dir = "$dir_up/$jenis";
+        if (!is_dir($dir)) continue;
+        $r = bc_file_di($dir, $stabil);
+        foreach ($r['belum_stabil'] as $n) $tunggu[] = "{$u['up']}/$jenis/$n";
+        foreach ($r['siap'] as $f) {
+            if ($jenis !== 'DIL' && ($u['ap'] === '' || $u['up'] === '')) { $salah[] = $f; continue; }
+            $tugas[] = ['file' => $f, 'ap' => $u['ap'], 'up' => $u['up']];
         }
     }
     return [$tugas, $salah, $tunggu];
 }
 
-function bc_pindah(string $file, string $root, string $folder_rel, string $ap, string $up, string $catatan = ''): string
+/** Pindahkan file ke <UPI>/<UP>/<JENIS>/Arsip/<berhasil|gagal>/<tanggal>/. */
+function bc_pindah(string $file, string $root, string $upi, string $up, string $jenis, string $hasil, string $catatan = ''): string
 {
-    $dir = $root . '/' . $folder_rel . '/' . date('Y-m-d') . ($ap !== '' ? "/$ap" : '') . ($up !== '' ? "/$up" : '');
+    $dir = "$root/$upi/$up/$jenis/" . BC_NAMA_ARSIP . "/$hasil/" . date('Y-m-d');
     if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) throw new RuntimeException("Tidak bisa membuat folder $dir");
     $tujuan = $dir . '/' . date('His') . '_' . basename($file);
     if (!@rename($file, $tujuan)) {
@@ -113,44 +193,51 @@ function bc_catatan(string $nama, array $hasil): string
     return $t;
 }
 
+function bc_rel(string $path, string $root): string
+{
+    return strncmp($path, $root . '/', strlen($root) + 1) === 0 ? substr($path, strlen($root) + 1) : $path;
+}
+
 function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $stabil): array
 {
     $gagal = fn(string $p) => ['kerja' => true, 'status' => 'GAGAL', 'pesan' => $p];
-    $jenis_daftar = bot_jenis_daftar();
-    $jenis = (string) $bot['JenisBot'];
+    $tag   = "[Bot #{$bot['IdBot']}]";
 
-    if (!isset($jenis_daftar[$jenis])) return $gagal("Jenis bot '$jenis' tidak dikenal.");
-    if (trim((string) $bot['UnitUpi']) === '') return $gagal('Bot belum punya Unit UPI.');
+    $k = bc_konteks_bot($conn, $bot);
+    if (isset($k['error'])) return $gagal($k['error']);
+    ['upi' => $upi, 'jenis' => $jenis, 'daftar_up' => $daftar_up] = $k;
 
-    $fm = bot_norm_folder((string) $bot['DirektoriUtama']);
-    $fa = bot_norm_folder((string) $bot['DirektoriArsip']);
-    if ($fm === null || $fa === null) return $gagal('DirektoriUtama / DirektoriArsip tidak valid.');
-    
-    if (!$kering && ($sulit = bot_buat_folder($root, [$fm, $fa]))) return $gagal('Folder tidak bisa dibuat: ' . implode(', ', $sulit));
-    $dir_masuk = $root . '/' . $fm;
-    if (!is_dir($dir_masuk)) return $kering ? ['kerja' => false, 'status' => 'BERHASIL', 'pesan' => ''] : $gagal("Direktori utama tidak ada: $fm");
+    if (!$kering) {
+        [$dibuat, $sulit] = bc_siapkan_folder($root, $upi, $jenis, $daftar_up);
+        foreach ($dibuat as $rel) bc_log('INFO', "$tag Folder dibuat: $rel");
+        if ($sulit) return $gagal('Folder tidak bisa dibuat: ' . implode(', ', $sulit));
+    }
 
-    [$tugas, $salah, $tunggu] = bc_cari_tugas($conn, $bot, $dir_masuk, $stabil);
-    if (!$tugas && !$salah) return ['kerja' => false, 'status' => 'BERHASIL', 'pesan' => ''];
+    [$tugas, $salah, $tunggu] = bc_cari_tugas($root, $upi, $jenis, $daftar_up, $stabil);
+    foreach ($salah as $f) bc_log('WARN', "$tag File salah tempat, tidak diproses (taruh di $upi/<UP>/$jenis/): " . bc_rel($f, $root));
+    if ($tunggu) bc_log('INFO', "$tag " . count($tunggu) . ' file belum stabil (baru diubah), menunggu putaran berikutnya.');
+    if (!$tugas) return ['kerja' => false, 'status' => 'BERHASIL', 'pesan' => ''];
 
     if ($kering) {
-        foreach ($tugas as $t) bc_log('INFO', "[KERING] [Bot #{$bot['IdBot']}] " . basename($t['file']));
+        foreach ($tugas as $t) bc_log('INFO', "[KERING] $tag " . bc_rel($t['file'], $root));
         return ['kerja' => false, 'status' => 'BERHASIL', 'pesan' => ''];
     }
 
     foreach ($tugas as $t) {
         $nama = basename($t['file']);
-        bc_log('INFO', "[Bot #{$bot['IdBot']}] Mengunggah: $nama");
+        bc_log('INFO', "$tag Mengunggah: " . bc_rel($t['file'], $root));
         $h = bh_jalankan($conn, $bot, $jenis, $t['file'], $t['ap'], $t['up']);
 
         if ($h['status'] === 'sukses' || $h['status'] === 'gagal') {
             try {
-                $sub_arsip = $fa . ($h['status'] === 'sukses' ? '/berhasil' : '/gagal');
-                $tujuan = bc_pindah($t['file'], $root, $sub_arsip, $t['ap'], $t['up'], bc_catatan($nama, $h));
-                bc_log('INFO', "  SELESAI -> $tujuan | {$h['pesan']}");
+                $tujuan = bc_pindah($t['file'], $root, $upi, $t['up'], $jenis,
+                                    $h['status'] === 'sukses' ? 'berhasil' : 'gagal', bc_catatan($nama, $h));
+                bc_log('INFO', "  SELESAI -> " . bc_rel($tujuan, $root) . " | {$h['pesan']}");
             } catch (Throwable $e) {
                 bc_log('ERROR', "  Gagal memindahkan file: {$e->getMessage()}");
             }
+        } else {
+            bc_log('WARN', "  DITUNDA ({$h['status']}), file dibiarkan di tempatnya | {$h['pesan']}");
         }
     }
 
@@ -174,7 +261,8 @@ function bc_jalan(PDO $conn, string $root, bool $kering, ?int $id_bot, int $stab
 
     foreach ($bots as $bot) {
         try {
-            bc_proses_bot($conn, $bot, $root, $kering, $stabil);
+            $r = bc_proses_bot($conn, $bot, $root, $kering, $stabil);
+            if ($r['status'] === 'GAGAL') bc_log('ERROR', "[Bot #{$bot['IdBot']}] {$r['pesan']}");
             $conn->prepare("UPDATE bot_akses SET WaktuData = NOW() WHERE IdBot = ?")->execute([$bot['IdBot']]);
         } catch (Throwable $e) {
             bc_log('ERROR', "[Bot #{$bot['IdBot']}] " . $e->getMessage());
@@ -183,6 +271,37 @@ function bc_jalan(PDO $conn, string $root, bool $kering, ?int $id_bot, int $stab
     return 0;
 }
 
+/** Perintah "siapkan": buat folder untuk semua bot (aktif maupun tidak) tanpa mengunggah apa pun. */
+function bc_siapkan_semua(PDO $conn, string $root): int
+{
+    $bots = bc_ambil_bot($conn, false, null);
+    if (!$bots) { bc_log('INFO', 'Belum ada bot di tabel bot_akses.'); return 0; }
+
+    $kembali = 0;
+    foreach ($bots as $bot) {
+        $tag = "[Bot #{$bot['IdBot']}]";
+        $k = bc_konteks_bot($conn, $bot);
+        if (isset($k['error'])) { bc_log('ERROR', "$tag {$k['error']}"); $kembali = 1; continue; }
+
+        [$dibuat, $sulit] = bc_siapkan_folder($root, $k['upi'], $k['jenis'], $k['daftar_up']);
+        foreach ($dibuat as $rel) bc_log('INFO', "$tag Folder dibuat: $rel");
+        if ($sulit) { bc_log('ERROR', "$tag Folder tidak bisa dibuat: " . implode(', ', $sulit)); $kembali = 1; }
+        if (!$dibuat && !$sulit) bc_log('INFO', "$tag Semua folder sudah ada.");
+    }
+    return $kembali;
+}
+
 $perintah = $argv[1] ?? 'jalan';
-[$root]   = bot_root();
-bc_jalan($conn, $root, false, null, 60);
+if (!in_array($perintah, ['jalan', 'kering', 'siapkan'], true)) {
+    bc_log('ERROR', "Perintah tidak dikenal: $perintah (pakai: jalan | kering | siapkan)");
+    exit(1);
+}
+
+try {
+    $root = bc_root($perintah !== 'kering');
+} catch (Throwable $e) {
+    bc_log('ERROR', $e->getMessage());
+    exit(1);
+}
+
+exit($perintah === 'siapkan' ? bc_siapkan_semua($conn, $root) : bc_jalan($conn, $root, $perintah === 'kering', null, 60));

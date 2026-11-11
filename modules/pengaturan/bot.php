@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../../config/database.php';   // $conn (PDO)
 require_once __DIR__ . '/../../functions/csrf.php';
-require_once __DIR__ . '/bot_helper.php';
+require_once __DIR__ . '/../../modules/pengaturan/bot_helper.php';
 
 $base_url = defined('BASE_URL') ? BASE_URL : '';
 $url_bot  = $base_url . '/index.php?page=pengaturan&sub=bot';
@@ -77,9 +77,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             if ($dir_utama === null) $errors[] = "Direktori Utama tidak valid.";
             if ($dir_arsip === null) $errors[] = "Direktori Arsip tidak valid.";
             if ($dir_utama !== null && $dir_arsip !== null) {
-                if (strtolower($dir_utama) === strtolower($dir_arsip)) $errors[] = 'Direktori Utama dan Direktori Arsip harus berbeda.';
-                if (bot_di_dalam($dir_arsip, $dir_utama)) $errors[] = 'Direktori Arsip tidak boleh berada di dalam Direktori Utama.';
-                if (bot_di_dalam($dir_utama, $dir_arsip)) $errors[] = 'Direktori Utama tidak boleh berada di dalam Direktori Arsip.';
+                if (strtolower($dir_utama) === strtolower($dir_arsip)) {
+                    $errors[] = 'Direktori Utama dan Direktori Arsip harus berbeda.';
+                }
+                // Catatan: Pengecekan bot_di_dalam telah dihapus agar Arsip bisa berada di dalam Direktori Utama
             }
 
             if ($id === 0 && $unit_upi === '') {
@@ -129,6 +130,47 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         header('Location: ' . $url_bot);
         exit;
     }
+}
+
+// ---------- Ambil Data Master AP & UP ----------
+$daftar_ap = [];
+$daftar_up = [];
+try {
+    $upi_ses = trim((string) ($_SESSION['UnitUpi'] ?? ''));
+    $ap_ses  = trim((string) ($_SESSION['UnitAp'] ?? ''));
+    $hak     = $_SESSION['KodeHak'] ?? '';
+
+    if ($hak === 'SA.KP') {
+        $s_ap = $conn->query("SELECT UnitAp, UnitUpi, NamaUnit FROM master_ap ORDER BY UnitAp ASC");
+        $daftar_ap = $s_ap->fetchAll(PDO::FETCH_ASSOC);
+
+        $s_up = $conn->query("SELECT UnitUp, UnitAp, UnitUpi, NamaUnit FROM master_up ORDER BY UnitUp ASC");
+        $daftar_up = $s_up->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $sql_ap = "SELECT UnitAp, UnitUpi, NamaUnit FROM master_ap WHERE UnitUpi = ?";
+        $params_ap = [$upi_ses];
+        if ($ap_ses !== '') {
+            $sql_ap .= " AND UnitAp = ?";
+            $params_ap[] = $ap_ses;
+        }
+        $sql_ap .= " ORDER BY UnitAp ASC";
+        $s_ap = $conn->prepare($sql_ap);
+        $s_ap->execute($params_ap);
+        $daftar_ap = $s_ap->fetchAll(PDO::FETCH_ASSOC);
+
+        $sql_up = "SELECT UnitUp, UnitAp, UnitUpi, NamaUnit FROM master_up WHERE UnitUpi = ?";
+        $params_up = [$upi_ses];
+        if ($ap_ses !== '') {
+            $sql_up .= " AND UnitAp = ?";
+            $params_up[] = $ap_ses;
+        }
+        $sql_up .= " ORDER BY UnitUp ASC";
+        $s_up = $conn->prepare($sql_up);
+        $s_up->execute($params_up);
+        $daftar_up = $s_up->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (PDOException $ex) {
+    error_log('master_unit (daftar): ' . $ex->getMessage());
 }
 
 // ---------- Ambil Daftar Bot ----------

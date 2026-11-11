@@ -47,11 +47,11 @@ if (!function_exists('bot_jenis_daftar')) {
         ];
     }
 
-    /** Folder bot di server: htdocs/ftp/digita (atau isi BOT_ROOT bila ingin lokasi lain). */
+    /** Folder bot di server: htdocs/ftp/digitas (atau isi BOT_ROOT bila ingin lokasi lain). */
     function bot_root(): array
     {
         clearstatcache(true);
-        $dasar = defined('BOT_ROOT') ? BOT_ROOT : __DIR__ . '/../../../../ftp/digita';
+        $dasar = defined('BOT_ROOT') ? BOT_ROOT : __DIR__ . '/../../../../ftp/digitas';
         $nyata = realpath($dasar);
         return [$nyata !== false ? str_replace('\\', '/', $nyata) : '', $dasar];
     }
