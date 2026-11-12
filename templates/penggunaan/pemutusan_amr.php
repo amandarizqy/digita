@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/pemutusan_amr.php  -  Pemutusan AMR
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan 8 tombol (salin / buka PPOB / Lunas / buka MDMS / Ready / Gagal). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap: 1. PPOB -> 2. MDMS / Lunas -> 3. Ready OFF / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/pemutusan_amr.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -45,8 +45,10 @@ if ($ada) {
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <label for="f_sesi" class="form-label fw-semibold text-secondary">Sesi ID :</label>
             <div class="input-group">
-                <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($ada ? $sesi : '') ?>" placeholder="Dibuat saat Create" readonly>
+                <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat saat Create" readonly>
                 <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
+                <button type="submit" name="aksi" value="hapus_sesi" class="btn btn-outline-danger px-3" formnovalidate <?= $sesi === '' || !$unit_siap ? 'disabled' : '' ?>
+                        onclick="return confirm(<?= pg_e(json_encode($ada ? 'Hapus sesi ini? Tiket yang sedang berjalan dilepas kembali ke antrean.' : 'Hapus sesi ini?')) ?>);"><i class="bi bi-trash3 me-1"></i> Hapus Sesi</button>
             </div>
             <?php if ($sisa !== null): ?><div class="form-text">Tiket yang masih bisa diambil/dibuat di wilayah Anda: <strong><?= pg_n($sisa) ?></strong></div><?php endif; ?>
         </form>
@@ -100,17 +102,27 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- TOMBOL 4 x 2 -->
-                <div class="row g-2 row-cols-2 row-cols-md-4">
-                    <div class="col"><button type="button" class="btn btn-outline-secondary w-100" data-salin="<?= pg_e($idpel) ?>"><i class="bi bi-clipboard me-1"></i> Salin IDPEL</button></div>
-                    <div class="col"><button type="button" class="btn btn-outline-secondary w-100" data-salin="<?= pg_e($hp) ?>"><i class="bi bi-clipboard me-1"></i> Salin No HP</button></div>
-                    <div class="col"><a class="btn btn-outline-primary w-100" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-box-arrow-up-right me-1"></i> Buka PPOB</a></div>
-                    <div class="col"><button type="submit" name="aksi" value="lunas" class="btn btn-warning w-100" formnovalidate data-konfirmasi="Catat LUNAS untuk tiket ini dan lanjut ke tiket berikutnya?"><i class="bi bi-cash-coin me-1"></i> Lunas</button></div>
+                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. MDMS / Lunas  ->  3. Ready OFF / Ready ON -->
+                <div class="rounded-3 border bg-white p-3">
+                    <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
-                    <div class="col"><button type="button" class="btn btn-outline-secondary w-100" data-salin="<?= pg_e($meter) ?>"><i class="bi bi-clipboard me-1"></i> Salin No Meter</button></div>
-                    <div class="col"><a class="btn btn-outline-primary w-100" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-box-arrow-up-right me-1"></i> Buka MDMS</a></div>
-                    <div class="col"><button type="submit" name="aksi" value="ready" class="btn btn-success w-100" formnovalidate data-konfirmasi="Catat Ready <?= $sufiks ?> untuk tiket ini dan lanjut ke tiket berikutnya?"><i class="bi bi-check-circle me-1"></i> Ready <?= $sufiks ?></button></div>
-                    <div class="col"><button type="submit" name="aksi" value="gagal" class="btn btn-outline-danger w-100" formnovalidate data-konfirmasi="Catat GAGAL <?= $sufiks ?> untuk tiket ini dan lanjut ke tiket berikutnya?"><i class="bi bi-x-circle me-1"></i> Gagal <?= $sufiks ?></button></div>
+                    <div class="d-flex gap-2" data-langkah="1">
+                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
+                        <a id="btnPpob" class="btn btn-primary flex-fill fw-semibold" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-wallet2 me-1"></i> PPOB</a>
+                    </div>
+
+                    <div class="d-flex gap-2 d-none" data-langkah="2">
+                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
+                        <a id="btnMdms" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-hdd-network me-1"></i> MDMS</a>
+                        <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Catat <?= pg_e($jenis_tindakan['lunas']) ?> (pelanggan sudah lunas) untuk tiket ini?"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
+                    </div>
+
+                    <div class="d-flex gap-2 d-none" data-langkah="3">
+                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
+                        <button type="submit" name="aksi" value="ready_off" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF: catat <?= pg_e($jenis_tindakan['ready_off']) ?> untuk tiket ini?"><i class="bi bi-power me-1"></i> Ready OFF</button>
+                        <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON: catat <?= pg_e($jenis_tindakan['ready_on']) ?> untuk tiket ini?"><i class="bi bi-power me-1"></i> Ready ON</button>
+                    </div>
+                    <div class="small text-muted mt-2 d-none" data-langkah="3">Ready OFF = <strong><?= pg_e($jenis_tindakan['ready_off']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
                 </div>
                 <div id="infoTombol" class="small text-muted mt-2" style="min-height:1.2em;"></div>
             </div>
@@ -120,8 +132,12 @@ if ($ada) {
 
 <script>
 (function () {
-    var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), terkirim = false;
-    function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 2500); }
+    var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah'), terkirim = false;
+    // Cara PPOB menyalin: 'terpisah' = 3 salinan berurutan (HP, No Meter, IDPEL; isi clipboard saat ini = IDPEL, sisanya di riwayat clipboard),
+    //                    'gabung'   = 1 salinan berisi 3 baris (IDPEL, No Meter, No HP).
+    var MODE_SALIN = 'terpisah';
+    var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
+    function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
 
     // ---- kartu pop-up terbuka otomatis saat halaman dimuat ----
     window.addEventListener('load', function () {
@@ -129,7 +145,18 @@ if ($ada) {
         else { modal.classList.add('show'); modal.style.display = 'block'; modal.removeAttribute('aria-hidden'); }   // cadangan bila Bootstrap JS tidak termuat
     });
 
-    // ---- tombol salin ----
+    // ---- langkah tombol ----
+    var judul = {1: 'Langkah 1 dari 3 \u00b7 Cek tagihan di PPOB',
+                 2: 'Langkah 2 dari 3 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
+                 3: 'Langkah 3 dari 3 \u00b7 Catat kondisi meter setelah proses di MDMS'};
+    function tampil(n) {
+        document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
+        penanda.textContent = judul[n];
+    }
+    tampil(1);
+    document.querySelectorAll('[data-ulangi]').forEach(function (b) { b.addEventListener('click', function () { tampil(1); kabar('Kembali ke langkah 1.'); }); });
+
+    // ---- salin ke clipboard ----
     function salin(teks) {
         if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(teks);
         return new Promise(function (ok, gagal) {
@@ -138,18 +165,30 @@ if ($ada) {
             try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
         });
     }
-    document.querySelectorAll('[data-salin]').forEach(function (b) {
-        b.addEventListener('click', function () {
-            var teks = (b.getAttribute('data-salin') || '').trim();
-            if (!teks) { kabar('Datanya kosong, tidak ada yang disalin.'); return; }
-            salin(teks).then(function () { kabar('Tersalin: ' + teks); }, function () { kabar('Gagal menyalin. Salin manual dari keterangan.'); });
-        });
-    });
+    function salinData() {
+        var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
+        if (!item.length) { kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.'); return; }
+        var kosong = [['IDPEL', data.idpel], ['No Meter', data.meter], ['No HP', data.hp]].filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
+        var catatan = kosong.length ? ' (' + kosong.join(', ') + ' kosong, dilewati)' : '';
+        var nama = item.slice().reverse().map(function (x) { return x[0]; }).join(', ');
+        var proses = MODE_SALIN === 'gabung'
+            ? salin(item.slice().reverse().map(function (x) { return x[1]; }).join('\n'))
+            : item.reduce(function (p, x) { return p.then(function () { return salin(String(x[1]).trim()); }); }, Promise.resolve());
+        proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
+                    function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
+    }
 
-    // ---- tautan yang belum diatur ('#') ----
-    document.querySelectorAll('[data-tautan]').forEach(function (a) {
-        if (a.getAttribute('href') === '#') a.addEventListener('click', function (e) { e.preventDefault(); kabar('Tautan belum diatur (isi $link di modules/penggunaan/pemutusan_amr.php).'); });
-    });
+    // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
+    // ---- MDMS: buka tautan, lanjut langkah 3 ----
+    function pasang(id, tautan, sesudah, nama) {
+        var a = document.getElementById(id);
+        a.addEventListener('click', function (e) {
+            if (a.getAttribute('href') === '#') { e.preventDefault(); kabar('Tautan ' + nama + ' belum diatur (isi $link di modules/penggunaan/pemutusan_amr.php).'); }
+            sesudah();
+        });
+    }
+    pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
+    pasang('btnMdms', 'mdms', function () { tampil(3); }, 'MDMS');
 
     // ---- tombol hasil: konfirmasi, lalu cegah kirim ganda ----
     document.querySelectorAll('[data-konfirmasi]').forEach(function (b) {
