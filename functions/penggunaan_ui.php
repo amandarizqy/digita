@@ -36,17 +36,18 @@ function pg_hidden(string $action, array $extra = []): string
 function pg_menu(): array
 {
     return [
-            'ap2t' => [
+        'ap2t' => [
             'label' => 'AP2T', 'icon' => 'bi-box-arrow-in-right', 'items' => [
                 'input_dil'       => ['DIL', 'bi-journal-text'],
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'upload_tul'      => ['Upload TUL', 'bi-type'],
+                'shuntrip'        => ['Shuntrip', 'bi-truck'],
             ],
         ],
         'S41' => [
             'label' => 'S41', 'icon' => 'bi-credit-card', 'items' => [
-                'isi_pulsa'       => ['Isi Pulsa', 'bi-phone'],
+                'isi_pulsa'           => ['Isi Pulsa', 'bi-phone'],
                 'input_perintah_s41'  => ['Perintah', 'bi-terminal'],
             ],
         ],
@@ -71,11 +72,12 @@ function pg_menu(): array
         'monitoring' => [
             'label' => 'Monitoring', 'icon' => 'bi-display', 'items' => [
                 'monitor_dil'       => ['DIL', 'bi-journal-text'],
+                'monitor_tul'       => ['TUL', 'bi-type'],
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
-                'monitor_tul'       => ['TUL', 'bi-type'],
                 'monitor_perintah_s41'  => ['Perintah', 'bi-terminal'],
-                // 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
+
+                'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],
     ];

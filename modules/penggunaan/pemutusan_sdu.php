@@ -8,7 +8,7 @@
 //        UPDATE trx_order_putus_sdu SET Sesi = SessionID ... ORDER BY TiketPutusSdu ASC LIMIT 1
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari TUL (tul_601) di wilayah akun yang belum punya tiket
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_putus_sdu:  Ready OFF = PADAM, Gagal OFF = GAGAL, Lunas = LUNAS
+//   4. Tombol hasil menulis ke trx_tindakan_putus_sdu:  Ready OFF = PADAM, Ready ON = GAGAL, Lunas = LUNAS
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -21,9 +21,9 @@ $pk             = 'TiketPutusSdu';             // kunci tiket
 $thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_putus_sdu';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
-    'ready' => 'PADAM',             // tombol Ready OFF
-    'gagal' => 'GAGAL',                 // tombol Gagal OFF
-    'lunas' => 'LUNAS',                 // tombol Lunas
+    'ready_off' => 'PADAM',             // Ready OFF: meter sudah OFF -> pemutusan berhasil
+    'ready_on'  => 'GAGAL',             // Ready ON : meter masih ON  -> pemutusan gagal
+    'lunas'     => 'LUNAS',             // Lunas
 ];
 // Syarat tambahan sumber TUL (opsional), mis. membedakan pelanggan SDU dari AMI/AMR lewat DIL: "AND d.JenisMk = 'SDU'"  (alias: t = tul_601, d = dil)
 $syarat_sumber = '';
@@ -109,6 +109,12 @@ $ambil_dil = function (string $idpel) use ($conn): array {
     return ['nama' => trim((string) ($r['Nama'] ?? '')), 'meter' => trim((string) ($r['NomorMeter'] ?? '')), 'hp' => trim((string) ($r['NomorHp'] ?? ''))];
 };
 
+$detail_fk = function (string $pesan): string {            // ambil nama tabel & constraint dari pesan MySQL untuk memudahkan pelacakan
+    $tabel_anak = preg_match('/fails \(([^,]+),/', $pesan, $m1) ? $m1[1] : '';
+    if (!preg_match('/CONSTRAINT (\S+) FOREIGN KEY \(([^)]*)\) REFERENCES (\S+) \(([^)]*)\)/', $pesan, $m)) return '';
+    return ' <span class="small">Detail: tabel ' . pg_e($tabel_anak) . ', kolom ' . pg_e($m[2]) . ' harus ada di ' . pg_e($m[3]) . ' (' . pg_e($m[4]) . '), constraint ' . pg_e($m[1]) . '.</span>';
+};
+
 $pesan_habis = 'Tidak ada TUL di wilayah Anda yang belum dibuatkan tiket. Unggah TUL dahulu (S41 > Upload TUL).';
 
 // ---- hasil proses sebelumnya (post-redirect-get) ----
@@ -152,6 +158,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $info_baru = $pesan_habis;
                 }
             }
+        } elseif ($aksi === 'hapus_sesi') {
+            // Hapus sesi: tiket sesi ini yang belum selesai (AKTIF, belum ditindak) dilepas kembali ke antrean (Sesi dikosongkan),
+            // lalu SessionID dibuang dari session login. Tiket yang sudah ditindak tetap menyimpan Sesi-nya sebagai riwayat.
+            if ($sesi === '') {
+                $pesan_error = 'Tidak ada sesi aktif untuk dihapus.';
+            } else {
+                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = '' WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+                                      AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+                $st->execute([':sesi' => $sesi]);
+                $dilepas = $st->rowCount();
+                unset($_SESSION[$kunci_sesi]);
+                $pesan_sukses = 'Sesi <strong>' . pg_e($sesi) . '</strong> dihapus.'
+                              . ($dilepas > 0 ? ' ' . pg_n($dilepas) . ' tiket yang belum selesai dilepas kembali ke antrean.' : '');
+            }
         } elseif (isset($jenis_tindakan[$aksi])) {
             $t = $tiket_sekarang($sesi);
             if (!$t || (string) $t[$pk] !== trim((string) ($_POST['tiket'] ?? ''))) {
@@ -179,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($conn->inTransaction()) $conn->rollBack();
         $kode = $e->errorInfo[1] ?? 0;
         $pesan_error = $kode === 1062 ? 'Tiket ini sudah pernah dicatat tindakannya.'
-                     : ($kode === 1452 ? 'Ditolak database (data rujukan tiket/akun/unit tidak valid).'
+                     : ($kode === 1452 ? 'Ditolak database (data rujukan tiket/akun/unit tidak valid).' . $detail_fk($e->getMessage())
                      : 'Gagal memproses: ' . pg_e($e->getMessage()));
     } catch (Throwable $e) {
         if ($conn->inTransaction()) $conn->rollBack();

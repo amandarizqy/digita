@@ -18,29 +18,31 @@ if (!function_exists('pga_matriks')) {
 
         return [
             // S41
-            'isi_pulsa'         => $input,      // Isi Pulsa
+            'isi_pulsa'         => ['TL.UP', 'SF.VD', 'SF.UP'],      // Isi Pulsa
             'input_perintah_s41' => $input,      // Perintah
             // AP2T
             'input_dil'         => $input,      // DIL
             'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
             'upload_tul'        => $input,      // Upload TUL
+            'shuntrip'          => $input,      // SHUN Trip
             // AMI
-            'pemutusan_ami'     => $input,      // Pemutusan AMI
-            'penyalaan_ami'     => $input,      // Penyalaan AMI
+            'pemutusan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Pemutusan AMI
+            'penyalaan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Penyalaan AMI
             // AMR
-            'pemutusan_amr'     => $input,      // Pemutusan AMR
-            'penyalaan_amr'     => $input,      // Penyalaan AMR
+            'pemutusan_amr'     => ['TL.UP', 'SF.UP'],      // Pemutusan AMR
+            'penyalaan_amr'     => ['TL.UP', 'SF.UP'],      // Penyalaan AMR
             // SDU
-            'pemutusan_sdu'     => $input,      // Pemutusan SD
-            'penyalaan_sdu'     => $input,      // Penyalaan SDU
+            'pemutusan_sdu'     => ['TL.UP', 'SF.UP'],      // Pemutusan SD
+            'penyalaan_sdu'     => ['TL.UP', 'SF.UP'],      // Penyalaan SDU
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL
-            'monitor_pelunasan' => $tanpa_vd,   // Pelunasan
+            'monitor_tul'       => $semua,   // TUL
+            'monitor_pelunasan' => $semua,   // Pelunasan
             'monitor_isi_pulsa' => $tanpa_vd,   // Isi Pulsa
-            'monitor_tul'       => $tanpa_vd,   // TUL
             'monitor_perintah_s41'  => $tanpa_vd,   // Perintah
-            // 'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
+
+            'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
         ];
     }
 

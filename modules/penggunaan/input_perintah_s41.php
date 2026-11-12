@@ -16,8 +16,8 @@ $maks_kirim   = 50;      // batas perangkat per sekali kirim
 $sumber_barang = 'vw_terpasang';
 $db_gateway    = 'smsd';
 $tiket_cfg = [   // sumber tiket: tabel, kolom kunci, label, perintah yang disarankan
-    'putus' => ['tabel' => 'trx_order_putus_s41', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus'],
-    'nyala' => ['tabel' => 'trx_order_nyala_s41', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala'],
+    'putus' => ['tabel' => 'trx_order_putus_s41', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus_s41'],
+    'nyala' => ['tabel' => 'trx_order_nyala_s41', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala_s41'],
 ];
 $sumber = (string) ($_POST['sumber'] ?? $_GET['sumber'] ?? 'putus');
 if (!isset($tiket_cfg[$sumber]) && $sumber !== 'barang') $sumber = 'putus';
@@ -81,7 +81,7 @@ if (!function_exists('pr_nomor')) {
 $keyword = trim($_GET['keyword'] ?? '');
 $relay   = in_array($_GET['relay'] ?? '', ['ON', 'OFF'], true) ? $_GET['relay'] : '';
 $status  = in_array($_GET['status'] ?? 'AKTIF', ['AKTIF', 'TIDAK', 'SEMUA'], true) ? ($_GET['status'] ?? 'AKTIF') : 'AKTIF';   // status tiket (default AKTIF)
-// status tindakan (trx_tindakan_putus / trx_tindakan_nyala): BELUM = tiket macet (belum ada tindakan), default BELUM
+// status tindakan (trx_tindakan_putus_s41 / trx_tindakan_nyala_s41): BELUM = tiket macet (belum ada tindakan), default BELUM
 $tindakan = in_array($_GET['tindakan'] ?? 'BELUM', ['BELUM', 'SUDAH', 'SEMUA'], true) ? ($_GET['tindakan'] ?? 'BELUM') : 'BELUM';
 $limit   = (int) ($_GET['limit'] ?? 25);
 if (!in_array($limit, [10, 25, 50, 100], true)) $limit = 25;
@@ -243,4 +243,4 @@ if ($unit_siap) {
 
 $boleh_monitor = pga_boleh('monitor_perintah');
 
-include __DIR__ . '/../../templates/penggunaan/input_perintah.php';
+include __DIR__ . '/../../templates/penggunaan/input_perintah_s41.php';
