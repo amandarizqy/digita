@@ -1,8 +1,9 @@
 <?php
-// Cetak Formulir Order Perintah Kerja (satu order memuat banyak FPK)
+// Cetak Order Pemeliharaan: 1 halaman Formulir Order + 1 halaman Formulir Perintah Kerja untuk setiap FPK di dalamnya
 session_start();
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../functions/pemeliharaan_helper.php';
+require_once __DIR__ . '/../../functions/pemeliharaan_cetak.php';
 
 if (!isset($_SESSION['NamaAkun']) || !ph_akses_monitoring()) {
     http_response_code(403);
@@ -58,26 +59,8 @@ $total_baris = max(CO_BARIS_MIN, $jml);
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Cetak Order - <?= ph_e($order['NoFormOrder']) ?></title>
-    <style>
-        @page { size: A4; margin: 10mm; }
-        * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 12px; color: #000; }
-        .kertas { width: 100%; max-width: 780px; margin: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        td, th { border: 1px solid #000; padding: 3px 6px; vertical-align: middle; }
-        .judul td { text-align: center; }
-        .lbl { width: 18%; white-space: nowrap; }
-        .daftar th { font-weight: 700; text-align: center; }
-        .daftar td { height: 19px; font-size: 10.5px; }
-        .daftar .no { width: 4%; text-align: left; }
-        .mono { font-family: "Courier New", monospace; }
-        .ttd td { height: 100px; text-align: center; vertical-align: top; width: 33.33%; }
-        .ttd .nama { display: block; margin-top: 66px; }
-        tr { page-break-inside: avoid; }
-        .no-print { text-align: right; margin-bottom: 10px; }
-        @media print { .no-print { display: none; } body { padding: 0; } }
-    </style>
+    <title>Cetak Order SPK &amp; FPK - <?= ph_e($order['NoFormOrder']) ?></title>
+    <style><?= pc_css() ?></style>
 </head>
 <body onload="window.print()">
 <div class="kertas">
@@ -85,6 +68,7 @@ $total_baris = max(CO_BARIS_MIN, $jml);
         <button onclick="window.print()" style="padding:8px 15px;background:#0d6efd;color:#fff;border:none;cursor:pointer;font-weight:bold;">Cetak / Simpan PDF</button>
     </div>
 
+    <div class="rekap">
     <table>
         <tr class="judul">
             <td style="width:25%;text-align:left;">PT PLN (PERSERO)<br>UID BANTEN<br><?= ph_e($unit) ?></td>
@@ -103,11 +87,11 @@ $total_baris = max(CO_BARIS_MIN, $jml);
         <thead>
             <tr>
                 <th class="no">No</th>
-                <th style="width:27%;">No Perintah Kerja</th>
-                <th style="width:15%;">IdPel</th>
-                <th style="width:19%;">No Ref IMEI</th>
+                <th style="width:26%;">No Perintah Kerja</th>
+                <th style="width:14%;">IdPel</th>
+                <th style="width:18%;">No Ref IMEI</th>
                 <th style="width:24%;">SIM Id &ndash; Nomor Kontak</th>
-                <th style="width:11%;">Tgl Pasang</th>
+                <th style="width:14%;">Tgl Pemeliharaan</th>
             </tr>
         </thead>
         <tbody>
@@ -146,6 +130,22 @@ $total_baris = max(CO_BARIS_MIN, $jml);
             <td>Menerima,<br>Petugas<span class="nama">( <?= ph_e($order['KdPetugas'] ?? '____________________') ?> )</span></td>
         </tr>
     </table>
+    </div>
+
+    <?php
+    // Halaman berikutnya: Formulir Perintah Kerja (FPK) satu per halaman, urut sesuai daftar di atas
+    foreach ($rows as $r) {
+        try {
+            $d = pc_ambil_fpk($conn, $r['NoFpk']);
+        } catch (PDOException $e) {
+            error_log('pemeliharaan cetak_order fpk: ' . $e->getMessage());
+            $d = null;
+        }
+        if ($d) {
+            echo pc_halaman_pk($conn, $d, true);
+        }
+    }
+    ?>
 </div>
 </body>
 </html>
