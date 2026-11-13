@@ -22,13 +22,13 @@ $thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_putus_amr';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
     'ready_off' => 'PADAM',             // Ready OFF: meter sudah OFF -> pemutusan berhasil
-    'ready_on'  => 'GAGAL',             // Ready ON : meter masih ON  -> pemutusan gagal
+    'gagal_off'  => 'GAGAL',             // Ready ON : meter masih ON  -> pemutusan gagal
     'lunas'     => 'LUNAS',             // Lunas
 ];
 // Syarat tambahan sumber TUL (opsional), mis. membedakan pelanggan AMI/AMR lewat DIL: "AND d.JenisMk = 'AMR'"  (alias: t = tul_601, d = dil)
 $syarat_sumber = '';
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => '#', 'mdms' => '#'];
+$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'mdms' => 'http://mdms.pln.co.id/meter'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));

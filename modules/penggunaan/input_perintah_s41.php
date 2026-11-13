@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!headers_sent()) {
         $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error];
-        header('Location: ' . pg_url('input_perintah', [
+        header('Location: ' . pg_url('input_perintah_s41', [
             'sumber' => $sumber === 'putus' ? '' : $sumber, 'status' => ($_POST['f_status'] ?? 'AKTIF') === 'AKTIF' ? '' : ($_POST['f_status'] ?? ''),
             'tindakan' => ($_POST['f_tindakan'] ?? 'BELUM') === 'BELUM' ? '' : ($_POST['f_tindakan'] ?? ''),
             'keyword' => $_POST['f_keyword'] ?? '', 'relay' => $_POST['f_relay'] ?? '',
@@ -241,6 +241,6 @@ if ($unit_siap) {
     }
 }
 
-$boleh_monitor = pga_boleh('monitor_perintah');
+$boleh_monitor = pga_boleh('monitor_perintah_s41');
 
 include __DIR__ . '/../../templates/penggunaan/input_perintah_s41.php';

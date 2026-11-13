@@ -8,7 +8,7 @@
 //        UPDATE trx_order_nyala_ami SET Sesi = SessionID ... ORDER BY TiketNyalaAmi ASC LIMIT 1
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_ami) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_nyala_ami:  Ready ON = NYALA, Ready OFF = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
+//   4. Tombol hasil menulis ke trx_tindakan_nyala_ami:  Ready ON = NYALA, Gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -22,7 +22,7 @@ $thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_nyala_ami';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
     'ready_on'  => 'NYALA',             // Ready ON : meter sudah ON  -> penyalaan berhasil
-    'ready_off' => 'GAGAL',             // Ready OFF: meter masih OFF -> penyalaan gagal
+    'gagal_on' => 'GAGAL',             // Gagal ON: meter masih OFF -> penyalaan gagal
     'lunas'     => 'LUNAS',             // Lunas
 ];
 $fk             = 'TiketPutusAmi';          // kolom rujukan ke tiket putus

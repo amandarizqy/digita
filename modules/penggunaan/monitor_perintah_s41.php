@@ -1,5 +1,5 @@
 <?php
-// modules/penggunaan/monitor_perintah.php  -  Monitoring Perintah (hanya baca)
+// modules/penggunaan/monitor_perintah_s41.php  -  Monitoring Perintah (hanya baca)
 // Tab: Tiket Putus (trx_order_putus_s41) | Tiket Nyala (trx_order_nyala_s41) | SMS Keluar (sms_outbox) | SMS Masuk (sms_inbox)
 // Wilayah: selalu mengikuti kode unit session akun (pg_scope()). Tiket: kolom Unit* pada tabel tiket.
 //          SMS: dicocokkan ke perangkat lewat 9 digit terakhir nomor (NomorBarang pada view) lalu difilter unit perangkat;
@@ -135,6 +135,6 @@ if (!$unit_siap) {
     }
 }
 
-$boleh_input = pga_boleh('input_perintah');
+$boleh_input = pga_boleh('input_perintah_s41');
 
-include __DIR__ . '/../../templates/penggunaan/monitor_perintah.php';
+include __DIR__ . '/../../templates/penggunaan/monitor_perintah_s41.php';
