@@ -27,6 +27,11 @@ $jenis_tindakan = [                     // tombol => nilai JenisTindakan
 ];
 $fk             = 'TiketPutusSdu';          // kolom rujukan ke tiket putus
 $putus_tabel    = 'trx_order_putus_sdu';   // tabel tiket putus (sumber tiket nyala; juga untuk menampilkan No TUL)
+// FK tiket nyala merujuk ke tabel TINDAKAN putus: tiket nyala hanya bisa dibuat untuk tiket putus yang sudah punya tindakan.
+$putus_tindakan_tabel  = 'trx_tindakan_putus_sdu';
+$putus_tindakan_syarat = ['PADAM'];      // jenis tindakan putus yang boleh dinyalakan (hanya meter yang benar-benar diputus)
+$syarat_putus = " AND EXISTS (SELECT 1 FROM `$putus_tindakan_tabel` pt WHERE pt.`$fk` = p.`$fk` AND pt.JenisTindakan IN ("
+              . implode(',', array_map(fn($j) => $conn->quote($j), $putus_tindakan_syarat)) . "))";
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
 $link = ['ppob' => '#', 'mdms' => '#'];
 
@@ -56,12 +61,12 @@ $klaim = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel
 };
 
 /** Langkah 2b: BUAT tiket baru atas nama SessionID. ID tiket diisi TRIGGER database, lalu dibaca kembali. '' bila tidak ada sumber. Panggil di dalam transaksi. */
-$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $thbl_len, $fk, $putus_tabel): string {
-    // Sumber: tiket putus AKTIF di wilayah akun yang belum punya tiket nyala AKTIF.
+$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $thbl_len, $fk, $putus_tabel, $syarat_putus): string {
+    // Sumber: tiket putus AKTIF di wilayah akun, sudah ditindak PADAM, dan belum punya tiket nyala AKTIF.
     $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
     $st = $conn->prepare("SELECT p.`$fk` AS rujukan, p.IdPel, p.ThblRek, p.NomorMeter, p.NomorHp, p.UnitUp, p.UnitAp, p.UnitUpi
                           FROM `$putus_tabel` p
-                          WHERE p.StatusData = 'AKTIF' AND $sc
+                          WHERE p.StatusData = 'AKTIF' AND $sc $syarat_putus
                             AND NOT EXISTS (SELECT 1 FROM `$tabel` n WHERE n.`$fk` = p.`$fk` AND n.StatusData = 'AKTIF')
                           ORDER BY p.`$fk` ASC LIMIT 1 FOR UPDATE");
     $st->execute($p);
@@ -116,7 +121,7 @@ $detail_fk = function (string $pesan): string {            // ambil nama tabel &
     return ' <span class="small">Detail: tabel ' . pg_e($tabel_anak) . ', kolom ' . pg_e($m[2]) . ' harus ada di ' . pg_e($m[3]) . ' (' . pg_e($m[4]) . '), constraint ' . pg_e($m[1]) . '.</span>';
 };
 
-$pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala (belum ada tiket putus, atau semuanya sudah punya tiket nyala).';
+$pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya: tiket putus sudah ditindak (gagal ON = PADAM) dan belum punya tiket nyala.';
 
 // ---- hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {
@@ -236,7 +241,7 @@ if ($unit_siap) {
         $sisa = (int) $st->fetchColumn();
         // ditambah tiket putus yang belum punya tiket nyala (akan dibuatkan tiket saat Create)
         $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
-        $st = $conn->prepare("SELECT COUNT(*) FROM `$putus_tabel` p WHERE p.StatusData = 'AKTIF' AND $sc AND NOT EXISTS (SELECT 1 FROM `$tabel` n WHERE n.`$fk` = p.`$fk` AND n.StatusData = 'AKTIF')");
+        $st = $conn->prepare("SELECT COUNT(*) FROM `$putus_tabel` p WHERE p.StatusData = 'AKTIF' AND $sc $syarat_putus AND NOT EXISTS (SELECT 1 FROM `$tabel` n WHERE n.`$fk` = p.`$fk` AND n.StatusData = 'AKTIF')");
         $st->execute($p);
         $sisa += (int) $st->fetchColumn();
     } catch (PDOException $e) {

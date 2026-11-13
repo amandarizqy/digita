@@ -33,7 +33,7 @@ if ($ada) {
     $rincian = [];
     if (!$putus) $rincian[] = ['Tiket Putus', (string) $row[$fk]];
     $rincian[] = ['No. TUL', (string) ($row['NoTulTampil'] ?? '')];
-    $rincian[] = ['Periode', trim((string) $row['ThblRek'])];
+    $rincian[] = ['Periode', trim((string) $row['ThBlRek'])];
     $rincian[] = ['No. Meter', $meter];
     $rincian[] = ['No. HP', $hp];
     $rincian[] = ['Dibuat', (string) $row['WaktuData']];
