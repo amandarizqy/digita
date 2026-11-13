@@ -2,9 +2,75 @@
 // functions/xlsx_reader.php
 // Pembaca XLSX streaming (tanpa Composer). Butuh ekstensi PHP: zip + xmlreader (bawaan XAMPP).
 // Memori kecil walau barisnya puluhan ribu karena sheet dibaca sebagai stream.
+//
+// PEMBACAAN PER SHEET
+//   xlsx_daftar_sheet($berkas)   -> daftar sheet yang tidak disembunyikan: [['nama' => ..., 'path' => 'xl/worksheets/sheetN.xml'], ...]
+//   xlsx_pilih_sheet($path|null) -> pilih sheet yang dibaca xlsx_baris(); null = sheet pertama (perilaku lama)
+//   xlsx_baris($berkas)          -> baris dari sheet yang dipilih
+
+/** Pilih sheet untuk pembacaan berikutnya ($path dari xlsx_daftar_sheet). null = sheet pertama. */
+function xlsx_pilih_sheet(?string $path): void
+{
+    $GLOBALS['XLSX_SHEET_PATH'] = $path;
+}
 
 /**
- * Baca sheet pertama. Menghasilkan [nomor_baris_excel => ['A' => nilai, 'C' => nilai, ...]].
+ * Daftar sheet (urutan sesuai buku kerja), sheet tersembunyi dilewati.
+ * Mengembalikan [] bila daftar tidak bisa dibaca (pemanggil memakai sheet pertama seperti biasa).
+ */
+function xlsx_daftar_sheet(string $berkas): array
+{
+    $wb = $rels = false;
+    if (class_exists('ZipArchive')) {
+        $zip = new ZipArchive();
+        if ($zip->open($berkas) !== true) return [];
+        $wb   = $zip->getFromName('xl/workbook.xml');
+        $rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
+        $zip->close();
+    } else {
+        $fh = @fopen($berkas, 'rb');
+        if (!$fh) return [];
+        try {
+            $ukuran = (int) filesize($berkas);
+            $a = xlsx_zip_cari($fh, $ukuran, 'xl/workbook.xml');
+            $b = xlsx_zip_cari($fh, $ukuran, 'xl/_rels/workbook.xml.rels');
+            $wb   = $a !== null ? xlsx_zip_isi($fh, $a) : false;
+            $rels = $b !== null ? xlsx_zip_isi($fh, $b) : false;
+        } catch (Throwable $e) {
+            return [];
+        } finally {
+            fclose($fh);
+        }
+    }
+    if ($wb === false || $rels === false) return [];
+
+    // rId -> path file sheet
+    $target = [];
+    if (preg_match_all('#<Relationship\b[^>]*>#', $rels, $m)) {
+        foreach ($m[0] as $tag) {
+            if (preg_match('/\bId="([^"]*)"/', $tag, $i) && preg_match('/\bTarget="([^"]*)"/', $tag, $t)) {
+                $p = $t[1];
+                $target[$i[1]] = ($p !== '' && $p[0] === '/') ? ltrim($p, '/') : 'xl/' . $p;
+            }
+        }
+    }
+
+    $hasil = [];
+    if (preg_match_all('#<sheet\b[^>]*>#', $wb, $m)) {
+        foreach ($m[0] as $tag) {
+            if (!preg_match('/\bname="([^"]*)"/', $tag, $n) || !preg_match('/\br:id="([^"]*)"/', $tag, $r)) continue;
+            if (preg_match('/\bstate="(?:hidden|veryHidden)"/', $tag)) continue;
+            $p = $target[$r[1]] ?? null;
+            if ($p === null || !preg_match('#^xl/worksheets/[^/]+\.xml$#', $p)) continue;   // lewati chartsheet dsb
+            $hasil[] = ['nama' => html_entity_decode($n[1], ENT_XML1 | ENT_QUOTES, 'UTF-8'), 'path' => $p];
+        }
+    }
+    return $hasil;
+}
+
+/**
+ * Baca satu sheet (yang dipilih xlsx_pilih_sheet(); bila tidak dipilih = sheet pertama).
+ * Menghasilkan [nomor_baris_excel => ['A' => nilai, 'C' => nilai, ...]].
  * Nilai selalu string mentah dari XLSX (angka tetap presisi penuh, tanggal berupa angka serial).
  */
 function xlsx_baris(string $berkas, bool $paksa_murni = false): Generator
@@ -19,15 +85,18 @@ function xlsx_baris(string $berkas, bool $paksa_murni = false): Generator
         throw new RuntimeException('File bukan XLSX yang valid.');
     }
 
-    // Sheet pertama
-    $sheet = 'xl/worksheets/sheet1.xml';
-    if ($zip->locateName($sheet) === false) {
-        $sheet = null;
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $n = $zip->getNameIndex($i);
-            if (preg_match('#^xl/worksheets/[^/]+\.xml$#', $n)) { $sheet = $n; break; }
+    // Sheet yang dipilih; bila tidak ada / tidak ditemukan -> sheet pertama
+    $sheet = $GLOBALS['XLSX_SHEET_PATH'] ?? null;
+    if ($sheet === null || $zip->locateName($sheet) === false) {
+        $sheet = 'xl/worksheets/sheet1.xml';
+        if ($zip->locateName($sheet) === false) {
+            $sheet = null;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $n = $zip->getNameIndex($i);
+                if (preg_match('#^xl/worksheets/[^/]+\.xml$#', $n)) { $sheet = $n; break; }
+            }
+            if ($sheet === null) throw new RuntimeException('Sheet tidak ditemukan di dalam file.');
         }
-        if ($sheet === null) throw new RuntimeException('Sheet tidak ditemukan di dalam file.');
     }
 
     // Shared strings
@@ -48,7 +117,7 @@ function xlsx_baris(string $berkas, bool $paksa_murni = false): Generator
     // Sheet (stream)
     $r = new XMLReader();
     if (!$r->open('zip://' . $berkas . '#' . $sheet, null, LIBXML_NONET | LIBXML_COMPACT)) {
-        throw new RuntimeException('Gagal membuka sheet pertama.');
+        throw new RuntimeException('Gagal membuka sheet.');
     }
     while ($r->read()) {
         if ($r->nodeType !== XMLReader::ELEMENT || $r->name !== 'row') continue;
@@ -160,8 +229,10 @@ function xlsx_baris_murni(string $berkas): Generator
     $fh = fopen($berkas, 'rb');
     if (!$fh) throw new RuntimeException('File tidak bisa dibaca.');
     try {
-        $ukuran = (int) filesize($berkas);
-        $sheet  = xlsx_zip_cari($fh, $ukuran, 'xl/worksheets/sheet1.xml')
+        $ukuran  = (int) filesize($berkas);
+        $dipilih = $GLOBALS['XLSX_SHEET_PATH'] ?? null;
+        $sheet   = ($dipilih !== null ? xlsx_zip_cari($fh, $ukuran, $dipilih) : null)
+               ?? xlsx_zip_cari($fh, $ukuran, 'xl/worksheets/sheet1.xml')
                ?? xlsx_zip_cari($fh, $ukuran, fn($n) => (bool) preg_match('#^xl/worksheets/[^/]+\.xml$#', $n));
         if ($sheet === null) throw new RuntimeException('Sheet tidak ditemukan di dalam file.');
 

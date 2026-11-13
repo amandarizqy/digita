@@ -404,12 +404,14 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 
 // ============================================================
 // TUL -> tul_601   [penggunaan/upload_tul.php]  (IdPel tidak dicek ke master_barang)
+// Logika sama dengan halaman web; bedanya wilayah dari folder/bot dan NamaAkun memakai akun bot
+// (harus ada di master_pengguna karena foreign key, lihat bot_akun_riwayat() di bot_helper.php).
 // ============================================================
 function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
     bh_wajib_wilayah($ap, $up);
     $upi  = trim((string) $bot['UnitUpi']);
-    $akun = bh_akun($bot);
+    $akun = bot_akun_riwayat($conn);          // ?string: akun 'BOT' di master_pengguna, atau NULL bila belum ada
     $int_max = 2147483647;
 
     $wajib = [
@@ -498,8 +500,10 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
             }
         }
 
-        // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong. IdPel tidak dicek ke master_barang.
-        foreach (array_chunk($nama_dil, BH_CHUNK, true) as $paket) {
+        // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong,
+        //     dan hanya untuk IdPel yang benar-benar disimpan (sama dengan halaman web).
+        $nama_pakai = array_intersect_key($nama_dil, array_flip(array_map('strval', array_column($baris, 3))));
+        foreach (array_chunk($nama_pakai, BH_CHUNK, true) as $paket) {
             $case = $param = [];
             foreach ($paket as $idn => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $idn, $nm); }
             $in = implode(',', array_fill(0, count($paket), '?'));

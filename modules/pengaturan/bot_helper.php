@@ -1,7 +1,12 @@
 <?php
 // modules/pengaturan/bot_helper.php
 // SUMBER TUNGGAL aturan bot: dipakai web (bot.php), cron (bot_cron.php) dan handler (bot_handlers.php),
-// sehingga aturan folder, cakupan unit, dan kolom status tidak bisa berbeda antar file.
+// sehingga aturan folder, cakupan unit, hak akses, dan pencatatan riwayat tidak bisa berbeda antar file.
+//
+// STRUKTUR TABEL
+//   bot_akses          : konfigurasi bot (IdBot, JenisBot, UnitUp/Ap/Upi, DirektoriUtama, DirektoriArsip, StatusData, WaktuData)
+//   bot_akses_riwayat  : satu baris per file yang selesai diproses cron
+//                        (TiketBot, IdBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp/Ap/Upi, StatusData, WaktuData)
 //
 // ATURAN FOLDER (semua relatif terhadap BOT_ROOT, nilainya dari kolom bot_akses):
 //   Direktori Utama = tempat file .xlsx diletakkan.
@@ -16,11 +21,26 @@ if (!defined('BOT_ROOT') && is_file(__DIR__ . '/../../config/bot.php')) {
     require_once __DIR__ . '/../../config/bot.php';
 }
 
-// Kolom status terakhir di bot_akses (opsional; bila kolomnya tidak ada, cron hanya menulis log).
-// Sesuaikan nama di sini bila kolom yang Anda buat berbeda.
-const BOT_KOL_JALAN  = 'TerakhirJalan';    // DATETIME     : kapan cron terakhir memeriksa bot ini
-const BOT_KOL_STATUS = 'StatusTerakhir';   // VARCHAR(10)  : BERHASIL | SEBAGIAN | GAGAL | TUNDA
-const BOT_KOL_PESAN  = 'PesanTerakhir';    // VARCHAR(255) : ringkasan hasil proses terakhir
+// Jumlah maksimal baris riwayat per bot yang ditampilkan di halaman Daftar Bot.
+const BOT_RIWAYAT_MAKS = 100;
+
+// NamaAkun yang dicatat di bot_akses_riwayat. Kolom itu punya foreign key ke master_pengguna.NamaAkun,
+// jadi nilainya HARUS akun yang ada di master_pengguna. Bila akun ini belum ada, NamaAkun dicatat NULL
+// (kolom harus boleh NULL; lihat catatan di bot_akun_riwayat()).
+const BOT_NAMA_AKUN = 'BOT';
+
+// ATURAN AKSES HALAMAN DAFTAR BOT: jenis bot -> KodeHak yang boleh mengatur.
+// SA.KP (superadmin) selalu boleh semua jenis dan tidak dibatasi.
+// Penulisan KodeHak dinormalkan (huruf besar, tanpa titik/spasi), jadi 'SF.UP' dan 'SFUP' dianggap sama.
+const BOT_HAK_SUPER = 'SA.KP';
+const BOT_HAK_JENIS = [
+    'DIL'         => ['SF.UI', 'SF.AP', 'SFUP'],
+    // 'SALDO_TUNGGAKAN' => ['SF.UI', 'SF.AP', 'SFUP'],   // aktifkan setelah jenis bot ini ditambahkan ke bot_jenis_daftar() & ENUM JenisBot
+    'PELUNASAN'   => ['SF.UP'],
+    'TUL'         => ['SF.UP'],
+    'SURVEY'      => ['SF.AP', 'SFUP'],
+    'KEPENTINGAN' => ['SF.AP', 'SFUP'],
+];
 
 if (!function_exists('bot_jenis_daftar')) {
 
@@ -59,6 +79,108 @@ if (!function_exists('bot_jenis_daftar')) {
                 'sumber' => 'perencanaan/input_kepentingan.php',
             ],
         ];
+    }
+
+    // ------------------------------------------------------------------ hak akses
+
+    /** Samakan penulisan KodeHak (huruf besar, tanpa titik/spasi) supaya 'SF.UP' dan 'SFUP' dianggap sama. */
+    function bot_hak_norm(string $h): string
+    {
+        return strtoupper(str_replace(['.', ' '], '', trim($h)));
+    }
+
+    /** true bila KodeHak adalah superadmin (SA.KP): tidak dibatasi. */
+    function bot_super(string $hak): bool
+    {
+        $h = bot_hak_norm($hak);
+        return $h !== '' && $h === bot_hak_norm(BOT_HAK_SUPER);
+    }
+
+    /** Boleh tidaknya KodeHak ini mengatur satu jenis bot. */
+    function bot_boleh_jenis(string $hak, string $jenis): bool
+    {
+        if (bot_super($hak)) return true;
+        $h = bot_hak_norm($hak);
+        if ($h === '') return false;
+        return in_array($h, array_map('bot_hak_norm', BOT_HAK_JENIS[$jenis] ?? []), true);
+    }
+
+    /** Daftar kode jenis bot yang boleh diatur KodeHak ini. */
+    function bot_jenis_diizinkan(string $hak): array
+    {
+        return array_values(array_filter(array_keys(bot_jenis_daftar()), fn($j) => bot_boleh_jenis($hak, $j)));
+    }
+
+    /** Boleh membuka halaman Daftar Bot sama sekali? (juga bisa dipakai untuk menyembunyikan menu) */
+    function bot_boleh_akses(string $hak): bool
+    {
+        return bot_jenis_diizinkan($hak) !== [];
+    }
+
+    // ------------------------------------------------------------------ riwayat
+
+    /**
+     * NamaAkun untuk bot_akses_riwayat. Foreign key ke master_pengguna.NamaAkun, jadi:
+     *  - bila akun BOT_NAMA_AKUN ada di master_pengguna -> dipakai;
+     *  - bila tidak ada -> null (butuh kolom NamaAkun yang boleh NULL).
+     * Hasil dicek sekali per proses.
+     */
+    function bot_akun_riwayat(PDO $conn): ?string
+    {
+        static $akun = false;
+        if ($akun === false) {
+            $st = $conn->prepare('SELECT NamaAkun FROM master_pengguna WHERE NamaAkun = ? LIMIT 1');
+            $st->execute([BOT_NAMA_AKUN]);
+            $ada = $st->fetchColumn();
+            $akun = $ada !== false ? (string) $ada : null;
+        }
+        return $akun;
+    }
+
+    /**
+     * Tiket riwayat otomatis, tepat 23 karakter (CHAR(23)): 'BOT' + yyyymmddhhmmss + 6 hex acak.
+     * Bila Anda sudah punya fungsi pembuat tiket sendiri, cukup ganti isi fungsi ini (hasilnya harus 23 karakter).
+     */
+    function bot_buat_tiket(): string
+    {
+        return 'BOT' . date('YmdHis') . strtoupper(bin2hex(random_bytes(3)));
+    }
+
+    /** Status ringkas satu baris riwayat: BERHASIL | SEBAGIAN | GAGAL. */
+    function bot_status_riwayat(int $berhasil, int $gagal): string
+    {
+        if ($berhasil > 0 && $gagal === 0) return 'BERHASIL';
+        if ($berhasil === 0) return 'GAGAL';
+        return 'SEBAGIAN';
+    }
+
+    /**
+     * Catat satu file yang selesai diproses ke bot_akses_riwayat. Mengembalikan nomor tiket.
+     * $ap / $up = wilayah file tersebut (kosong -> dipakai wilayah bot).
+     */
+    function bot_catat_riwayat(PDO $conn, array $bot, string $ap, string $up, int $berhasil, int $gagal): string
+    {
+        $upi_db = trim((string) ($bot['UnitUpi'] ?? ''));
+        $ap_db  = $ap !== '' ? $ap : trim((string) ($bot['UnitAp'] ?? ''));
+        $up_db  = $up !== '' ? $up : trim((string) ($bot['UnitUp'] ?? ''));
+        $ap_db  = $ap_db !== '' ? $ap_db : null;
+        $up_db  = $up_db !== '' ? $up_db : null;
+
+        $sql = "INSERT INTO bot_akses_riwayat (TiketBot, IdBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
+                VALUES (?,?,?,?,?,?,?,?,?,'AKTIF',NOW())";
+        $coba = 0;
+        while (true) {
+            $tiket = bot_buat_tiket();
+            try {
+                $conn->prepare($sql)->execute([$tiket, (int) $bot['IdBot'], $berhasil + $gagal, $berhasil, $gagal,
+                                               bot_akun_riwayat($conn), $up_db, $ap_db, $upi_db]);
+                return $tiket;
+            } catch (PDOException $e) {
+                // 1062 = tiket kembar (sangat jarang): buat tiket baru lalu coba lagi
+                if ((int) ($e->errorInfo[1] ?? 0) === 1062 && ++$coba < 3) continue;
+                throw $e;
+            }
+        }
     }
 
     // ------------------------------------------------------------------ root & folder

@@ -1,6 +1,6 @@
 <?php
-// modules/pengaturan/bot.php -> LOGIKA halaman Daftar Bot (tabel bot_akses)
-// Aturan folder, cakupan unit, dan validasi unit memakai bot_helper.php (sama dengan bot_cron.php).
+// modules/pengaturan/bot.php -> LOGIKA halaman Daftar Bot (tabel bot_akses + bot_akses_riwayat)
+// Aturan folder, cakupan unit, validasi unit, hak akses jenis bot, dan riwayat memakai bot_helper.php (sama dengan bot_cron.php).
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -12,14 +12,28 @@ $base_url = defined('BASE_URL') ? BASE_URL : '';
 $url_bot  = $base_url . '/index.php?page=pengaturan&sub=bot';
 
 $jenis_info = bot_jenis_daftar();
-$jenis_opsi = array_map(fn($j) => $j['label'], $jenis_info);
 $hak        = (string) ($_SESSION['KodeHak'] ?? '');
 
+// ---------- Hak akses per jenis bot (SA.KP tidak dibatasi) ----------
+$jenis_izin = bot_jenis_diizinkan($hak);
+if (!$jenis_izin) {
+    http_response_code(403);
+    echo '<div class="alert alert-danger border-0 shadow-sm m-4"><i class="bi bi-shield-lock me-2"></i>'
+       . '<strong>Akses ditolak.</strong> Akun Anda tidak memiliki hak untuk mengatur bot.</div>';
+    return;
+}
+// Hanya jenis yang diizinkan yang tampil di dropdown
+$jenis_opsi = [];
+foreach ($jenis_izin as $j) $jenis_opsi[$j] = $jenis_info[$j]['label'];
+
 // ---------- Cakupan Batas Data (Scope) ----------
+// SA.KP : semua bot.
+// Akun lain: WAJIB UnitUpi = UnitUpi session login (kosong -> tidak ada bot yang tampil);
+//            bila session juga terikat AP / UP, cakupan dipersempit lagi sesuai AP / UP tersebut.
 if (!function_exists('bot_scope')) {
     function bot_scope(): array
     {
-        if (($_SESSION['KodeHak'] ?? '') === 'SA.KP') return ['1=1', []];
+        if (bot_super((string) ($_SESSION['KodeHak'] ?? ''))) return ['1=1', []];
         $upi = trim((string) ($_SESSION['UnitUpi'] ?? ''));
         $ap  = trim((string) ($_SESSION['UnitAp'] ?? ''));
         $up  = trim((string) ($_SESSION['UnitUp'] ?? ''));
@@ -33,6 +47,13 @@ if (!function_exists('bot_scope')) {
 
 [$root_bot, $root_konfig] = bot_root();
 [$w_scope, $p_scope]      = bot_scope();
+
+// Selain SA.KP, batasi juga pada jenis bot yang diizinkan.
+// Semua query yang memakai $w_scope (cek bot yang diubah, status, hapus, daftar) otomatis ikut terbatas.
+if (!bot_super($hak)) {
+    $w_scope = "($w_scope) AND JenisBot IN (" . implode(',', array_fill(0, count($jenis_izin), '?')) . ')';
+    $p_scope = array_merge($p_scope, $jenis_izin);
+}
 
 // Pesan flash dari proses sebelumnya
 $pesan = $_SESSION['bot_flash'] ?? null;
@@ -64,7 +85,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pos_upi = trim((string) ($_POST['unit_upi'] ?? ''));
             $pos_ap  = trim((string) ($_POST['unit_ap'] ?? ''));
             $pos_up  = trim((string) ($_POST['unit_up'] ?? ''));
-            if ($hak === 'SA.KP') {
+            if (bot_super($hak)) {
                 $unit_upi = $pos_upi !== '' ? $pos_upi : $ses_upi;
                 $unit_ap  = $pos_ap;
                 $unit_up  = $pos_up;
@@ -81,15 +102,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 'status' => $stat, 'unit_upi' => $unit_upi, 'unit_ap' => $unit_ap, 'unit_up' => $unit_up
             ];
 
+            // Bot yang diubah harus ada di cakupan unit DAN jenis yang diizinkan (filter ada di $w_scope).
             if ($id > 0) {
                 $s = $conn->prepare("SELECT * FROM bot_akses WHERE IdBot = ? AND ($w_scope)");
                 $s->execute(array_merge([$id], $p_scope));
                 if (!$s->fetch()) {
-                    $errors[] = 'Bot tidak ditemukan atau bukan milik unit Anda.';
+                    $errors[] = 'Bot tidak ditemukan atau bukan milik unit/jenis yang boleh Anda atur.';
                 }
             }
 
-            if (!isset($jenis_info[$jenis])) $errors[] = 'Jenis bot tidak valid.';
+            if (!isset($jenis_info[$jenis])) {
+                $errors[] = 'Jenis bot tidak valid.';
+            } elseif (!bot_boleh_jenis($hak, $jenis)) {
+                $errors[] = 'Anda tidak berhak mengatur bot jenis ini.';
+            }
             if ($dir_utama === null) $errors[] = 'Direktori Utama tidak valid (hanya huruf, angka, _ dan -, pisahkan tingkat dengan /).';
             if ($dir_arsip === null) $errors[] = 'Direktori Arsip tidak valid (hanya huruf, angka, _ dan -, pisahkan tingkat dengan /).';
 
@@ -157,12 +183,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $flash = ['tipe' => 'success', 'teks' => 'Status bot berhasil diperbarui.'];
 
         } elseif ($aksi === 'hapus') {
-            $s = $conn->prepare("DELETE FROM bot_akses WHERE IdBot = ? AND ($w_scope)");
-            $s->execute(array_merge([(int) ($_POST['id'] ?? 0)], $p_scope));
-            $flash = $s->rowCount() ? ['tipe' => 'success', 'teks' => 'Bot dihapus dari tabel bot_akses. Folder dan file di server tidak ikut dihapus.']
-                                    : ['tipe' => 'danger', 'teks' => 'Bot tidak ditemukan atau bukan milik unit Anda.'];
+            $id_hapus = (int) ($_POST['id'] ?? 0);
+            $s = $conn->prepare("SELECT 1 FROM bot_akses WHERE IdBot = ? AND ($w_scope)");
+            $s->execute(array_merge([$id_hapus], $p_scope));
+            if ($s->fetchColumn()) {
+                // Riwayat milik bot ini ikut dihapus (IdBot di bot_akses_riwayat merujuk ke bot_akses).
+                $conn->beginTransaction();
+                $conn->prepare("DELETE FROM bot_akses_riwayat WHERE IdBot = ?")->execute([$id_hapus]);
+                $conn->prepare("DELETE FROM bot_akses WHERE IdBot = ?")->execute([$id_hapus]);
+                $conn->commit();
+                $flash = ['tipe' => 'success', 'teks' => 'Bot dan riwayatnya dihapus. Folder dan file di server tidak ikut dihapus.'];
+            } else {
+                $flash = ['tipe' => 'danger', 'teks' => 'Bot tidak ditemukan atau bukan milik unit/jenis yang boleh Anda atur.'];
+            }
         }
     } catch (PDOException $e) {
+        if ($conn->inTransaction()) $conn->rollBack();
         error_log('bot_akses: ' . $e->getMessage());
         $flash = ['tipe' => 'danger', 'teks' => 'Terjadi kesalahan pada server: ' . htmlspecialchars($e->getMessage())];
     }
@@ -181,7 +217,7 @@ try {
     $upi_ses = trim((string) ($_SESSION['UnitUpi'] ?? ''));
     $ap_ses  = trim((string) ($_SESSION['UnitAp'] ?? ''));
 
-    if ($hak === 'SA.KP') {
+    if (bot_super($hak)) {
         $s_ap = $conn->query("SELECT UnitAp, UnitUpi, NamaUnit FROM master_ap ORDER BY UnitAp ASC");
         $daftar_ap = $s_ap->fetchAll(PDO::FETCH_ASSOC);
 
@@ -215,7 +251,6 @@ try {
 }
 
 // ---------- Ambil Daftar Bot ----------
-// SELECT * sudah mencakup kolom status terakhir (TerakhirJalan, StatusTerakhir, PesanTerakhir) bila ada.
 try {
     $s = $conn->prepare("SELECT * FROM bot_akses WHERE $w_scope ORDER BY StatusData ASC, IdBot ASC");
     $s->execute($p_scope);
@@ -225,6 +260,40 @@ try {
     echo '<div class="alert alert-danger border-0 shadow-sm m-4"><i class="bi bi-database-exclamation me-2"></i>'
        . '<strong>Data bot tidak bisa dibaca.</strong> Pastikan tabel <code>bot_akses</code> tersedia.</div>';
     return;
+}
+
+// ---------- Ambil Riwayat Bot (hanya bot yang lolos cakupan di atas) ----------
+// $riwayat[IdBot] = daftar baris terbaru lebih dulu (maks BOT_RIWAYAT_MAKS); baris pertama = proses terakhir.
+$riwayat = [];
+if ($bots) {
+    try {
+        $st = $conn->prepare("SELECT TiketBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData
+                              FROM bot_akses_riwayat WHERE IdBot = ?
+                              ORDER BY WaktuData DESC, TiketBot DESC LIMIT " . (int) BOT_RIWAYAT_MAKS);
+        foreach ($bots as $b) {
+            $st->execute([(int) $b['IdBot']]);
+            $baris = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $ok = (int) $r['JmlBerhasil'];
+                $gl = (int) $r['JmlGagal'];
+                $baris[] = [
+                    'tiket'    => (string) $r['TiketBot'],
+                    'waktu'    => $r['WaktuData'] ? date('d/m/Y H:i:s', strtotime((string) $r['WaktuData'])) : '-',
+                    'upi'      => (string) ($r['UnitUpi'] ?? ''),
+                    'ap'       => (string) ($r['UnitAp'] ?? ''),
+                    'up'       => (string) ($r['UnitUp'] ?? ''),
+                    'data'     => (int) $r['JmlData'],
+                    'berhasil' => $ok,
+                    'gagal'    => $gl,
+                    'status'   => bot_status_riwayat($ok, $gl),
+                    'akun'     => (string) ($r['NamaAkun'] ?? ''),
+                ];
+            }
+            $riwayat[(int) $b['IdBot']] = $baris;
+        }
+    } catch (PDOException $ex) {
+        error_log('bot_akses_riwayat (daftar): ' . $ex->getMessage());   // halaman tetap tampil tanpa riwayat
+    }
 }
 
 require __DIR__ . '/../../templates/pengaturan/bot.php';

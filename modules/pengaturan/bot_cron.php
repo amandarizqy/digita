@@ -8,6 +8,7 @@
  *   bot level UP      : file .xlsx langsung di <DirektoriUtama>/
  *   bot level AP/UPI  : file .xlsx di <DirektoriUtama>/<KodeUP>/   (khusus DIL boleh langsung di <DirektoriUtama>/)
  *   hasil             : <DirektoriArsip>[/<KodeUP>]/<berhasil|gagal>/<tanggal>/
+ *   riwayat           : tabel bot_akses_riwayat (satu baris + satu TiketBot per file yang selesai diproses)
  *   log               : <BOT_ROOT>/log/bot_cron.log
  *
  * Pemakaian (command line):
@@ -98,9 +99,11 @@ function bc_pindah(string $file, string $root, string $arsip, string $up, string
     return $tujuan;
 }
 
-function bc_catatan(string $nama, array $hasil): string
+function bc_catatan(string $nama, array $hasil, string $tiket = ''): string
 {
-    $t = "File    : $nama\r\nWaktu   : " . date('Y-m-d H:i:s') . "\r\nHasil   : " . $hasil['pesan'] . "\r\n";
+    $t = "File    : $nama\r\n"
+       . ($tiket !== '' ? "Tiket   : $tiket\r\n" : '')
+       . "Waktu   : " . date('Y-m-d H:i:s') . "\r\nHasil   : " . $hasil['pesan'] . "\r\n";
     if ($hasil['detail']) $t .= "\r\nBaris ditolak (maksimal 50 contoh):\r\n- " . implode("\r\n- ", $hasil['detail']) . "\r\n";
     return $t;
 }
@@ -160,38 +163,6 @@ function bc_cari_tugas(string $root, array $k, int $stabil): array
     return [$tugas, $salah, $tunggu];
 }
 
-// ============================================================ status ke bot_akses
-/** Kolom status yang benar-benar ada di bot_akses (lihat BOT_KOL_* di bot_helper.php). */
-function bc_kolom_status(PDO $conn): array
-{
-    static $ada = null;
-    if ($ada !== null) return $ada;
-    $ada = [];
-    foreach ([BOT_KOL_JALAN, BOT_KOL_STATUS, BOT_KOL_PESAN] as $kol) {
-        $st = $conn->query('SHOW COLUMNS FROM bot_akses LIKE ' . $conn->quote($kol));
-        if ($st && $st->fetch()) $ada[] = $kol;
-    }
-    return $ada;
-}
-
-/**
- * Catat hasil putaran. WaktuData tidak disentuh (itu waktu konfigurasi diubah dari halaman Daftar Bot).
- * Putaran tanpa file ('KOSONG') hanya memperbarui waktu terakhir jalan, supaya hasil proses terakhir tidak tertimpa.
- */
-function bc_catat(PDO $conn, array $bot, array $r): void
-{
-    $ada = bc_kolom_status($conn);
-    $set = []; $prm = [];
-    if (in_array(BOT_KOL_JALAN, $ada, true)) $set[] = BOT_KOL_JALAN . ' = NOW()';
-    if ($r['status'] !== 'KOSONG') {
-        if (in_array(BOT_KOL_STATUS, $ada, true)) { $set[] = BOT_KOL_STATUS . ' = ?'; $prm[] = mb_substr($r['status'], 0, 10); }
-        if (in_array(BOT_KOL_PESAN, $ada, true))  { $set[] = BOT_KOL_PESAN . ' = ?';  $prm[] = mb_substr($r['pesan'], 0, 255); }
-    }
-    if (!$set) return;
-    $prm[] = $bot['IdBot'];
-    $conn->prepare('UPDATE bot_akses SET ' . implode(', ', $set) . ' WHERE IdBot = ?')->execute($prm);
-}
-
 // ============================================================ proses satu bot
 function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $stabil): array
 {
@@ -230,9 +201,20 @@ function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $s
         if ($h['status'] === 'sukses' || $h['status'] === 'gagal') {
             $beruntun = 0;
             $h['status'] === 'sukses' ? $ok++ : $tidak++;
+
+            // Riwayat: satu baris + satu TiketBot per file yang selesai diproses (berhasil maupun gagal).
+            // Dicatat SEBELUM file dipindah; kegagalan mencatat tidak menghentikan proses.
+            $tiket = '';
+            try {
+                $tiket = bot_catat_riwayat($conn, $bot, $t['ap'], $t['up'], (int) $h['tersimpan'], (int) $h['ditolak']);
+                bc_log('INFO', "  Riwayat dicatat: tiket $tiket");
+            } catch (Throwable $e) {
+                bc_log('ERROR', "  Gagal mencatat riwayat: {$e->getMessage()}");
+            }
+
             try {
                 $tujuan = bc_pindah($t['file'], $root, $k['arsip'], $k['multi'] ? $t['up'] : '',
-                                    $h['status'] === 'sukses' ? 'berhasil' : 'gagal', bc_catatan($nama, $h));
+                                    $h['status'] === 'sukses' ? 'berhasil' : 'gagal', bc_catatan($nama, $h, $tiket));
                 bc_log($h['status'] === 'sukses' ? 'INFO' : 'WARN', '  SELESAI -> ' . bc_rel($tujuan, $root) . " | {$h['pesan']}");
             } catch (Throwable $e) {
                 // data sudah diproses tetapi file tidak bisa dipindah: akan terbaca lagi di putaran berikutnya
@@ -279,10 +261,6 @@ function bc_jalan(PDO $conn, string $root, bool $kering, ?int $id_bot, int $stab
             $r = ['status' => 'GAGAL', 'pesan' => 'Kesalahan tak terduga: ' . $e->getMessage()];
         }
         if ($r['status'] === 'GAGAL') { bc_log('ERROR', "[Bot #{$bot['IdBot']}] {$r['pesan']}"); $kembali = 1; }
-        if (!$kering) {
-            try { bc_catat($conn, $bot, $r); }
-            catch (Throwable $e) { bc_log('ERROR', "[Bot #{$bot['IdBot']}] Gagal mencatat status: {$e->getMessage()}"); }
-        }
     }
     return $kembali;
 }

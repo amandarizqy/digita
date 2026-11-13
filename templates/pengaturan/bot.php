@@ -1,13 +1,14 @@
 <?php
-// templates/pengaturan/bot.php -> TAMPILAN halaman Daftar Bot (Tabel bot_akses)
+// templates/pengaturan/bot.php -> TAMPILAN halaman Daftar Bot (tabel bot_akses + riwayat)
 // Variabel yang disiapkan oleh modules/pengaturan/bot.php:
-// $bots, $pesan, $errors, $form_isi, $buka_form, $jenis_opsi, $jenis_info, $root_bot, $root_konfig, $daftar_ap, $daftar_up
-// Fungsi/konstanta dari bot_helper.php: bot_tingkat(), BOT_KOL_JALAN, BOT_KOL_STATUS, BOT_KOL_PESAN
+// $bots, $riwayat, $pesan, $errors, $form_isi, $buka_form, $jenis_opsi, $jenis_info, $root_bot, $root_konfig, $daftar_ap, $daftar_up
+// ($jenis_opsi sudah difilter menurut hak akses akun; $bots sudah difilter menurut UnitUpi session)
+// Fungsi dari bot_helper.php: bot_tingkat(), bot_super(), bot_status_riwayat(), konstanta BOT_RIWAYAT_MAKS
 $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $root_tampil = $root_bot !== '' ? $root_bot : str_replace('\\', '/', (string) $root_konfig);
 $fmt_waktu   = fn($v) => $v ? $e(date('d/m/Y H:i', strtotime((string) $v))) : '-';
 
-$hak_sa    = (($_SESSION['KodeHak'] ?? '') === 'SA.KP');
+$hak_sa    = bot_super((string) ($_SESSION['KodeHak'] ?? ''));
 $upi_ses   = trim((string) ($_SESSION['UnitUpi'] ?? ''));
 $kunci_ap  = $hak_sa ? '' : trim((string) ($_SESSION['UnitAp'] ?? ''));   // akun terikat AP/UP: pilihan otomatis terisi
 $kunci_up  = $hak_sa ? '' : trim((string) ($_SESSION['UnitUp'] ?? ''));
@@ -17,14 +18,26 @@ $kol_unit  = $hak_sa ? 'col-md-4' : 'col-md-6';
 $daftar_upi = array_values(array_unique(array_map(fn($a) => (string) $a['UnitUpi'], $daftar_ap)));
 sort($daftar_upi);
 
-$kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'warning', 'TUNDA' => 'warning'];
+$kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'warning'];
+
+// Data untuk jendela riwayat: id bot -> {judul, baris}
+$riwayat_js = [];
+foreach ($bots as $b) {
+    $id = (int) $b['IdBot'];
+    $riwayat_js[$id] = [
+        'judul' => '#' . $id . ' - ' . ($jenis_opsi[$b['JenisBot']] ?? $b['JenisBot']),
+        'unit'  => 'UPI ' . ($b['UnitUpi'] ?: '-') . ' / AP ' . ($b['UnitAp'] ?: 'Semua') . ' / UP ' . ($b['UnitUp'] ?: 'Semua'),
+        'baris' => $riwayat[$id] ?? [],
+    ];
+}
 ?>
 <div class="container-fluid" style="max-width: 1280px;">
 
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
             <h4 class="fw-bold mb-1"><i class="bi bi-robot me-2"></i>Daftar Akses Bot</h4>
-            <p class="text-muted mb-0">Kelola direktori utama, arsip, serta cakupan unit wilayah untuk bot otomatisasi.</p>
+            <p class="text-muted mb-0">Kelola direktori utama, arsip, serta cakupan unit wilayah untuk bot otomatisasi.
+                <?php if (!$hak_sa): ?>Menampilkan bot milik UPI <strong><?= $e($upi_ses ?: '-') ?></strong>.<?php endif; ?></p>
         </div>
         <button type="button" class="btn btn-primary" id="btnTambahBot">
             <i class="bi bi-plus-lg me-1"></i> Tambah Konfigurasi Bot
@@ -46,7 +59,6 @@ $kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'wa
         <?php else: ?>
             — semua direktori di bawah ditulis secara <strong>relatif</strong> terhadap folder ini.
         <?php endif; ?>
-        
     </div>
 
     <div class="card shadow-sm border-0">
@@ -81,10 +93,8 @@ $kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'wa
                         ];
                         $aktif    = $b['StatusData'] === 'AKTIF';
                         $tingkat  = bot_tingkat($b);                       // UP | AP | UPI
-                        $ada_cron = array_key_exists(BOT_KOL_JALAN, $b);   // kolom status terakhir ada di tabel
-                        $t_jalan  = $b[BOT_KOL_JALAN]  ?? null;
-                        $t_status = (string) ($b[BOT_KOL_STATUS] ?? '');
-                        $t_pesan  = (string) ($b[BOT_KOL_PESAN]  ?? '');
+                        $rw       = $riwayat[(int) $b['IdBot']] ?? [];
+                        $akhir    = $rw[0] ?? null;                        // proses terakhir (baris riwayat terbaru)
                     ?>
                     <tr class="<?= $aktif ? '' : 'text-muted' ?>">
                         <td class="fw-bold">#<?= (int) $b['IdBot'] ?></td>
@@ -113,24 +123,21 @@ $kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'wa
                             <div title="Waktu konfigurasi bot ini terakhir disimpan">
                                 <i class="bi bi-gear me-1 text-muted"></i>Konfigurasi: <?= $fmt_waktu($b['WaktuData'] ?? null) ?>
                             </div>
-                            <?php if ($ada_cron): ?>
-                                <div class="mt-1" title="Waktu cron terakhir memeriksa folder bot ini">
-                                    <i class="bi bi-clock-history me-1 text-muted"></i>Cron:
-                                    <?php if ($t_jalan): ?>
-                                        <?= $fmt_waktu($t_jalan) ?>
-                                        <?php if ($t_status !== ''): ?>
-                                            <span class="badge bg-<?= $kelas_status[$t_status] ?? 'secondary' ?> ms-1"><?= $e($t_status) ?></span>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">belum pernah jalan</span>
-                                    <?php endif; ?>
-                                </div>
-                                <?php if ($t_pesan !== ''): ?>
-                                    <div class="text-muted text-truncate" style="max-width: 280px;" title="<?= $e($t_pesan) ?>"><?= $e($t_pesan) ?></div>
+                            <div class="mt-1" title="Proses file terakhir oleh cron (dari riwayat bot)">
+                                <i class="bi bi-clock-history me-1 text-muted"></i>Terakhir:
+                                <?php if ($akhir): ?>
+                                    <?= $e(substr($akhir['waktu'], 0, 16)) ?>
+                                    <span class="badge bg-<?= $kelas_status[$akhir['status']] ?? 'secondary' ?> ms-1"><?= $e($akhir['status']) ?></span>
+                                    <div class="text-muted"><?= (int) $akhir['data'] ?> data: <?= (int) $akhir['berhasil'] ?> berhasil, <?= (int) $akhir['gagal'] ?> gagal</div>
+                                <?php else: ?>
+                                    <span class="text-muted">belum ada riwayat</span>
                                 <?php endif; ?>
-                            <?php endif; ?>
+                            </div>
                         </td>
                         <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary btn-riwayat-bot" data-id="<?= (int) $b['IdBot'] ?>">
+                                <i class="bi bi-clock-history"></i> Riwayat
+                            </button>
                             <form method="post" action="" class="d-inline">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="aksi" value="status">
@@ -250,6 +257,50 @@ $kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'wa
     </div>
 </div>
 
+<!-- Pop out Riwayat Bot -->
+<div class="modal fade" id="modalRiwayat" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0"><i class="bi bi-clock-history me-2"></i>Riwayat Bot <span id="riwayatJudul"></span></h5>
+                    <div class="small text-muted" id="riwayatUnit"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 align-items-center mb-3">
+                    <div class="col-md-5">
+                        <input type="search" class="form-control form-control-sm" id="riwayatCari" placeholder="Cari tiket / unit / status...">
+                    </div>
+                    <div class="col-md-7 small text-muted text-md-end" id="riwayatRingkas"></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tiket</th>
+                                <th>Waktu</th>
+                                <th>AP</th>
+                                <th>UP</th>
+                                <th class="text-end">Data</th>
+                                <th class="text-end">Berhasil</th>
+                                <th class="text-end">Gagal</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="riwayatBody"></tbody>
+                    </table>
+                </div>
+                <div class="small text-muted mt-2"><?= (int) BOT_RIWAYAT_MAKS ?> proses terbaru per bot.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var el = document.getElementById('modalBot');
@@ -268,12 +319,15 @@ document.addEventListener('DOMContentLoaded', function () {
     var jenisEl = document.getElementById('botJenisInfo');
     var levelEl = document.getElementById('botLevelInfo');
     var dirInfoEl = document.getElementById('botDirInfo');
-    var jenisInfo = <?= json_encode(array_map(fn($j) => $j['format'] . ' (Tabel Tujuan: ' . $j['tabel'] . ')', $jenis_info), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    // Info jenis: hanya jenis yang diizinkan untuk akun ini
+    var jenisInfo = <?= json_encode(array_map(fn($j) => $j['format'] . ' (Tabel Tujuan: ' . $j['tabel'] . ')', array_intersect_key($jenis_info, $jenis_opsi)), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     // Akun terikat AP/UP: pilihan otomatis terisi (server tetap memaksa sesuai cakupan akun)
     var kunci = <?= json_encode(['upi' => $upi_ses, 'ap' => $kunci_ap, 'up' => $kunci_up], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    // Riwayat per bot (sudah difilter cakupan akun di server)
+    var dataRiwayat = <?= json_encode($riwayat_js, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var dirty = false;   // true bila direktori sudah diketik/diedit manual -> jangan ditimpa isian otomatis
 
-    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
     function level() { return f.unitUp.value ? 'UP' : (f.unitAp.value ? 'AP' : 'UPI'); }
 
@@ -322,7 +376,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function isi(d) {
         f.id.value = d.id || 0;
-        f.jenis.value = d.jenis || 'PELUNASAN';
+        // Default jenis = pilihan pertama yang diizinkan (bukan 'PELUNASAN' tetap, karena bisa tidak diizinkan)
+        f.jenis.value = d.jenis || f.jenis.options[0].value;
         f.status.value = d.status || 'AKTIF';
         f.dirUtama.value = d.direktori_utama || '';
         f.dirArsip.value = d.direktori_arsip || '';
@@ -373,6 +428,57 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ---------- Pop out Riwayat ----------
+    var modalRw = new bootstrap.Modal(document.getElementById('modalRiwayat'));
+    var rwBody = document.getElementById('riwayatBody');
+    var rwCari = document.getElementById('riwayatCari');
+    var rwRingkas = document.getElementById('riwayatRingkas');
+    var rwAktif = null;
+    var kelasStatus = { BERHASIL: 'success', GAGAL: 'danger', SEBAGIAN: 'warning' };
+
+    function gambarRiwayat() {
+        var d = rwAktif;
+        if (!d) return;
+        var q = rwCari.value.trim().toLowerCase();
+        var tampil = d.baris.filter(function (r) {
+            if (!q) return true;
+            return (r.tiket + ' ' + r.ap + ' ' + r.up + ' ' + r.status + ' ' + r.waktu).toLowerCase().indexOf(q) !== -1;
+        });
+        var tData = 0, tOk = 0, tGagal = 0;
+        tampil.forEach(function (r) { tData += r.data; tOk += r.berhasil; tGagal += r.gagal; });
+
+        if (!tampil.length) {
+            rwBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">'
+                + (d.baris.length ? 'Tidak ada riwayat yang cocok dengan pencarian.' : 'Belum ada riwayat untuk bot ini.') + '</td></tr>';
+        } else {
+            rwBody.innerHTML = tampil.map(function (r) {
+                return '<tr>'
+                    + '<td><code>' + esc(r.tiket) + '</code></td>'
+                    + '<td class="text-nowrap">' + esc(r.waktu) + '</td>'
+                    + '<td>' + esc(r.ap || '-') + '</td>'
+                    + '<td>' + esc(r.up || '-') + '</td>'
+                    + '<td class="text-end">' + r.data + '</td>'
+                    + '<td class="text-end text-success">' + r.berhasil + '</td>'
+                    + '<td class="text-end text-danger">' + r.gagal + '</td>'
+                    + '<td class="text-center"><span class="badge bg-' + (kelasStatus[r.status] || 'secondary') + '">' + esc(r.status) + '</span></td>'
+                    + '</tr>';
+            }).join('');
+        }
+        rwRingkas.textContent = tampil.length + ' proses | ' + tData + ' data | ' + tOk + ' berhasil | ' + tGagal + ' gagal';
+    }
+
+    rwCari.addEventListener('input', gambarRiwayat);
+    document.querySelectorAll('.btn-riwayat-bot').forEach(function (b) {
+        b.addEventListener('click', function () {
+            rwAktif = dataRiwayat[b.getAttribute('data-id')] || { judul: '', unit: '', baris: [] };
+            document.getElementById('riwayatJudul').textContent = rwAktif.judul;
+            document.getElementById('riwayatUnit').textContent = rwAktif.unit;
+            rwCari.value = '';
+            gambarRiwayat();
+            modalRw.show();
+        });
+    });
+
     // Konfirmasi hapus
     document.querySelectorAll('.form-hapus-bot').forEach(function (form) {
         form.addEventListener('submit', function (ev) {
@@ -384,13 +490,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Hapus konfigurasi bot?',
-                    html: 'Konfigurasi bot <b>' + esc(nama) + '</b> akan dihapus. Folder dan file di server tidak ikut dihapus.',
+                    html: 'Konfigurasi bot <b>' + esc(nama) + '</b> beserta <b>riwayatnya</b> akan dihapus. Folder dan file di server tidak ikut dihapus.',
                     showCancelButton: true,
                     confirmButtonText: 'Hapus',
                     cancelButtonText: 'Batal',
                     confirmButtonColor: '#dc3545'
                 }).then(function (r) { if (r.isConfirmed) lanjut(); });
-            } else if (confirm('Hapus konfigurasi bot ' + nama + '?')) { lanjut(); }
+            } else if (confirm('Hapus konfigurasi bot ' + nama + ' beserta riwayatnya?')) { lanjut(); }
         });
     });
 
