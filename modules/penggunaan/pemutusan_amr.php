@@ -8,7 +8,7 @@
 //        UPDATE trx_order_putus_amr SET Sesi = SessionID ... ORDER BY TiketPutusAmr ASC LIMIT 1
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari TUL (tul_601) di wilayah akun yang belum punya tiket
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_putus_amr:  Ready OFF = PADAM, Ready ON = GAGAL, Lunas = LUNAS
+//   4. Tombol hasil menulis ke trx_tindakan_putus_amr:  Ready OFF = PADAM, Gagal OFF = GAGAL, Lunas = LUNAS
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -21,14 +21,14 @@ $pk             = 'TiketPutusAmr';             // kunci tiket
 $thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_putus_amr';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
-    'ready_off' => 'PADAM',             // Ready OFF: meter sudah OFF -> pemutusan berhasil
-    'gagal_off'  => 'GAGAL',             // Ready ON : meter masih ON  -> pemutusan gagal
-    'lunas'     => 'LUNAS',             // Lunas
+    'ready' => 'PADAM',                 // Ready OFF: meter sudah OFF -> pemutusan berhasil
+    'gagal' => 'GAGAL',                 // Gagal OFF: pemutusan gagal
+    'lunas' => 'LUNAS',                 // Lunas
 ];
 // Syarat tambahan sumber TUL (opsional), mis. membedakan pelanggan AMI/AMR lewat DIL: "AND d.JenisMk = 'AMR'"  (alias: t = tul_601, d = dil)
 $syarat_sumber = '';
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'mdms' => 'http://mdms.pln.co.id/meter'];
+$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'amicon_mohon' => 'https://amicon.pln.co.id/#/shunttrip/request_pemutusan', 'amicon_setuju' => 'https://amicon.pln.co.id/#/shunttrip/app_niaga', 'amicon_eksekusi' => 'https://amicon.pln.co.id/#/shunttrip/app_TE'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));

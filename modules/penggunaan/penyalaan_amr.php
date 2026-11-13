@@ -8,7 +8,7 @@
 //        UPDATE trx_order_nyala_amr SET Sesi = SessionID ... ORDER BY TiketNyalaAmr ASC LIMIT 1
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_amr) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_nyala_amr:  Ready ON = NYALA, gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
+//   4. Tombol hasil menulis ke trx_tindakan_nyala_amr:  Ready ON = NYALA, Gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -21,9 +21,9 @@ $pk             = 'TiketNyalaAmr';             // kunci tiket
 $thbl_len       = 6;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_nyala_amr';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
-    'ready_on'  => 'NYALA',             // Ready ON : meter sudah ON  -> penyalaan berhasil
-    'gagal_on' => 'GAGAL',             // gagal ON: meter masih OFF -> penyalaan gagal
-    'lunas'     => 'LUNAS',             // Lunas
+    'ready' => 'NYALA',                 // Ready ON : meter sudah ON -> penyalaan berhasil
+    'gagal' => 'GAGAL',                 // Gagal ON : penyalaan gagal
+    'lunas' => 'LUNAS',                 // Lunas
 ];
 $fk             = 'TiketPutusAmr';          // kolom rujukan ke tiket putus
 $putus_tabel    = 'trx_order_putus_amr';   // tabel tiket putus (sumber tiket nyala; juga untuk menampilkan No TUL)
@@ -33,7 +33,7 @@ $putus_tindakan_syarat = ['PADAM'];      // jenis tindakan putus yang boleh diny
 $syarat_putus = " AND EXISTS (SELECT 1 FROM `$putus_tindakan_tabel` pt WHERE pt.`$fk` = p.`$fk` AND pt.JenisTindakan IN ("
               . implode(',', array_map(fn($j) => $conn->quote($j), $putus_tindakan_syarat)) . "))";
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => '#', 'mdms' => '#'];
+$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'amicon_mohon' => 'https://amicon.pln.co.id/#/shunttrip/request_penormalan', 'amicon_setuju' => 'https://amicon.pln.co.id/#/shunttrip/app_niaga', 'amicon_eksekusi' => 'https://amicon.pln.co.id/#/shunttrip/app_TE'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
@@ -121,7 +121,7 @@ $detail_fk = function (string $pesan): string {            // ambil nama tabel &
     return ' <span class="small">Detail: tabel ' . pg_e($tabel_anak) . ', kolom ' . pg_e($m[2]) . ' harus ada di ' . pg_e($m[3]) . ' (' . pg_e($m[4]) . '), constraint ' . pg_e($m[1]) . '.</span>';
 };
 
-$pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya: tiket putus sudah ditindak (gagal ON = PADAM) dan belum punya tiket nyala.';
+$pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya: tiket putus sudah ditindak (Ready OFF = PADAM) dan belum punya tiket nyala.';
 
 // ---- hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {

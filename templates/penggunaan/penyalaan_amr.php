@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_amr.php  -  Penyalaan AMR
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap: 1. PPOB -> 2. MDMS / Lunas -> 3. Gagal OFF / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap: 1. PPOB -> 2. Amicon Mohon / Setuju / Eksekusi (atau Lunas) -> 3. Ready ON / Gagal ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_amr.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -11,8 +11,8 @@ $sufiks = $putus ? 'OFF' : 'ON';
 
 echo pg_header([
     'title'    => $judul,
-    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.'
-                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.',
+    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, proses di Amicon, dan catat hasilnya.'
+                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, proses di Amicon, dan catat hasilnya.',
     'action'   => $halaman,
 ]);
 
@@ -30,10 +30,13 @@ if ($ada) {
     $hp     = (string) $row['hp_tpl'];
     $detail_tiket = $tiket . ' · ' . $nama . ' (' . $idpel . ')';      // keterangan di kartu konfirmasi
     // keterangan ringkas: [label, nilai]
+    // nama kolom periode bisa beda huruf besar/kecil antar tabel (ThblRek / ThBlRek)
+    $periode = '';
+    foreach ($row as $kolom => $nilai) { if (strcasecmp((string) $kolom, 'ThblRek') === 0) { $periode = trim((string) $nilai); break; } }
     $rincian = [];
     if (!$putus) $rincian[] = ['Tiket Putus', (string) $row[$fk]];
     $rincian[] = ['No. TUL', (string) ($row['NoTulTampil'] ?? '')];
-    $rincian[] = ['Periode', trim((string) $row['ThblRek'])];
+    $rincian[] = ['Periode', $periode];
     $rincian[] = ['No. Meter', $meter];
     $rincian[] = ['No. HP', $hp];
     $rincian[] = ['Dibuat', (string) $row['WaktuData']];
@@ -174,7 +177,7 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. MDMS / Lunas  ->  3. Gagal OFF / Ready ON -->
+                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. Amicon Mohon / Setuju / Eksekusi (atau Lunas)  ->  3. Ready ON / Gagal ON -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
@@ -183,18 +186,20 @@ if ($ada) {
                         <a id="btnPpob" class="btn btn-primary flex-fill fw-semibold" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-wallet2 me-1"></i> PPOB</a>
                     </div>
 
-                    <div class="d-flex gap-2 d-none" data-langkah="2">
+                    <div class="d-flex flex-wrap gap-2 d-none" data-langkah="2">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <a id="btnMdms" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-hdd-network me-1"></i> MDMS</a>
+                        <a id="btnAmiconMohon" class="btn flex-fill fw-semibold btn-info" data-tautan="amicon_mohon" href="<?= pg_e($link['amicon_mohon']) ?>" <?= $link['amicon_mohon'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-send me-1"></i> Amicon Mohon <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
+                        <a id="btnAmiconSetuju" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="amicon_setuju" href="<?= pg_e($link['amicon_setuju']) ?>" <?= $link['amicon_setuju'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-patch-check me-1"></i> Amicon Setuju <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
+                        <a id="btnAmiconEksekusi" class="btn flex-fill fw-semibold btn-dark" data-tautan="amicon_eksekusi" href="<?= pg_e($link['amicon_eksekusi']) ?>" <?= $link['amicon_eksekusi'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-play-circle me-1"></i> Amicon Eksekusi <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
                         <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
                     </div>
 
                     <div class="d-flex gap-2 d-none" data-langkah="3">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal OFF" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal OFF</button>
-                        <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
+                        <button type="submit" name="aksi" value="ready" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berhasil dinyalakan. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
+                        <button type="submit" name="aksi" value="gagal" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Penyalaan gagal. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal']) ?>"><i class="bi bi-x-circle me-1"></i> Gagal ON</button>
                     </div>
-                    <div class="small text-muted mt-2 d-none" data-langkah="3">Gagal OFF = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
+                    <div class="small text-muted mt-2 d-none" data-langkah="3">Ready ON = <strong><?= pg_e($jenis_tindakan['ready']) ?></strong> &middot; Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal']) ?></strong></div>
                 </div>
                 <div id="infoTombol" class="small text-muted mt-2" style="min-height:1.2em;"></div>
             </div>
@@ -219,11 +224,12 @@ if ($ada) {
 
     // ---- langkah tombol ----
     var judul = {1: 'Langkah 1 dari 3 \u00b7 Cek tagihan di PPOB',
-                 2: 'Langkah 2 dari 3 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
-                 3: 'Langkah 3 dari 3 \u00b7 Catat kondisi meter setelah proses di MDMS'};
+                 2: 'Langkah 2 dari 3 \u00b7 Proses di Amicon (Mohon, Setuju, Eksekusi), atau tandai Lunas bila sudah dibayar',
+                 3: 'Langkah 3 dari 3 \u00b7 Catat kondisi meter setelah Eksekusi di Amicon'};
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
         penanda.textContent = judul[n];
+        if (n === 1) document.querySelectorAll('[data-centang]').forEach(function (el) { el.classList.add('d-none'); });   // hapus tanda centang Amicon
     }
     tampil(1);
     document.querySelectorAll('[data-ulangi]').forEach(function (b) { b.addEventListener('click', function () { tampil(1); kabar('Kembali ke langkah 1.'); }); });
@@ -251,7 +257,7 @@ if ($ada) {
     }
 
     // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
-    // ---- MDMS: buka tautan, lanjut langkah 3 ----
+    // ---- Amicon Mohon / Setuju: buka tautan, beri tanda centang (tetap di langkah 2); Amicon Eksekusi: buka tautan, lanjut langkah 3 ----
     function pasang(id, tautan, sesudah, nama) {
         var a = document.getElementById(id);
         a.addEventListener('click', function (e) {
@@ -260,7 +266,10 @@ if ($ada) {
         });
     }
     pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
-    pasang('btnMdms', 'mdms', function () { tampil(3); }, 'MDMS');
+    function centang(id) { var i = document.querySelector('#' + id + ' [data-centang]'); if (i) i.classList.remove('d-none'); }
+    pasang('btnAmiconMohon', 'amicon_mohon', function () { centang('btnAmiconMohon'); }, 'Amicon Mohon');
+    pasang('btnAmiconSetuju', 'amicon_setuju', function () { centang('btnAmiconSetuju'); }, 'Amicon Setuju');
+    pasang('btnAmiconEksekusi', 'amicon_eksekusi', function () { centang('btnAmiconEksekusi'); tampil(3); }, 'Amicon Eksekusi');
 
 })();
 </script>

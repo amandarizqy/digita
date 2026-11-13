@@ -33,7 +33,7 @@ $putus_tindakan_syarat = ['PADAM'];      // jenis tindakan putus yang boleh diny
 $syarat_putus = " AND EXISTS (SELECT 1 FROM `$putus_tindakan_tabel` pt WHERE pt.`$fk` = p.`$fk` AND pt.JenisTindakan IN ("
               . implode(',', array_map(fn($j) => $conn->quote($j), $putus_tindakan_syarat)) . "))";
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => '#', 'mdms' => '#'];
+$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'mdms' => 'http://mdms.pln.co.id/meter'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
