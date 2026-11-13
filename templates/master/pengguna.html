@@ -67,6 +67,10 @@ $offset = ($hal_aktif - 1) * $per_hal;
 $users_tampil = array_slice($users, $offset, $per_hal);
 
 $csrf_token = $_SESSION['csrf_token'] ?? '';
+
+// Data pilihan unit (disiapkan controller); aman bila belum terisi
+$daftar_ap = $daftar_ap ?? [];
+$daftar_up = $daftar_up ?? [];
 ?>
 <?php require_once __DIR__ . '/../../functions/master_ui.php'; ?>
 
@@ -239,6 +243,21 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                     <input type="text" name="NomorKontak" class="form-control" placeholder="081234567890">
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label">Unit UP3 (UnitAp) <span class="text-danger unit-wajib-ap d-none">*</span></label>
+                    <select name="UnitAp" id="add_unitap" class="form-select unit-ap-select">
+                        <option value="">-- Pilih UP3 --</option>
+                        <?php foreach ($daftar_ap as $ap): ?>
+                            <option value="<?php echo htmlspecialchars($ap['UnitAp']); ?>"><?php echo htmlspecialchars($ap['UnitAp'] . ' - ' . ($ap['SingkatanNama'] ?: $ap['NamaUnit'])); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Unit ULP (UnitUp) <span class="text-danger unit-wajib-up d-none">*</span></label>
+                    <select name="UnitUp" id="add_unitup" class="form-select unit-up-select" disabled>
+                        <option value="">-- Pilih UP3 dulu --</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
                     <label class="form-label">Kata Kunci (Password) *</label>
                     <div class="input-group">
                         <input type="password" name="KataKunci" class="form-control" autocomplete="new-password" required>
@@ -247,20 +266,12 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Kode Hak Access *</label>
-                    <select name="KodeHak" class="form-select" required>
+                    <select name="KodeHak" id="add_kodehak" class="form-select" required>
                         <?php foreach ($daftar_hak as $kode => $label): ?>
                             <option value="<?php echo htmlspecialchars($kode); ?>"><?php echo htmlspecialchars($label); ?></option>
                         <?php endforeach; ?>
                     </select>
                     <small class="text-muted" style="font-size: 0.725rem;">* Pilih dengan teliti: hak akses tidak dapat diubah setelah akun disimpan.</small>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Unit UP3 (UnitAp)</label>
-                    <input type="text" name="UnitAp" class="form-control font-monospace" placeholder="Contoh: 56600">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Unit ULP (UnitUp)</label>
-                    <input type="text" name="UnitUp" class="form-control font-monospace" placeholder="Contoh: 56610">
                 </div>
                 <div class="col-md-12">
                     <label class="form-label">Status Akun</label>
@@ -319,12 +330,19 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Unit UP3 (UnitAp)</label>
-                    <input type="text" name="UnitAp" id="edit_pg_unitap" class="form-control font-monospace" placeholder="Kosongkan jika tak diubah">
+                    <label class="form-label">Unit UP3 (UnitAp) <span class="text-danger unit-wajib-ap d-none">*</span></label>
+                    <select name="UnitAp" id="edit_pg_unitap" class="form-select unit-ap-select">
+                        <option value="">-- Pilih UP3 --</option>
+                        <?php foreach ($daftar_ap as $ap): ?>
+                            <option value="<?php echo htmlspecialchars($ap['UnitAp']); ?>"><?php echo htmlspecialchars($ap['UnitAp'] . ' - ' . ($ap['SingkatanNama'] ?: $ap['NamaUnit'])); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Unit ULP (UnitUp)</label>
-                    <input type="text" name="UnitUp" id="edit_pg_unitup" class="form-control font-monospace" placeholder="Kosongkan jika tak diubah">
+                    <label class="form-label">Unit ULP (UnitUp) <span class="text-danger unit-wajib-up d-none">*</span></label>
+                    <select name="UnitUp" id="edit_pg_unitup" class="form-select unit-up-select" disabled>
+                        <option value="">-- Pilih UP3 dulu --</option>
+                    </select>
                 </div>
                 <div class="col-md-12">
                     <label class="form-label">Kata Kunci Baru (Password)</label>
@@ -342,6 +360,9 @@ $csrf_token = $_SESSION['csrf_token'] ?? '';
         </form>
     </div>
 </div>
+
+<!-- Data ULP untuk dropdown berantai (dibaca oleh JavaScript di bawah) -->
+<div id="dataUnitUp" hidden data-up="<?php echo htmlspecialchars(json_encode($daftar_up, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>"></div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -369,6 +390,62 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ===== Dropdown berantai UP3 (UnitAp) -> ULP (UnitUp) =====
+    var DAFTAR_UP = JSON.parse(document.getElementById('dataUnitUp').dataset.up || '[]');
+
+    function isiUlp(selAp, selUp, terpilih) {
+        var ap = selAp.value;
+        selUp.innerHTML = '';
+        if (!ap) {
+            selUp.innerHTML = '<option value="">-- Pilih UP3 dulu --</option>';
+            selUp.disabled = true;
+            return;
+        }
+        var daftar = DAFTAR_UP.filter(function(u) { return u.UnitAp === ap; });
+        var opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = daftar.length ? '-- Pilih ULP --' : '-- UP3 ini belum punya ULP --';
+        selUp.appendChild(opt0);
+        daftar.forEach(function(u) {
+            var o = document.createElement('option');
+            o.value = u.UnitUp;
+            o.textContent = u.UnitUp + ' - ' + (u.SingkatanNama || u.NamaUnit);
+            if (terpilih && u.UnitUp === terpilih) o.selected = true;
+            selUp.appendChild(o);
+        });
+        selUp.disabled = false;
+        // Hanya ada satu ULP di UP3 ini -> langsung terpilih otomatis
+        if (!terpilih && daftar.length === 1) selUp.value = daftar[0].UnitUp;
+    }
+
+    // Kolom unit selalu bisa dipilih. Tanda wajib (*) mengikuti hak akses:
+    // .UP = UP3 + ULP wajib, .AP = UP3 wajib, hak lain = boleh dikosongkan
+    function aturUnit(modalEl, kodeHak) {
+        var akhiran = (kodeHak || '').slice(-3);
+        var wajibAp = (akhiran === '.AP' || akhiran === '.UP');
+        var wajibUp = (akhiran === '.UP');
+        modalEl.querySelector('.unit-ap-select').required = wajibAp;
+        modalEl.querySelector('.unit-up-select').required = wajibUp;
+        modalEl.querySelector('.unit-wajib-ap').classList.toggle('d-none', !wajibAp);
+        modalEl.querySelector('.unit-wajib-up').classList.toggle('d-none', !wajibUp);
+    }
+
+    var modalTambahEl = document.getElementById('modalTambahPengguna');
+    var selHakTambah = document.getElementById('add_kodehak');
+    var selApTambah = document.getElementById('add_unitap');
+    var selUpTambah = document.getElementById('add_unitup');
+    selApTambah.addEventListener('change', function() {
+        isiUlp(selApTambah, selUpTambah, '');
+    });
+    selHakTambah.addEventListener('change', function() { aturUnit(modalTambahEl, this.value); });
+    aturUnit(modalTambahEl, selHakTambah.value);
+
+    var selApEdit = document.getElementById('edit_pg_unitap');
+    var selUpEdit = document.getElementById('edit_pg_unitup');
+    selApEdit.addEventListener('change', function() {
+        isiUlp(selApEdit, selUpEdit, '');
+    });
+
     var modalEditEl = document.getElementById('modalEditPengguna');
     var modalEdit = new bootstrap.Modal(modalEditEl);
 
@@ -387,8 +464,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_pg_nama').value = this.dataset.nama || '';
             document.getElementById('edit_pg_kontak').value = this.dataset.kontak || '';
             document.getElementById('edit_pg_hak').value = this.dataset.hak || '';
-            document.getElementById('edit_pg_unitap').value = this.dataset.unitap || '';
-            document.getElementById('edit_pg_unitup').value = this.dataset.unitup || '';
+            selApEdit.value = this.dataset.unitap || '';
+            if (selApEdit.value !== (this.dataset.unitap || '')) selApEdit.value = '';
+            isiUlp(selApEdit, selUpEdit, this.dataset.unitup || '');
+            aturUnit(modalEditEl, this.dataset.hak || '');
             document.getElementById('edit_pg_status').value = (this.dataset.status === 'AKTIF') ? 'AKTIF' : 'TIDAK';
             document.getElementById('edit_pg_password').value = '';
             modalEdit.show();
