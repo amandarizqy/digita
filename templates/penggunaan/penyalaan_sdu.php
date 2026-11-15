@@ -11,8 +11,8 @@ $sufiks = $putus ? 'OFF' : 'ON';
 
 echo pg_header([
     'title'    => $judul,
-    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.'
-                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.',
+    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, lalu catat hasilnya.'
+                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, lalu catat hasilnya.',
     'action'   => $halaman,
 ]);
 
@@ -47,11 +47,15 @@ if ($ada) {
             <label for="f_sesi" class="form-label fw-semibold text-secondary">Sesi ID :</label>
             <div class="input-group">
                 <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat saat Create" readonly>
-                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
+                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap || $sisa === 0 ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
                 <button type="submit" name="aksi" value="hapus_sesi" class="btn btn-outline-danger px-3" formnovalidate <?= $sesi === '' || !$unit_siap ? 'disabled' : '' ?>
                         data-konfirmasi="<?= pg_e($ada ? 'Tiket yang sedang berjalan akan dilepas kembali ke antrean.' : 'Sesi ini akan dihapus.') ?>" data-judul="Hapus sesi?" data-detail="Sesi <?= pg_e($sesi) ?>" data-ya="Ya, hapus sesi"><i class="bi bi-trash3 me-1"></i> Hapus Sesi</button>
             </div>
-            <?php if ($sisa !== null): ?><div class="form-text">Tiket yang masih bisa diambil/dibuat di wilayah Anda: <strong><?= pg_n($sisa) ?></strong></div><?php endif; ?>
+            <div class="form-text d-flex align-items-center gap-2">
+                <span id="denyut" class="d-inline-block rounded-circle bg-secondary" style="width:8px;height:8px;transition:opacity .3s;"></span>
+                <span>Tiket tersedia di wilayah Anda: <strong id="jmlSisa"><?= $sisa === null ? '-' : pg_n($sisa) ?></strong> <span class="text-muted" id="waktuCek"></span></span>
+            </div>
+            <div id="peringatanData" class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none">Data tiket berubah (mungkin dari tab atau sesi lain). <a href="" class="alert-link" onclick="location.reload(); return false;">Muat ulang</a></div>
         </form>
 
         <?php if ($ada): ?>
@@ -138,6 +142,39 @@ if ($ada) {
 })();
 </script>
 
+<!-- PENGECEKAN BERKALA: jumlah tiket tersedia diperbarui otomatis (multiuser); berhenti saat tab tidak terlihat -->
+<script>
+(function () {
+    var URL_CEK = <?= json_encode(pg_url($halaman, ['hitung' => 1])) ?>, INTERVAL = 5000, MAKS = 30000,
+        ada = <?= $ada ? 'true' : 'false' ?>, tiketSaya = <?= json_encode($ada ? (string) $row[$pk] : '') ?>;
+    var jml = document.getElementById('jmlSisa'), waktu = document.getElementById('waktuCek'), denyut = document.getElementById('denyut'),
+        peringatan = document.getElementById('peringatanData'), btn = document.querySelector('button[name="aksi"][value="create"]'),
+        jeda = INTERVAL, timer = null, jalan = false;
+    function atur(ms) { clearTimeout(timer); timer = setTimeout(cek, ms); }
+    function cek() {
+        if (document.hidden) { atur(jeda); return; }
+        if (jalan) return;
+        jalan = true;
+        fetch(URL_CEK, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}})
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (j) {
+                if (j.sisa !== null && j.sisa !== undefined) {
+                    jml.textContent = Number(j.sisa).toLocaleString('id-ID');
+                    if (btn && !ada) btn.disabled = Number(j.sisa) === 0;               // tidak ada tiket -> Create mati; muncul tiket -> menyala
+                }
+                waktu.textContent = '\u00b7 dicek ' + j.waktu;
+                denyut.className = 'd-inline-block rounded-circle bg-success'; denyut.style.opacity = '.35'; setTimeout(function () { denyut.style.opacity = '1'; }, 300);
+                if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
+                jeda = INTERVAL;
+            })
+            .catch(function () { denyut.className = 'd-inline-block rounded-circle bg-danger'; jeda = Math.min(jeda * 2, MAKS); })   // gagal: perlambat
+            .then(function () { jalan = false; atur(jeda); });
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) atur(300); });
+    atur(INTERVAL);
+})();
+</script>
+
 <?php if ($ada): ?>
 <!-- KARTU POP-UP TIKET -->
 <div class="modal fade" id="modalTiket" tabindex="-1" aria-labelledby="judulTiket" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -174,7 +211,7 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. MDMS / Lunas  ->  3. Gagal ON / Ready ON -->
+                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. Ready / Gagal / Lunas -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
@@ -183,18 +220,13 @@ if ($ada) {
                         <a id="btnPpob" class="btn btn-primary flex-fill fw-semibold" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-wallet2 me-1"></i> PPOB</a>
                     </div>
 
-                    <div class="d-flex gap-2 d-none" data-langkah="2">
+                    <div class="d-flex flex-wrap gap-2 d-none" data-langkah="2">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <a id="btnMdms" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-hdd-network me-1"></i> MDMS</a>
+                        <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
+                        <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal ON</button>
                         <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
                     </div>
-
-                    <div class="d-flex gap-2 d-none" data-langkah="3">
-                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal ON</button>
-                        <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
-                    </div>
-                    <div class="small text-muted mt-2 d-none" data-langkah="3">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
+                    <div class="small text-muted mt-2 d-none" data-langkah="2">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
                 </div>
                 <div id="infoTombol" class="small text-muted mt-2" style="min-height:1.2em;"></div>
             </div>
@@ -218,9 +250,8 @@ if ($ada) {
     });
 
     // ---- langkah tombol ----
-    var judul = {1: 'Langkah 1 dari 3 \u00b7 Cek tagihan di PPOB',
-                 2: 'Langkah 2 dari 3 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
-                 3: 'Langkah 3 dari 3 \u00b7 Catat kondisi meter setelah proses di MDMS'};
+    var judul = {1: 'Langkah 1 dari 2 \u00b7 Cek tagihan di PPOB',
+                 2: 'Langkah 2 dari 2 \u00b7 Catat hasil: Ready, Gagal, atau Lunas'};
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
         penanda.textContent = judul[n];
@@ -251,7 +282,6 @@ if ($ada) {
     }
 
     // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
-    // ---- MDMS: buka tautan, lanjut langkah 3 ----
     function pasang(id, tautan, sesudah, nama) {
         var a = document.getElementById(id);
         a.addEventListener('click', function (e) {
@@ -260,7 +290,6 @@ if ($ada) {
         });
     }
     pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
-    pasang('btnMdms', 'mdms', function () { tampil(3); }, 'MDMS');
 
 })();
 </script>

@@ -158,22 +158,24 @@ if (!function_exists('bot_jenis_daftar')) {
      * Catat satu file yang selesai diproses ke bot_akses_riwayat. Mengembalikan nomor tiket.
      * $ap / $up = wilayah file tersebut (kosong -> dipakai wilayah bot).
      */
-    function bot_catat_riwayat(PDO $conn, array $bot, string $ap, string $up, int $berhasil, int $gagal): string
+    function bot_catat_riwayat(PDO $conn, array $bot, string $ap, string $up, int $berhasil, int $gagal, string $nama_file = ''): string
     {
         $upi_db = trim((string) ($bot['UnitUpi'] ?? ''));
         $ap_db  = $ap !== '' ? $ap : trim((string) ($bot['UnitAp'] ?? ''));
         $up_db  = $up !== '' ? $up : trim((string) ($bot['UnitUp'] ?? ''));
         $ap_db  = $ap_db !== '' ? $ap_db : null;
         $up_db  = $up_db !== '' ? $up_db : null;
+        $file_db = trim(basename(str_replace('\\', '/', $nama_file)));   // hanya nama file, tanpa folder
+        $file_db = $file_db !== '' ? mb_substr($file_db, 0, 255) : null;
 
-        $sql = "INSERT INTO bot_akses_riwayat (TiketBot, IdBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
-                VALUES (?,?,?,?,?,?,?,?,?,'AKTIF',NOW())";
+        $sql = "INSERT INTO bot_akses_riwayat (TiketBot, IdBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, NamaFile, StatusData, WaktuData)
+                VALUES (?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())";
         $coba = 0;
         while (true) {
             $tiket = bot_buat_tiket();
             try {
                 $conn->prepare($sql)->execute([$tiket, (int) $bot['IdBot'], $berhasil + $gagal, $berhasil, $gagal,
-                                               bot_akun_riwayat($conn), $up_db, $ap_db, $upi_db]);
+                                               bot_akun_riwayat($conn), $up_db, $ap_db, $upi_db, $file_db]);
                 return $tiket;
             } catch (PDOException $e) {
                 // 1062 = tiket kembar (sangat jarang): buat tiket baru lalu coba lagi

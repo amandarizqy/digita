@@ -4,13 +4,13 @@
 //
 // Alur:
 //   1. [Create]  -> buat SessionID baru (disimpan di session login, per halaman).
-//   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
+//   2. Ambil tiket AKTIF terlama yang belum punya Sesi (tiket pemutusan dibuat TRIGGER database saat tul_601 diisi):
 //        UPDATE trx_order_putus_sdu SET Sesi = SessionID ... ORDER BY TiketPutusSdu ASC LIMIT 1
-//      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari TUL (tul_601) di wilayah akun yang belum punya tiket
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
 //   4. Tombol hasil menulis ke trx_tindakan_putus_sdu:  Ready OFF = PADAM, Ready ON = GAGAL, Lunas = LUNAS
-//   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
-// ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
+//   5. Kembali ke langkah 2 (tiket berikutnya diambil otomatis dengan SessionID yang sama).
+// Tiket pemutusan dibuat TRIGGER database saat tabel tul_601 diisi (Sesi masih kosong). Halaman ini hanya MENGAMBIL dan MENGHITUNG tiket itu,
+// dan mengecek jumlahnya berkala (?hitung=1) karena banyak pengguna memakainya bersamaan.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
 
 // ---- PENGATURAN ----
@@ -25,10 +25,8 @@ $jenis_tindakan = [                     // tombol => nilai JenisTindakan
     'gagal_off' => 'GAGAL',             // Gagal OFF: meter masih ON  -> pemutusan gagal
     'lunas'     => 'LUNAS',             // Lunas
 ];
-// Syarat tambahan sumber TUL (opsional), mis. membedakan pelanggan SDU dari AMI/AMR lewat DIL: "AND d.JenisMk = 'SDU'"  (alias: t = tul_601, d = dil)
-$syarat_sumber = '';
 // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln', 'mdms' => 'http://mdms.pln.co.id/meter'];
+$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
@@ -55,41 +53,9 @@ $klaim = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel
     return $st->rowCount() === 1;
 };
 
-/** Langkah 2b: BUAT tiket baru atas nama SessionID. ID tiket diisi TRIGGER database, lalu dibaca kembali. '' bila tidak ada sumber. Panggil di dalam transaksi. */
-$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $thbl_len, $syarat_sumber): string {
-    // Sumber: TUL (tul_601) di wilayah akun yang belum punya tiket di tabel ini.
-    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT t.NoTul, t.IdPel, t.ThBlRekAkhir AS ThblRek, t.UnitUp, t.UnitAp, t.UnitUpi, d.NomorMeter, d.NomorHp
-                          FROM tul_601 t LEFT JOIN dil d ON d.IdPel = t.IdPel
-                          WHERE $sc AND NOT EXISTS (SELECT 1 FROM `$tabel` o WHERE o.NoTul = t.NoTul) $syarat_sumber
-                          ORDER BY t.NoTul ASC LIMIT 1 FOR UPDATE");
-    $st->execute($p);
-    $r = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$r) return '';
-    $meter = mb_substr(trim((string) $r['NomorMeter']), 0, 15);
-    $hp    = mb_substr(trim((string) $r['NomorHp']), 0, 20);
-    // Kolom kunci diisi '' : nilai sebenarnya ditetapkan trigger BEFORE INSERT.
-    $ins = $conn->prepare("INSERT INTO `$tabel` (`$pk`, JenisTiket, NoTul, IdPel, ThblRek, NomorMeter, NomorHp, Sesi, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
-                           VALUES ('', 'PREVENTIF', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', NOW())");
-    for ($coba = 0; $coba < 10; $coba++) {
-        try {
-            $ins->execute([$r['NoTul'], $r['IdPel'], mb_substr((string) $r['ThblRek'], 0, $thbl_len), $meter, $hp, $sesi_id, $akun, $r['UnitUp'], $r['UnitAp'], $r['UnitUpi']]);
-            $q = $conn->prepare("SELECT `$pk` FROM `$tabel` WHERE NoTul = ? AND Sesi = ? AND StatusData = 'AKTIF' ORDER BY `$pk` DESC LIMIT 1");
-            $q->execute([$r['NoTul'], $sesi_id]);
-            $id = (string) $q->fetchColumn();
-            if ($id === '') throw new RuntimeException('Tiket tersimpan tetapi ID dari trigger tidak terbaca.');
-            return $id;
-        } catch (PDOException $e) {
-            if (($e->errorInfo[1] ?? 0) !== 1062) throw $e;          // nomor urut trigger bentrok dengan sesi lain -> coba lagi (trigger hitung ulang)
-        }
-    }
-    throw new RuntimeException('Gagal mendapatkan nomor tiket unik. Coba lagi.');
-};
-
-/** Langkah 2: ambil tiket antrean terlama; bila tak ada, buat baru. Hasil: '' (tidak ada) | 'ambil' | 'baru'. */
-$ambil_berikutnya = function (string $sesi_id) use ($klaim, $buat_tiket): string {
-    if ($klaim($sesi_id)) return 'ambil';
-    return $buat_tiket($sesi_id) !== '' ? 'baru' : '';
+/** Langkah 2: ambil tiket antrean terlama yang belum punya Sesi. Hasil: '' (tidak ada) | 'ambil'. */
+$ambil_berikutnya = function (string $sesi_id) use ($klaim): string {
+    return $klaim($sesi_id) ? 'ambil' : '';
 };
 
 /** Langkah 3: tiket milik SessionID yang belum ditindak (null bila tidak ada). */
@@ -115,7 +81,33 @@ $detail_fk = function (string $pesan): string {            // ambil nama tabel &
     return ' <span class="small">Detail: tabel ' . pg_e($tabel_anak) . ', kolom ' . pg_e($m[2]) . ' harus ada di ' . pg_e($m[3]) . ' (' . pg_e($m[4]) . '), constraint ' . pg_e($m[1]) . '.</span>';
 };
 
-$pesan_habis = 'Tidak ada TUL di wilayah Anda yang belum dibuatkan tiket. Unggah TUL dahulu (S41 > Upload TUL).';
+$pesan_habis = 'Belum ada tiket pemutusan yang tersedia di wilayah Anda. Tiket baru muncul otomatis setelah TUL diunggah (S41 > Upload TUL); jumlahnya dicek berkala.';
+
+/** Jumlah tiket yang bisa diambil sekarang: AKTIF, belum punya Sesi, belum ditindak, di wilayah akun.
+ *  (Tiket pemutusan dibuat TRIGGER database saat tabel tul_601 diisi; halaman ini hanya menghitung dan mengambilnya.)
+ *  Dipakai tampilan halaman dan pengecekan berkala (?hitung=1). */
+$hitung_sisa = function () use ($conn, $u, $tabel, $pk, $tindakan_tabel): int {
+    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+    $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
+                          AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+    $st->execute($p);
+    return (int) $st->fetchColumn();
+};
+
+// ---- pengecekan berkala (JSON): jumlah tiket tersedia + tiket milik sesi ini; dipanggil JavaScript halaman tiap beberapa detik ----
+// Letaknya SEBELUM pembacaan flash, supaya pengecekan berkala tidak menghabiskan pesan hasil proses.
+if (isset($_GET['hitung'])) {
+    if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) session_write_close();   // lepas kunci session agar halaman lain tidak menunggu
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
+    try {
+        $t_saya = $unit_siap ? $tiket_sekarang($sesi) : null;
+        echo json_encode(['sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
+    } catch (Throwable $e) {
+        http_response_code(500); echo json_encode(['error' => 'gagal']);
+    }
+    exit;
+}
 
 // ---- hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {
@@ -227,17 +219,7 @@ if ($unit_siap) {
             $row['meter_tpl']  = trim((string) $row['NomorMeter']) !== '' ? trim((string) $row['NomorMeter']) : $d['meter'];
             $row['hp_tpl']     = trim((string) $row['NomorHp']) !== '' ? trim((string) $row['NomorHp']) : $d['hp'];
         }
-        // jumlah yang masih bisa diambil/dibuat di wilayah akun
-        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-        $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                              AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
-        $st->execute($p);
-        $sisa = (int) $st->fetchColumn();
-        // ditambah TUL yang belum punya tiket (akan dibuatkan tiket saat Create)
-        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-        $st = $conn->prepare("SELECT COUNT(*) FROM tul_601 t LEFT JOIN dil d ON d.IdPel = t.IdPel WHERE $sc AND NOT EXISTS (SELECT 1 FROM `$tabel` o WHERE o.NoTul = t.NoTul) $syarat_sumber");
-        $st->execute($p);
-        $sisa += (int) $st->fetchColumn();
+        $sisa = $hitung_sisa();
     } catch (PDOException $e) {
         $pesan_error = trim($pesan_error . ' Gagal memuat tiket: ' . pg_e($e->getMessage()));
     }

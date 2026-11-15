@@ -123,6 +123,35 @@ $detail_fk = function (string $pesan): string {            // ambil nama tabel &
 
 $pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya: tiket putus sudah ditindak (gagal ON = PADAM) dan belum punya tiket nyala.';
 
+/** Jumlah tiket yang bisa diambil/dibuat sekarang: tiket nyala yang belum punya Sesi, ditambah tiket putus yang sudah ditindak
+ *  dan belum punya tiket nyala (akan dibuatkan tiket saat Create). Dipakai tampilan halaman dan pengecekan berkala (?hitung=1). */
+$hitung_sisa = function () use ($conn, $u, $tabel, $pk, $tindakan_tabel, $fk, $putus_tabel, $syarat_putus): int {
+    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+    $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
+                          AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+    $st->execute($p);
+    $jumlah = (int) $st->fetchColumn();
+    $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
+    $st = $conn->prepare("SELECT COUNT(*) FROM `$putus_tabel` p WHERE p.StatusData = 'AKTIF' AND $sc $syarat_putus AND NOT EXISTS (SELECT 1 FROM `$tabel` n WHERE n.`$fk` = p.`$fk` AND n.StatusData = 'AKTIF')");
+    $st->execute($p);
+    return $jumlah + (int) $st->fetchColumn();
+};
+
+// ---- pengecekan berkala (JSON): jumlah tiket tersedia + tiket milik sesi ini; dipanggil JavaScript halaman tiap beberapa detik ----
+// Letaknya SEBELUM pembacaan flash, supaya pengecekan berkala tidak menghabiskan pesan hasil proses.
+if (isset($_GET['hitung'])) {
+    if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) session_write_close();   // lepas kunci session agar halaman lain tidak menunggu
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
+    try {
+        $t_saya = $unit_siap ? $tiket_sekarang($sesi) : null;
+        echo json_encode(['sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
+    } catch (Throwable $e) {
+        http_response_code(500); echo json_encode(['error' => 'gagal']);
+    }
+    exit;
+}
+
 // ---- hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {
     $fl = $_SESSION['pg_flash']; unset($_SESSION['pg_flash']);
@@ -233,17 +262,7 @@ if ($unit_siap) {
             $row['meter_tpl']  = trim((string) $row['NomorMeter']) !== '' ? trim((string) $row['NomorMeter']) : $d['meter'];
             $row['hp_tpl']     = trim((string) $row['NomorHp']) !== '' ? trim((string) $row['NomorHp']) : $d['hp'];
         }
-        // jumlah yang masih bisa diambil/dibuat di wilayah akun
-        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-        $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                              AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
-        $st->execute($p);
-        $sisa = (int) $st->fetchColumn();
-        // ditambah tiket putus yang belum punya tiket nyala (akan dibuatkan tiket saat Create)
-        $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
-        $st = $conn->prepare("SELECT COUNT(*) FROM `$putus_tabel` p WHERE p.StatusData = 'AKTIF' AND $sc $syarat_putus AND NOT EXISTS (SELECT 1 FROM `$tabel` n WHERE n.`$fk` = p.`$fk` AND n.StatusData = 'AKTIF')");
-        $st->execute($p);
-        $sisa += (int) $st->fetchColumn();
+        $sisa = $hitung_sisa();
     } catch (PDOException $e) {
         $pesan_error = trim($pesan_error . ' Gagal memuat tiket: ' . pg_e($e->getMessage()));
     }

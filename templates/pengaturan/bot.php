@@ -271,7 +271,7 @@ foreach ($bots as $b) {
             <div class="modal-body">
                 <div class="row g-2 align-items-center mb-3">
                     <div class="col-md-5">
-                        <input type="search" class="form-control form-control-sm" id="riwayatCari" placeholder="Cari tiket / unit / status...">
+                        <input type="search" class="form-control form-control-sm" id="riwayatCari" placeholder="Cari tiket / nama file / unit / status...">
                     </div>
                     <div class="col-md-7 small text-muted text-md-end" id="riwayatRingkas"></div>
                 </div>
@@ -281,6 +281,7 @@ foreach ($bots as $b) {
                             <tr>
                                 <th>Tiket</th>
                                 <th>Waktu</th>
+                                <th>Nama File</th>
                                 <th>AP</th>
                                 <th>UP</th>
                                 <th class="text-end">Data</th>
@@ -442,19 +443,20 @@ document.addEventListener('DOMContentLoaded', function () {
         var q = rwCari.value.trim().toLowerCase();
         var tampil = d.baris.filter(function (r) {
             if (!q) return true;
-            return (r.tiket + ' ' + r.ap + ' ' + r.up + ' ' + r.status + ' ' + r.waktu).toLowerCase().indexOf(q) !== -1;
+            return (r.tiket + ' ' + r.file + ' ' + r.ap + ' ' + r.up + ' ' + r.status + ' ' + r.waktu).toLowerCase().indexOf(q) !== -1;
         });
         var tData = 0, tOk = 0, tGagal = 0;
         tampil.forEach(function (r) { tData += r.data; tOk += r.berhasil; tGagal += r.gagal; });
 
         if (!tampil.length) {
-            rwBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">'
+            rwBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">'
                 + (d.baris.length ? 'Tidak ada riwayat yang cocok dengan pencarian.' : 'Belum ada riwayat untuk bot ini.') + '</td></tr>';
         } else {
             rwBody.innerHTML = tampil.map(function (r) {
                 return '<tr>'
                     + '<td><code>' + esc(r.tiket) + '</code></td>'
                     + '<td class="text-nowrap">' + esc(r.waktu) + '</td>'
+                    + '<td class="small text-break">' + (r.file ? esc(r.file) : '<span class="text-muted">-</span>') + '</td>'
                     + '<td>' + esc(r.ap || '-') + '</td>'
                     + '<td>' + esc(r.up || '-') + '</td>'
                     + '<td class="text-end">' + r.data + '</td>'

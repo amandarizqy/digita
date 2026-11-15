@@ -206,7 +206,7 @@ function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $s
             // Dicatat SEBELUM file dipindah; kegagalan mencatat tidak menghentikan proses.
             $tiket = '';
             try {
-                $tiket = bot_catat_riwayat($conn, $bot, $t['ap'], $t['up'], (int) $h['tersimpan'], (int) $h['ditolak']);
+                $tiket = bot_catat_riwayat($conn, $bot, $t['ap'], $t['up'], (int) $h['tersimpan'], (int) $h['ditolak'], $nama);
                 bc_log('INFO', "  Riwayat dicatat: tiket $tiket");
             } catch (Throwable $e) {
                 bc_log('ERROR', "  Gagal mencatat riwayat: {$e->getMessage()}");

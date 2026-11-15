@@ -267,7 +267,7 @@ try {
 $riwayat = [];
 if ($bots) {
     try {
-        $st = $conn->prepare("SELECT TiketBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData
+        $st = $conn->prepare("SELECT TiketBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, NamaFile, WaktuData
                               FROM bot_akses_riwayat WHERE IdBot = ?
                               ORDER BY WaktuData DESC, TiketBot DESC LIMIT " . (int) BOT_RIWAYAT_MAKS);
         foreach ($bots as $b) {
@@ -278,6 +278,7 @@ if ($bots) {
                 $gl = (int) $r['JmlGagal'];
                 $baris[] = [
                     'tiket'    => (string) $r['TiketBot'],
+                    'file'     => (string) ($r['NamaFile'] ?? ''),
                     'waktu'    => $r['WaktuData'] ? date('d/m/Y H:i:s', strtotime((string) $r['WaktuData'])) : '-',
                     'upi'      => (string) ($r['UnitUpi'] ?? ''),
                     'ap'       => (string) ($r['UnitAp'] ?? ''),

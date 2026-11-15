@@ -50,11 +50,15 @@ if ($ada) {
             <label for="f_sesi" class="form-label fw-semibold text-secondary">Sesi ID :</label>
             <div class="input-group">
                 <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat saat Create" readonly>
-                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
+                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap || $sisa === 0 ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
                 <button type="submit" name="aksi" value="hapus_sesi" class="btn btn-outline-danger px-3" formnovalidate <?= $sesi === '' || !$unit_siap ? 'disabled' : '' ?>
                         data-konfirmasi="<?= pg_e($ada ? 'Tiket yang sedang berjalan akan dilepas kembali ke antrean.' : 'Sesi ini akan dihapus.') ?>" data-judul="Hapus sesi?" data-detail="Sesi <?= pg_e($sesi) ?>" data-ya="Ya, hapus sesi"><i class="bi bi-trash3 me-1"></i> Hapus Sesi</button>
             </div>
-            <?php if ($sisa !== null): ?><div class="form-text">Tiket yang masih bisa diambil/dibuat di wilayah Anda: <strong><?= pg_n($sisa) ?></strong></div><?php endif; ?>
+            <div class="form-text d-flex align-items-center gap-2">
+                <span id="denyut" class="d-inline-block rounded-circle bg-secondary" style="width:8px;height:8px;transition:opacity .3s;"></span>
+                <span>Tiket tersedia di wilayah Anda: <strong id="jmlSisa"><?= $sisa === null ? '-' : pg_n($sisa) ?></strong> <span class="text-muted" id="waktuCek"></span></span>
+            </div>
+            <div id="peringatanData" class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none">Data tiket berubah (mungkin dari tab atau sesi lain). <a href="" class="alert-link" onclick="location.reload(); return false;">Muat ulang</a></div>
         </form>
 
         <?php if ($ada): ?>
@@ -138,6 +142,39 @@ if ($ada) {
         tanya(b).then(function (setuju) { if (!setuju) return; terkirim = true; b.__lanjut = true; b.click(); });
     }, true);
     window.addEventListener('pageshow', function (e) { if (e.persisted) terkirim = false; });
+})();
+</script>
+
+<!-- PENGECEKAN BERKALA: jumlah tiket tersedia diperbarui otomatis (multiuser); berhenti saat tab tidak terlihat -->
+<script>
+(function () {
+    var URL_CEK = <?= json_encode(pg_url($halaman, ['hitung' => 1])) ?>, INTERVAL = 5000, MAKS = 30000,
+        ada = <?= $ada ? 'true' : 'false' ?>, tiketSaya = <?= json_encode($ada ? (string) $row[$pk] : '') ?>;
+    var jml = document.getElementById('jmlSisa'), waktu = document.getElementById('waktuCek'), denyut = document.getElementById('denyut'),
+        peringatan = document.getElementById('peringatanData'), btn = document.querySelector('button[name="aksi"][value="create"]'),
+        jeda = INTERVAL, timer = null, jalan = false;
+    function atur(ms) { clearTimeout(timer); timer = setTimeout(cek, ms); }
+    function cek() {
+        if (document.hidden) { atur(jeda); return; }
+        if (jalan) return;
+        jalan = true;
+        fetch(URL_CEK, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}})
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function (j) {
+                if (j.sisa !== null && j.sisa !== undefined) {
+                    jml.textContent = Number(j.sisa).toLocaleString('id-ID');
+                    if (btn && !ada) btn.disabled = Number(j.sisa) === 0;               // tidak ada tiket -> Create mati; muncul tiket -> menyala
+                }
+                waktu.textContent = '\u00b7 dicek ' + j.waktu;
+                denyut.className = 'd-inline-block rounded-circle bg-success'; denyut.style.opacity = '.35'; setTimeout(function () { denyut.style.opacity = '1'; }, 300);
+                if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
+                jeda = INTERVAL;
+            })
+            .catch(function () { denyut.className = 'd-inline-block rounded-circle bg-danger'; jeda = Math.min(jeda * 2, MAKS); })   // gagal: perlambat
+            .then(function () { jalan = false; atur(jeda); });
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) atur(300); });
+    atur(INTERVAL);
 })();
 </script>
 
