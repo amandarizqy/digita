@@ -15,6 +15,11 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
         <!-- Tombol Aksi Kanan Atas Dinamis Sesuai Halaman -->
         <div>
             <?php if ($menu === 'pra_eksekusi' && $sub === 'pengujian' && $view === 'daftar' && $can_pengujian): ?>
+                <!-- TOMBOL BARU: Cetak Form Detail -->
+                <button type="button" class="btn btn-info fw-bold text-white px-3 rounded-3 shadow-sm btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalCetakMasal">
+                    <i class="bi bi-printer me-1"></i> Cetak Form Detail
+                </button>
+                
                 <a href="index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=baru" class="btn btn-primary fw-bold px-3 rounded-3 shadow-sm btn-sm">
                     <i class="bi bi-plus-lg me-1"></i> Formulir Pengujian Baru
                 </a>

@@ -87,9 +87,18 @@ try {
     // 2. HAPUS FPK
     if ($action === 'hapus_fpk') {
         $no_fpk = $_GET['no_fpk'] ?? '';
+        $is_sa = ($_SESSION['KodeHak'] ?? '') === 'SA.KP';
+        
         $conn->beginTransaction();
+        
         $conn->prepare("DELETE FROM frm_pk_detil WHERE NoFpk = ?")->execute([$no_fpk]);
-        $conn->prepare("DELETE FROM frm_pk WHERE NoFpk = ? AND UnitUp = ?")->execute([$no_fpk, $unit_up]);
+        
+        if ($is_sa) {
+            $conn->prepare("DELETE FROM frm_pk WHERE NoFpk = ?")->execute([$no_fpk]);
+        } else {
+            $conn->prepare("DELETE FROM frm_pk WHERE NoFpk = ? AND UnitUp = ?")->execute([$no_fpk, $unit_up]);
+        }
+        
         $conn->commit();
 
         echo "<!DOCTYPE html>
@@ -100,7 +109,7 @@ try {
                 Swal.fire({
                     icon: 'success',
                     title: 'Terhapus',
-                    text: 'FPK berhasil dihapus.',
+                    text: 'FPK berhasil dihapus secara keseluruhan.',
                     confirmButtonColor: '#0d6efd',
                     timer: 1200,
                     showConfirmButton: false
@@ -113,7 +122,7 @@ try {
         exit;
     }
 
-    // 3. SIMPAN ORDER (SPK) BARU (Menyertakan KdPetugas default 'IPM.001')
+    // 3. SIMPAN ORDER (SPK) BARU (StatusData = 'TIDAK' saat masih draft / belum final mutasi)
     if ($action === 'simpan_order' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $tgl_order = trim($_POST['tgl_order']);
         $fpk_terpilih = $_POST['fpk_terpilih'] ?? [];
@@ -132,11 +141,11 @@ try {
         $urutan = $last_ord ? (int) substr($last_ord, strlen($prefix), 3) + 1 : 1;
         $no_order = $prefix . str_pad($urutan, 3, '0', STR_PAD_LEFT) . $tgl_fmt . '-F.E';
 
-        $kd_petugas = 'IPM.001'; // Nilai default petugas sesuai struktur database
+        $kd_petugas = 'IPM.001';
 
         $stmt_ord = $conn->prepare("
             INSERT INTO frm_order (NoFormOrder, TglOrder, KdPetugas, UnitUp, UnitAp, UnitUpi, StatusData, NamaAkun) 
-            VALUES (?, ?, ?, ?, ?, ?, 'AKTIF', ?)
+            VALUES (?, ?, ?, ?, ?, ?, 'TIDAK', ?)
         ");
         $stmt_ord->execute([$no_order, $tgl_order, $kd_petugas, $unit_up, $unit_ap, $unit_upi, $nama_akun]);
 
@@ -155,7 +164,7 @@ try {
                 Swal.fire({
                     icon: 'success',
                     title: 'Berhasil!',
-                    text: 'Surat Perintah Kerja (Order) berhasil dibuat dengan KdPetugas default.',
+                    text: 'Surat Perintah Kerja (Order) berhasil dibuat.',
                     confirmButtonColor: '#0d6efd',
                     timer: 1500,
                     showConfirmButton: false
@@ -168,13 +177,13 @@ try {
         exit;
     }
     
-    // 4. HAPUS KESELURUHAN ORDER / SPK
+    // 4. HAPUS KESELURUHAN ORDER / SPK (Hanya jika belum difinalisasi / StatusData = 'TIDAK')
     if ($action === 'hapus_order') {
         $no_form = $_GET['no_form'];
         $conn->beginTransaction();
         
         $conn->prepare("DELETE FROM frm_order_detil WHERE NoFormOrder=?")->execute([$no_form]);
-        $conn->prepare("DELETE FROM frm_order WHERE NoFormOrder=? AND StatusData='AKTIF'")->execute([$no_form]);
+        $conn->prepare("DELETE FROM frm_order WHERE NoFormOrder=? AND StatusData='TIDAK'")->execute([$no_form]);
         
         $conn->commit();
 
