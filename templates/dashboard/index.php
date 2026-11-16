@@ -72,6 +72,16 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
            LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
           WHERE b.JenisPekerjaan = 'PEMELIHARAAN' AND b.StatusData = 'AKTIF'" . $sp,
         array_merge([$awal, $akhir], $pp));
+    // Penghapusan: FPK jenis BERHENTI (status TIDAK = masih berjalan, AKTIF = BA selesai). Wilayah memakai $sp/$pp yang sama dengan Pemeliharaan.
+    $h = dash_q($conn, $err, 'Penghapusan',
+        "SELECT COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NULL),0) AS belum_order,
+                COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NOT NULL),0) AS berjalan,
+                COALESCE(SUM(b.StatusData = 'AKTIF' AND b.TglFba >= ? AND b.TglFba < ?),0) AS hapus_bulan_ini
+           FROM frm_pk p
+           LEFT JOIN (SELECT DISTINCT NoFpk FROM frm_order_detil) od ON od.NoFpk = p.NoFpk
+           LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'BONGKAR'
+          WHERE p.JenisPk = 'BERHENTI'" . $sp,
+        array_merge([$awal, $akhir], $pp));
     // Penghapusan: FPK (JenisPk 'BERHENTI') -> Order -> BA 'BONGKAR'.
     // Status FPK/BA: 'TIDAK' = belum selesai (terbuka / pending), 'AKTIF' = selesai (alat sudah dilepas dari pelanggan).
     // Lampu 'TIDAK' pada BA bongkar = "perlu mutasi" (lihat PGH_LAMPU di penghapusan_helper.php).
