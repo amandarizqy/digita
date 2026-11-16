@@ -1,5 +1,4 @@
 <?php
-// Ambil parameter paginasi & pencarian
 $q = trim($_GET['q'] ?? '');
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 10;
 $page  = isset($_GET['p']) ? (int)$_GET['p'] : 1;
@@ -7,7 +6,6 @@ if ($limit < 1) $limit = 10;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $limit;
 
-// Set parameter hak akses
 $unit_up = $_SESSION['UnitUp'] ?? '';
 $is_sa   = ($_SESSION['KodeHak'] ?? '') === 'SA.KP';
 $where_clause = "WHERE 1=1";
@@ -22,14 +20,12 @@ if (!empty($q)) {
     $params[] = "%$q%";
 }
 
-// 1. Hitung total data untuk Paginasi
 $sql_count = "SELECT COUNT(*) FROM formulir_pengujian f $where_clause";
 $stmt_count = $conn->prepare($sql_count);
 $stmt_count->execute($params);
 $total_data = $stmt_count->fetchColumn();
 $total_pages = ceil($total_data / $limit);
 
-// 2. Query Utama dengan Limit dan Offset
 $sql = "SELECT f.NoFormulir, f.TglUji, f.NamaAkun, f.StatusData, f.WaktuData,
                (SELECT COUNT(NoRef) FROM formulir_pengujian_detil d WHERE d.NoFormulir = f.NoFormulir) as TotalAlat
         FROM formulir_pengujian f
@@ -38,21 +34,36 @@ $sql = "SELECT f.NoFormulir, f.TglUji, f.NamaAkun, f.StatusData, f.WaktuData,
 $stmt = $conn->prepare($sql);
 $stmt->execute($params);
 $list_pengujian = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// PERBAIKAN: Ambil List NoRef Alat (Bukan No Formulir) untuk Modal Cetak
+$sql_aktif = "SELECT d.NoRef, f.NoFormulir, f.TglUji 
+              FROM formulir_pengujian_detil d 
+              JOIN formulir_pengujian f ON d.NoFormulir = f.NoFormulir 
+              WHERE f.StatusData = 'AKTIF'";
+if (!$is_sa && !empty($unit_up)) $sql_aktif .= " AND f.UnitUp = '$unit_up'";
+$sql_aktif .= " ORDER BY f.WaktuData DESC";
+$list_alat_aktif = $conn->query($sql_aktif)->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <div class="card shadow mb-4 border-0">
     <div class="card-body p-0">
-        <form action="index.php" method="GET" class="mb-3 px-4 pt-3">
-            <input type="hidden" name="page" value="pemasangan">
-            <input type="hidden" name="menu" value="pra_eksekusi">
-            <input type="hidden" name="sub" value="pengujian">
-            <input type="hidden" name="view" value="daftar">
-            <?php if(isset($_GET['limit'])): ?><input type="hidden" name="limit" value="<?= htmlspecialchars($_GET['limit']) ?>"><?php endif; ?>
-            <div class="input-group input-group-sm" style="max-width: 340px;">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3 px-4 pt-3 flex-wrap gap-2">
+            <form action="index.php" method="GET" class="input-group input-group-sm" style="max-width: 340px;">
+                <input type="hidden" name="page" value="pemasangan">
+                <input type="hidden" name="menu" value="pra_eksekusi">
+                <input type="hidden" name="sub" value="pengujian">
+                <input type="hidden" name="view" value="daftar">
                 <input type="text" class="form-control" name="q" placeholder="Cari No Formulir..." value="<?= htmlspecialchars($q) ?>">
                 <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
-            </div>
-        </form>
+            </form>
+            <!-- Tombol Cetak Form Masal TELAH DIPINDAHKAN KE ATAS (Lihat Langkah 1) -->
+        </div>
 
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -64,7 +75,7 @@ $list_pengujian = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <th class="fw-bold border-bottom-0 py-3 text-center">TOTAL ALAT</th>
                         <th class="fw-bold border-bottom-0 py-3">PENGUJI</th>
                         <th class="fw-bold border-bottom-0 py-3 text-center">STATUS</th>
-                        <th class="fw-bold border-bottom-0 py-3 text-center pe-4">AKSI</th>
+                        <th class="fw-bold border-bottom-0 py-3 text-center pe-4" style="width: 15%;">AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -87,6 +98,11 @@ $list_pengujian = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </td>
                                 <td class="text-center pe-4">
                                     <div class="d-flex justify-content-center gap-1">
+                                        <?php if($row['StatusData'] == 'AKTIF'): ?>
+                                            <a href="modules/pemasangan/cetak_pengujian.php?action=full&no_form[]=<?= urlencode($row['NoFormulir']) ?>" target="_blank" class="btn btn-sm btn-outline-info" title="Cetak Full (Ringkasan & Detail)">
+                                                <i class="bi bi-printer"></i>
+                                            </a>
+                                        <?php endif; ?>
                                         <a href="index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=detail&no_form=<?= urlencode($row['NoFormulir']) ?>" class="btn btn-sm btn-outline-primary" title="Buka Detail">
                                             <i class="bi <?= ($row['StatusData'] == 'AKTIF') ? 'bi-eye' : 'bi-pencil' ?>"></i> Detail
                                         </a>
@@ -104,7 +120,6 @@ $list_pengujian = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </table>
         </div>
         
-        <!-- Paginasi -->
         <div class="d-flex justify-content-between align-items-center p-3 border-top bg-white">
             <div class="d-flex align-items-center gap-2">
                 <span class="small text-muted">Tampilkan</span>
@@ -132,7 +147,46 @@ $list_pengujian = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
+<!-- MODAL CETAK MASAL (Satuan No Ref) -->
+<div class="modal fade" id="modalCetakMasal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="modules/pemasangan/cetak_pengujian.php" method="GET" target="_blank" class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-info"><i class="bi bi-printer me-2"></i>Cetak Lembar Pengujian (Detail)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="action" value="detail">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Pilih NoRef Alat (Bisa lebih dari satu)</label>
+                    <select name="noref[]" class="form-select select2-multiple" multiple="multiple" required style="width: 100%;">
+                        <?php foreach ($list_alat_aktif as $alt): ?>
+                            <option value="<?= htmlspecialchars($alt['NoRef']) ?>">
+                                NoRef: <?= htmlspecialchars($alt['NoRef']) ?> (Form: <?= htmlspecialchars($alt['NoFormulir']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Sistem hanya akan mencetak "Formulir Pengujian Pemasangan" untuk Alat/NoRef spesifik yang dipilih.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-info text-white fw-bold px-4"><i class="bi bi-printer me-1"></i> Cetak Sekarang</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+$(document).ready(function() {
+    $('#modalCetakMasal').on('shown.bs.modal', function () {
+        $('.select2-multiple').select2({
+            dropdownParent: $('#modalCetakMasal'),
+            placeholder: "-- Cari & Pilih NoRef Alat --",
+            allowClear: true
+        });
+    });
+});
 function confirmDeleteDraft(noForm) {
     Swal.fire({
         title: 'Hapus Draft Pengujian?',
