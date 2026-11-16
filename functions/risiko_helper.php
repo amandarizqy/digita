@@ -46,7 +46,7 @@ function hitungKemungkinan($kepentingan, $keterlambatan) {
     elseif (in_array($kuadran, [3, 4, 5])) $kemungkinan = 'BISA TERJADI';
     elseif (in_array($kuadran, [6, 7, 8, 9])) $kemungkinan = 'SANGAT MUNGKIN TERJADI';
 
-    return ['kuadran' => $kuadran, 'LevelKemungkinan' => $kemungkinan];
+    return ['kuadranKemungkinan' => $kuadran, 'LevelKemungkinan' => $kemungkinan];
 }
 
 /**

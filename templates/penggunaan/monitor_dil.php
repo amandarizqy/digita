@@ -114,7 +114,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                     <td class="text-end text-nowrap"><?= $r['Daya'] === null ? '<span class="text-muted">-</span>' : pg_n($r['Daya']) ?></td>
                     <td class="text-center"><?= $kosong($r['TegUkur']) ?></td>
                     <td class="text-center"><?= $kosong($r['KdPembMeter']) ?></td>
-                    <td class="font-monospace small text-nowrap"><?= $kosong($r['NomorKwh']) ?></td>
+                    <td class="font-monospace small text-nowrap"><?= $kosong($r['NomorMeter']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['Aktifasi']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['ProdukPrabayar']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['NamaAkun']) ?></td>
@@ -135,7 +135,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                             <i class="bi bi-pencil-square me-1"></i>Edit
                         </button>
                         <form method="POST" action="<?= pg_e(pg_url('monitor_dil')) ?>" class="d-inline"
-                              onsubmit="return confirm('<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> IdPel <?= pg_e($r['IdPel']) ?>?');">
+                              data-konfirmasi="<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> IdPel <?= pg_e($r['IdPel']) ?>?" data-judul="<?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?> data?" data-ya="Ya, <?= $aktif ? 'Nonaktifkan' : 'Aktifkan' ?>"<?= $aktif ? ' data-bahaya="1"' : '' ?>>
                             <?= $tetap ?>
                             <input type="hidden" name="aksi" value="status">
                             <input type="hidden" name="idpel" value="<?= pg_e($r['IdPel']) ?>">
@@ -202,3 +202,5 @@ document.querySelectorAll('.btn-edit-dil').forEach(function (b) {
 });
 </script>
 <?php endif; ?>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

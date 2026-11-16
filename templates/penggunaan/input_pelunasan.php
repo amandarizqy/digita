@@ -100,7 +100,7 @@ if ($tahun === '') {
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTerapkan">Terapkan</button>
             <span class="ms-auto small text-muted" id="infoPilih">0 dipilih</span>
             <button type="submit" class="btn btn-sm btn-primary px-3" id="btnBanyak" disabled
-                    onclick="return confirm('Lunasi ' + document.querySelectorAll('.cek-baris:checked').length + ' tagihan terpilih?');">
+                    data-konfirmasi="Lunasi {jumlah} tagihan terpilih?" data-jumlah=".cek-baris:checked" data-judul="Lunasi tagihan?" data-ya="Ya, Lunasi">
                 <i class="bi bi-check2-all me-1"></i>Lunasi Terpilih
             </button>
         </div>
@@ -130,7 +130,7 @@ if ($tahun === '') {
                         <td><input type="number" class="form-control form-control-sm" name="rpbk[<?= pg_e($key) ?>]" min="0" step="1" value="0" required></td>
                         <td class="text-end pe-4">
                             <button type="submit" name="satu" value="<?= pg_e($key) ?>" class="btn btn-sm btn-outline-success"
-                                    onclick="return confirm('Catat IdPel <?= pg_e($r['IdPel']) ?> periode <?= pg_e(trim($r['ThBlRek'])) ?> sebagai lunas?');">
+                                    data-konfirmasi="Catat IdPel <?= pg_e($r['IdPel']) ?> periode <?= pg_e(trim($r['ThBlRek'])) ?> sebagai lunas?" data-judul="Catat pelunasan?" data-ya="Ya, Catat">
                                 <i class="bi bi-check-circle me-1"></i>Lunasi
                             </button>
                         </td>
@@ -165,3 +165,5 @@ if ($tahun === '') {
     hitung();
 })();
 </script>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>

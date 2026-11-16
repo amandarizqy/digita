@@ -285,7 +285,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                     <th>MODEM (PASANG)</th>
                     <th>INDIKATOR</th>
                     <th>STATUS</th>
-                    <th class="text-end pe-4" style="width:130px;">AKSI</th>
+                    <th class="text-end pe-4" style="width:90px;">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
@@ -327,12 +327,16 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                             <td class="font-monospace"><?= ph_e($row['PImei'] ?? '-') ?></td>
                             <td><?= ph_badge_relay($row['PLampu'] ?? '') ?></td>
                             <td><?= $ada_ba ? ph_badge_status($row['StatusBa']) : '<span class="badge bg-primary-subtle text-primary">BELUM</span>' ?></td>
-                            <td class="text-end pe-4">
-                                <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-3 py-1 fw-bold btn-eksekusi"
-                                        data-row="<?= ph_e(json_encode($js, JSON_UNESCAPED_UNICODE)) ?>"
-                                        data-status="<?= ph_e($row['StatusBa'] ?? 'TIDAK') ?>">
-                                    <i class="bi bi-tools me-1"></i> <?= $ada_ba ? 'Ubah BA' : 'Eksekusi' ?>
-                                </button>
+                            <td class="text-end pe-4 text-nowrap">
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button"
+                                            class="btn <?= $ada_ba ? 'btn-outline-primary' : 'btn-primary' ?> py-1 px-2 btn-eksekusi"
+                                            title="<?= $ada_ba ? 'Ubah Berita Acara' : 'Eksekusi Pekerjaan' ?>"
+                                            data-row="<?= ph_e(json_encode($js, JSON_UNESCAPED_UNICODE)) ?>"
+                                            data-status="<?= ph_e($row['StatusBa'] ?? 'TIDAK') ?>">
+                                        <i class="bi <?= $ada_ba ? 'bi-pencil-square' : 'bi-play-fill' ?>"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

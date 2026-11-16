@@ -179,7 +179,8 @@ if ($h): ?>
         f.addEventListener('submit', function (e) {
             if (selUp && !selUp.value) {
                 e.preventDefault();
-                alert('Pilih Unit UP tujuan terlebih dahulu.');
+                if (window.notifPeringatan) notifPeringatan('Unit UP belum dipilih', 'Pilih Unit UP tujuan terlebih dahulu.');
+                else alert('Pilih Unit UP tujuan terlebih dahulu.');
                 selUp.focus();
                 return;
             }
@@ -190,3 +191,5 @@ if ($h): ?>
     });
 })();
 </script>
+
+<?php include __DIR__ . '/../_konfirmasi.php'; ?>
