@@ -34,7 +34,11 @@ function dash_scope($kode, $c, $up, $ap, $upi) {
 }
 
 // ===== DATA (dengan cache sesi) ==================================================================
+<<<<<<< HEAD
+$kunci = 'v3-penghapusan|' . $kode_hak . '|' . $u_up . '|' . $u_ap . '|' . $u_upi;
+=======
 $kunci = 'v3|' . $kode_hak . '|' . $u_up . '|' . $u_ap . '|' . $u_upi;
+>>>>>>> 443c3d3414f3e53252f3429a7010c359fa13c550
 $c = $_SESSION['dash_cache'] ?? null;
 if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refresh'])) {
     $D = $c['d'];
@@ -72,6 +76,18 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
            LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
           WHERE b.JenisPekerjaan = 'PEMELIHARAAN' AND b.StatusData = 'AKTIF'" . $sp,
         array_merge([$awal, $akhir], $pp));
+<<<<<<< HEAD
+    // Penghapusan: FPK jenis BERHENTI (status TIDAK = masih berjalan, AKTIF = BA selesai). Wilayah memakai $sp/$pp yang sama dengan Pemeliharaan.
+    $h = dash_q($conn, $err, 'Penghapusan',
+        "SELECT COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NULL),0) AS belum_order,
+                COALESCE(SUM(p.StatusData = 'TIDAK' AND od.NoFpk IS NOT NULL),0) AS berjalan,
+                COALESCE(SUM(b.StatusData = 'AKTIF' AND b.TglFba >= ? AND b.TglFba < ?),0) AS hapus_bulan_ini
+           FROM frm_pk p
+           LEFT JOIN (SELECT DISTINCT NoFpk FROM frm_order_detil) od ON od.NoFpk = p.NoFpk
+           LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'BONGKAR'
+          WHERE p.JenisPk = 'BERHENTI'" . $sp,
+        array_merge([$awal, $akhir], $pp));
+=======
     // Penghapusan: FPK (JenisPk 'BERHENTI') -> Order -> BA 'BONGKAR'.
     // Status FPK/BA: 'TIDAK' = belum selesai (terbuka / pending), 'AKTIF' = selesai (alat sudah dilepas dari pelanggan).
     // Lampu 'TIDAK' pada BA bongkar = "perlu mutasi" (lihat PGH_LAMPU di penghapusan_helper.php).
@@ -87,6 +103,7 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
            LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'BONGKAR'
           WHERE p.JenisPk = 'BERHENTI'" . $sp,
         array_merge([$awal, $akhir, $awal, $akhir], $pp));
+>>>>>>> 443c3d3414f3e53252f3429a7010c359fa13c550
     $k = dash_q($conn, $err, 'Pengiriman',
         "SELECT COUNT(*) AS n FROM formulir_pengiriman WHERE StatusPengiriman = 'DIKIRIM'" . $s2, $p2);
     $r = dash_q($conn, $err, 'Prioritas',
@@ -116,6 +133,7 @@ if ($c && $c['k'] === $kunci && (time() - $c['t']) < 120 && !isset($_GET['refres
         'dil' => (int)($d['aktif'] ?? 0), 'dil_kosong' => (int)($d['kosong'] ?? 0),
         'tunggakan' => (float)($l['tunggakan'] ?? 0), 'lunas' => (int)($l['lunas'] ?? 0),
         'rusak' => (int)($m['rusak'] ?? 0), 'pml' => (int)($m['bulan_ini'] ?? 0),
+        'hapus' => (int)($h['hapus_bulan_ini'] ?? 0), 'hapus_belum_order' => (int)($h['belum_order'] ?? 0), 'hapus_berjalan' => (int)($h['berjalan'] ?? 0),
         'kirim' => (int)($k['n'] ?? 0), 'prio' => (int)($r['n'] ?? 0), 'periode_prio' => $periode_prio ?? null,
         'pgh_belum_order' => (int)($h['belum_order'] ?? 0), 'pgh_menunggu' => (int)($h['menunggu'] ?? 0), 'pgh_pending' => (int)($h['pending'] ?? 0),
         'pgh_selesai' => (int)($h['selesai_bln'] ?? 0), 'pgh_lampu_mati' => (int)($h['lampu_mati'] ?? 0),
@@ -133,7 +151,11 @@ $modul = [
     'pemasangan'   => ['Pemasangan',       'bi-tools',                  dash_n($pasang), 'S41 terpasang',          dash_n($gudang) . ' belum terpasang',    3],
     'penggunaan'   => ['Penggunaan',       'bi-people',                 dash_n($dil),    'pelanggan DIL aktif',    dash_n($lunas) . ' pelunasan bulan ini', 4],
     'pemeliharaan' => ['Pemeliharaan',     'bi-wrench-adjustable',      dash_n($pml),    'pemeliharaan bulan ini', dash_n($rusak) . ' relay rusak',         5],
+<<<<<<< HEAD
+    'penghapusan'  => ['Penghapusan',      'bi-trash3',                 dash_n($hapus),  'S41 dihapus bulan ini',  dash_n($hapus_belum_order) . ' FPK belum diorder, ' . dash_n($hapus_berjalan) . ' order berjalan', 6],
+=======
     'penghapusan'  => ['Penghapusan',      'bi-trash3',                 dash_n($pgh_terbuka), 'FPK penghapusan terbuka', dash_n($pgh_selesai) . ' alat dibongkar bulan ini', 6],
+>>>>>>> 443c3d3414f3e53252f3429a7010c359fa13c550
     'master'       => ['Master Data',      'bi-database',               'Kelola',        'unit, pengguna, modem',  'data acuan aplikasi',                   0],
     'laporan'      => ['Laporan',          'bi-file-earmark-bar-graph', 'Lihat',         'rekap & ekspor',         'seluruh modul',                         0],
 ];
@@ -152,6 +174,9 @@ $todo = array_filter([
     ['bi-person-x',             'DIL belum berisi nama pelanggan',   $dil_kosong, 'penggunaan'],
     ['bi-exclamation-triangle', 'S41 dengan relay rusak',            $rusak,      'pemeliharaan'],
     ['bi-graph-up-arrow',       'Pelanggan prioritas sangat tinggi', $prio,       'perencanaan'],
+    // Penghapusan: TL mengurus FPK -> order, SF mengurus eksekusi order; peran lain (monitoring) melihat keduanya
+    ['bi-trash3',               'FPK penghapusan belum dibuatkan order', in_array($kode_hak, ['SF.UP', 'SF.AP'], true) ? 0 : $hapus_belum_order, 'penghapusan'],
+    ['bi-trash3',               'Order penghapusan menunggu eksekusi',   in_array($kode_hak, ['TL.UP', 'TL.AP'], true) ? 0 : $hapus_berjalan,    'penghapusan'],
 ], fn($t) => (int)$t[2] > 0);
 $hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 $bln  = [1=>'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -213,7 +238,11 @@ $salam = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 
   <div class="row g-3 mb-4">
     <?php foreach ($modul as $key => $m):
         if ($izin !== null && !isset($izin[$key])) continue;
+<<<<<<< HEAD
+        $off = false;   // semua modul Tahap 1-6 sudah tersedia
+=======
         $off = false;
+>>>>>>> 443c3d3414f3e53252f3429a7010c359fa13c550
         $ikon = ($izin[$key]['icon'] ?? '') ?: $m[1];   // ikon dari menu DB, cadangan = bawaan dashboard
         $judul = ($izin[$key]['nama'] ?? '') ?: $m[0]; ?>
     <div class="col-xl-3 col-md-6"><div class="box mod <?= $off ? 'off' : '' ?>">
