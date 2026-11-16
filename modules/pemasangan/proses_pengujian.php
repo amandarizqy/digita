@@ -66,6 +66,31 @@ try {
             $val('catatan')
         ]);
 
+        $noref = trim($_POST['noref']);
+        if(empty($noref)) throw new Exception("Nomor Referensi Alat (NoRef) wajib dipilih!");
+
+        $stmt->execute([
+            $no_form, $noref, $val('simid'), $val('imei_modem'),
+            $val('set_admin'), $val('list_admin'), $val('del_admin'), $val('reset_admin'),
+            $val('cek_phasa'), $val('lampu_awal'), $val('detik_status_awal'), $val('jawab_status_awal'), $val('isi_status_awal'),
+            $val('detik_plnoff'), $val('jawab_plnoff'), $val('durasi_jawab_off'), $val('lampu_off'), $val('detik_status_off'), $val('jawab_status_off'), $val('isi_status_off'),
+            $val('detik_plnon'), $val('jawab_plnon'), $val('durasi_jawab_on'), $val('lampu_on'), $val('detik_status_on'), $val('jawab_status_on'), $val('isi_status_on'),
+            $val('catatan')
+        ]);
+
+        // PERBAIKAN 4: Ganti Status Data Master ke TIDAK AKTIF jika dipilih Tidak Layak
+        $status_alat = trim($_POST['status_alat'] ?? 'LAYAK');
+        $status_sim  = trim($_POST['status_sim'] ?? 'LAYAK');
+
+        if ($status_alat === 'TIDAK LAYAK') {
+            $conn->prepare("UPDATE master_barang SET StatusData = 'TIDAK AKTIF' WHERE NoRef = ?")->execute([$noref]);
+        }
+        
+        $sim_id_input = $val('simid');
+        if ($status_sim === 'TIDAK LAYAK' && !empty($sim_id_input)) {
+            $conn->prepare("UPDATE master_nomor SET StatusData = 'TIDAK AKTIF' WHERE SimId = ?")->execute([$sim_id_input]);
+        }
+
         $conn->commit();
         header("Location: ../../index.php?page=pemasangan&menu=pra_eksekusi&sub=pengujian&view=detail&no_form=" . urlencode($no_form) . "&active_tab=" . urlencode($noref) . "&alert=saved");
         exit;

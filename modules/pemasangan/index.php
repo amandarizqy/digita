@@ -151,11 +151,28 @@ if ($menu === 'pra_eksekusi' && $sub === 'pengujian') {
         $stmt_detil->execute([$no_form]);
         $items = $stmt_detil->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt_alat = $conn->prepare("SELECT NoRef FROM master_barang WHERE StatusData = 'AKTIF' AND (IdPel IS NULL OR IdPel = '') $filter_up ORDER BY NoRef ASC");
+        // PERBAIKAN 1: Filter NoRef agar yang tampil HANYA alat yang BELUM diuji
+        $sql_alat = "SELECT mb.NoRef 
+                     FROM master_barang mb 
+                     LEFT JOIN formulir_pengujian_detil fd ON mb.NoRef = fd.NoRef 
+                     WHERE mb.StatusData = 'AKTIF' 
+                       AND (mb.IdPel IS NULL OR mb.IdPel = '') 
+                       AND fd.NoRef IS NULL $filter_up 
+                     ORDER BY mb.NoRef ASC LIMIT 300";
+        $stmt_alat = $conn->prepare($sql_alat);
         $stmt_alat->execute();
         $list_alat = $stmt_alat->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt_sim = $conn->prepare("SELECT SimId, NomorAkun FROM master_nomor WHERE StatusData = 'AKTIF' $filter_kode_up ORDER BY SimId ASC");
+        // PERBAIKAN 2: Filter SIM Card agar yang tampil HANYA SIM yang BELUM dipakai/diuji
+        $sql_sim = "SELECT n.SimId, n.NomorAkun 
+                    FROM master_nomor n 
+                    LEFT JOIN formulir_pengujian_detil fd ON n.SimId = fd.SimId 
+                    LEFT JOIN master_barang mb ON n.SimId = mb.SimId 
+                    WHERE n.StatusData = 'AKTIF' 
+                      AND fd.SimId IS NULL 
+                      AND mb.SimId IS NULL $filter_kode_up 
+                    ORDER BY n.SimId ASC LIMIT 300";
+        $stmt_sim = $conn->prepare($sql_sim);
         $stmt_sim->execute();
         $list_sim = $stmt_sim->fetchAll(PDO::FETCH_ASSOC);
         

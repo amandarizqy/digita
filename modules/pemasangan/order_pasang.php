@@ -240,8 +240,8 @@ if ($view === 'daftar') {
 </div>
 
 <?php
-// Ambil list order untuk dropdown Modal Cetak
-$sql_orders = "SELECT NoFormOrder, TglOrder FROM frm_order WHERE StatusData = 'AKTIF'";
+// Ambil list order untuk dropdown Modal Cetak (baik status TIDAK maupun AKTIF)
+$sql_orders = "SELECT NoFormOrder, TglOrder FROM frm_order WHERE 1=1";
 if (!$is_sa && !empty($unit_up)) $sql_orders .= " AND UnitUp = '$unit_up'";
 $sql_orders .= " ORDER BY WaktuData DESC LIMIT 100";
 $list_orders = $conn->query($sql_orders)->fetchAll(PDO::FETCH_ASSOC);

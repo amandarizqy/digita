@@ -7,14 +7,55 @@ if (!in_array($_SESSION['KodeHak'] ?? '', ['SF.UP', 'SA.KP'])) {
     die("<!DOCTYPE html><html><head><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body><script>Swal.fire({icon:'error', title:'Akses Ditolak', text:'Anda tidak memiliki wewenang.'}).then(()=>{window.history.back();});</script></body></html>");
 }
 
+$action    = $_GET['action'] ?? $_POST['action'] ?? '';
 $unit_up   = $_SESSION['UnitUp'] ?? '';
 $unit_ap   = $_SESSION['UnitAp'] ?? '';
 $unit_upi  = $_SESSION['UnitUpi'] ?? '';
 $nama_akun = $_SESSION['NamaAkun'] ?? 'System';
 
 try {
+    // 1. FINALISASI MUTASI PASANG (Ubah StatusData frm_order dari 'TIDAK' menjadi 'AKTIF')
+    if ($action === 'finalisasi_order' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $no_form_order = trim($_POST['no_form_order'] ?? '');
+        if (empty($no_form_order)) {
+            throw new Exception("Nomor Form Order tidak valid.");
+        }
+
+        $stmt_fin = $conn->prepare("UPDATE frm_order SET StatusData = 'AKTIF' WHERE NoFormOrder = ?");
+        $stmt_fin->execute([$no_form_order]);
+
+        echo "<!DOCTYPE html>
+        <html>
+        <head><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head>
+        <body>
+            <script>
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Finalisasi Berhasil!',
+                    text: 'Seluruh Berita Acara pada Order {$no_form_order} telah dikunci dan tidak dapat diubah lagi.',
+                    confirmButtonColor: '#0d6efd',
+                    timer: 1800,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.href = '../../index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang&view=daftar';
+                });
+            </script>
+        </body>
+        </html>";
+        exit;
+    }
+
+    // 2. SIMPAN / EDIT BERITA ACARA PEMASANGAN
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_form_order = trim($_POST['no_form_order']);
+
+        // Validasi Kunci: Tolak perubahan jika Order sudah difinalisasi ('AKTIF')
+        $stmt_cek_lock = $conn->prepare("SELECT StatusData FROM frm_order WHERE NoFormOrder = ?");
+        $stmt_cek_lock->execute([$no_form_order]);
+        if ($stmt_cek_lock->fetchColumn() === 'AKTIF') {
+            throw new Exception("Order ini sudah difinalisasi. Data Berita Acara terkunci dan tidak dapat diubah lagi.");
+        }
+
         $no_ref        = trim($_POST['no_ref']);
         $id_pel        = trim($_POST['id_pel']);
         $sim_id        = trim($_POST['sim_id']);
