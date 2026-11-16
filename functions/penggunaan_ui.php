@@ -76,7 +76,9 @@ function pg_menu(): array
                 'monitor_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'monitor_isi_pulsa' => ['Isi Pulsa', 'bi-phone'],
                 'monitor_perintah_s41'  => ['Perintah', 'bi-terminal'],
-
+                'monitor_ami'       => ['AMI', 'bi-robot'],
+                'monitor_amr'       => ['AMR', 'bi-person-gear'],
+                'monitor_sdu'       => ['SDU', 'bi-person-gear'],
                 'monitor_status_barang' => ['Status Barang', 'bi-box-seam'],
             ],
         ],

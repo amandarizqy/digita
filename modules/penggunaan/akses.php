@@ -41,7 +41,9 @@ if (!function_exists('pga_matriks')) {
             'monitor_pelunasan' => $semua,   // Pelunasan
             'monitor_isi_pulsa' => $tanpa_vd,   // Isi Pulsa
             'monitor_perintah_s41'  => $tanpa_vd,   // Perintah
-
+            'monitor_ami'       => $semua,   // AMI
+            'monitor_amr'       => $semua,   // AMR
+            'monitor_sdu'       => $semua,   // SDU
             'monitor_status_barang' => $semua,  // Status Barang (SF.VD boleh)
         ];
     }

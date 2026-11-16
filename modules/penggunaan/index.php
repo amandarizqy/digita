@@ -53,7 +53,9 @@ switch ($action) {
     case 'monitor_pelunasan':  include __DIR__ . '/monitor_pelunasan.php'; break;
     case 'monitor_isi_pulsa':      include __DIR__ . '/monitor_isi_pulsa.php'; break;
     case 'monitor_perintah_s41':   include __DIR__ . '/monitor_perintah_s41.php'; break;
-
+    case'monitor_ami': include __DIR__ . '/monitor_ami.php'; break;
+    case'monitor_amr': include __DIR__ . '/monitor_amr.php'; break;
+    case'monitor_sdu': include __DIR__ . '/monitor_sdu.php'; break;
     case 'monitor_status_barang': include __DIR__ . '/monitor_status_barang.php'; break;
     default:
         include __DIR__ . '/' . ($menu_pertama ?: 'monitor_dil') . '.php';
