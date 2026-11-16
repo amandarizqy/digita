@@ -1,8 +1,9 @@
 <?php
 // modules/penggunaan/input_dil.php  -  Input DIL (tabel `dil`)
 // Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorMeter
-//            | Aktifasi | ProdukPrabayar | IndexPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
-// Fitur: tambah manual (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
+//            | ProdukPrabayar | Aktifasi | JenisShuntrip | Kuadran | SkalaPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
+//            (Kuadran & SkalaPrioritas diisi modul Perencanaan; NamaAkun, StatusData, WaktuData otomatis.)
+// Fitur: tambah manual lewat pop-up form bertab (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
 // Import: baris Excel dimasukkan ke tabel penampung `transit_dil`, dipindahkan ke `dil`, lalu transit_dil dikosongkan lagi.
 // Daftar, pencarian, edit, dan aktif/nonaktif ada di Monitoring > DIL (monitor_dil.php).
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
@@ -10,6 +11,7 @@ require_once __DIR__ . '/../../functions/xlsx_reader.php';
 $pesan_sukses  = '';
 $pesan_error   = '';
 $detail_import = [];   // rincian baris yang dilewati saat import
+$form_lama     = [];   // isian form tambah yang gagal disimpan (agar pop-up terbuka lagi dengan isian terakhir)
 
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['pg_csrf'];
@@ -32,10 +34,14 @@ const DIL_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
                        'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
+/** Nilai ENUM dil.JenisShuntrip. */
+const JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU'];
+
 /** Judul kolom Excel (huruf besar, tanpa spasi/simbol) => kolom dil. */
 const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
-    'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter',
+    'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
+   
     'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
 
@@ -53,6 +59,7 @@ if (!empty($_SESSION['pg_flash'])) {
     $pesan_sukses  = $fl['sukses'] ?? '';
     $pesan_error   = $fl['error'] ?? '';
     $detail_import = $fl['detail'] ?? [];
+    $form_lama     = $fl['form_lama'] ?? [];
 }
 
 // ---------------------------------------------------------
@@ -74,6 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $daya_mentah = trim((string) ($_POST['daya'] ?? ''));
         $teg   = strtoupper($t('tegukur', 2));
         $kdp   = strtoupper($t('kdpembmeter', 1));
+        $shuntrip = strtoupper($t('jenisshuntrip', 10));
+        $upi_akun = mb_substr(trim((string) ($_SESSION['UnitUpi'] ?? '')), 0, 2);   // Unit UPI terkunci = UPI akun yang login
         if (!preg_match('/^[A-Za-z0-9]{12}$/', $idpel)) {
             $pesan_error = 'IdPel harus 12 karakter (huruf/angka).';
         } elseif ($nama === '' || mb_strlen(trim((string) ($_POST['nama'] ?? ''))) > 50) {
@@ -82,23 +91,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Daya harus berupa angka bulat (VA).';
         } elseif ($teg !== '' && !in_array($teg, ['TR', 'TM', 'TT'], true)) {
             $pesan_error = 'Tegangan ukur harus TR, TM, atau TT.';
+        } elseif ($upi_akun === '') {
+            $pesan_error = 'Akun Anda belum memiliki Unit UPI, sehingga pelanggan tidak dapat ditambahkan. Hubungi administrator.';
+        } elseif ($shuntrip !== '' && !in_array($shuntrip, JENIS_SHUNTRIP, true)) {
+            $pesan_error = 'Jenis shuntrip harus salah satu dari: ' . implode(', ', JENIS_SHUNTRIP) . '.';
         } else {
             try {
-                $st = $conn->prepare("INSERT INTO dil (IdPel, Nama, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorMeter,
-                                                       Aktifasi, ProdukPrabayar, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', NOW())");
-                $st->execute([
+                // JenisShuntrip hanya disertakan bila dipilih (kosong = nilai bawaan database)
+                $kolom = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter', 'NomorMeter',
+                          'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
+                $nilai = [
                     $idpel, $nama, $t('alamat', 100), $t('jenismk', 10), $t('nomortlp', 20), $t('nomorhp', 20),
                     strtoupper($t('goltar', 5)), $daya_mentah === '' ? 0 : (int) $daya_mentah, $teg === '' ? null : $teg, $kdp,
                     $t('nomormeter', 15), $t('aktifasi', 15), $t('produkprabayar', 50),
                     mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20),
-                    $t('unitup', 5), $t('unitap', 5), $t('unitupi', 2),
-                ]);
+                    $t('unitup', 5), $t('unitap', 5), $upi_akun,
+                ];
+                if ($shuntrip !== '') { $kolom[] = 'JenisShuntrip'; $nilai[] = $shuntrip; }
+                $st = $conn->prepare("INSERT INTO dil (" . implode(', ', $kolom) . ", StatusData, WaktuData) VALUES ("
+                                   . implode(', ', array_fill(0, count($kolom), '?')) . ", 'AKTIF', NOW())");
+                $st->execute($nilai);
                 $pesan_sukses = 'Pelanggan <strong>' . pg_e($idpel) . '</strong> berhasil ditambahkan (status AKTIF).';
             } catch (PDOException $e) {
                 $pesan_error = $e->getCode() === '23000'
                     ? 'IdPel <strong>' . pg_e($idpel) . '</strong> sudah terdaftar di DIL.'
                     : 'Gagal menyimpan: ' . pg_e($e->getMessage());
+            }
+        }
+        if ($pesan_error !== '') {   // simpan isian terakhir supaya pop-up terbuka lagi dengan data yang sama
+            foreach (['idpel', 'nama', 'alamat', 'jenismk', 'nomortlp', 'nomorhp', 'goltar', 'daya', 'tegukur', 'kdpembmeter', 'nomormeter',
+                      'aktifasi', 'produkprabayar', 'jenisshuntrip', 'unitupi', 'unitap', 'unitup'] as $k) {
+                $form_lama[$k] = mb_substr(trim((string) ($_POST[$k] ?? '')), 0, 100);
             }
         }
 
@@ -174,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $idpel, $nama, $g('Alamat', 100), $g('JenisMk', 10), $g('NomorTlp', 20), $g('NomorHp', 20),
                         $g('GolTar', 5), (int) round((float) str_replace(',', '.', $g('Daya', 15))),
                         in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-                        $g('KdPembMeter', 1), $g('Nomormeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
+                        $g('KdPembMeter', 1), $g('NomorMeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
                         $akun, $g('UnitUp', 5), $g('UnitAp', 5), $g('UnitUpi', 2),
                     ];
                     if (count($batch) >= 500) { $kirim($batch); $batch = []; }
@@ -207,24 +230,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Post-Redirect-Get supaya refresh tidak mengirim ulang form
     if (!headers_sent()) {
-        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'detail' => $detail_import];
+        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'detail' => $detail_import, 'form_lama' => $form_lama];
         header('Location: ' . pg_url('input_dil'));
         exit;
     }
 }
 
-// ---------------------------------------------------------
-// RINGKASAN (daftar lengkap ada di Monitoring > DIL)
-// ---------------------------------------------------------
-$kpi = ['total' => 0, 'AKTIF' => 0, 'TIDAK' => 0];
-try {
-    foreach ($conn->query("SELECT StatusData, COUNT(*) c FROM dil GROUP BY StatusData")->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (isset($kpi[$r['StatusData']])) $kpi[$r['StatusData']] = (int) $r['c'];
-        $kpi['total'] += (int) $r['c'];
-    }
-} catch (PDOException $e) {
-    $pesan_error = trim($pesan_error . ' Gagal memuat ringkasan DIL: ' . pg_e($e->getMessage()));
-}
+// // ---------------------------------------------------------
+// // RINGKASAN (daftar lengkap ada di Monitoring > DIL)
+// // ---------------------------------------------------------
+// $kpi = ['total' => 0, 'AKTIF' => 0, 'TIDAK' => 0];
+// try {
+//     foreach ($conn->query("SELECT StatusData, COUNT(*) c FROM dil GROUP BY StatusData")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+//         if (isset($kpi[$r['StatusData']])) $kpi[$r['StatusData']] = (int) $r['c'];
+//         $kpi['total'] += (int) $r['c'];
+//     }
+// } catch (PDOException $e) {
+//     $pesan_error = trim($pesan_error . ' Gagal memuat ringkasan DIL: ' . pg_e($e->getMessage()));
+// }
 
 // nilai awal unit pada form tambah = unit akun yang login
 $unit_awal = ['UnitUpi' => (string) ($_SESSION['UnitUpi'] ?? ''), 'UnitAp' => (string) ($_SESSION['UnitAp'] ?? ''), 'UnitUp' => (string) ($_SESSION['UnitUp'] ?? '')];

@@ -30,7 +30,7 @@ if ($tahun === '') {
 <?php endif; ?>
 
 <!-- RINGKASAN -->
-<div class="row g-3 mb-4">
+<!-- <div class="row g-3 mb-4">
     <?php foreach ([
         ['Pelunasan Tercatat', pg_n($ringkas['lunas']), 'text-dark'],
         ['Total Tagihan Lunas', 'Rp ' . pg_n($ringkas['rp_tag']), 'text-success'],
@@ -44,7 +44,7 @@ if ($tahun === '') {
         </div>
     </div>
     <?php endforeach; ?>
-</div>
+</div> -->
 
 <!-- DAFTAR -->
 <div class="card border-0 shadow-sm rounded-4">

@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/input_perintah.php  -  Input Perintah (kirim manual ke perangkat lewat SMS Gateway)
-// Sumber (tab) : 'putus' = tabel trx_order_putus, 'nyala' = tabel trx_order_nyala (tiket otomatis dari trigger saldo / pelunasan),
+// Sumber (tab) : 'putus' = tabel trx_order_putus_s41, 'nyala' = tabel trx_order_nyala_s41 (tiket otomatis dari trigger saldo / pelunasan),
 //                'barang' = VIEW `vw_terpasang` (perangkat manual, tanpa tiket). Semua dibatasi wilayah akun (kode unit session, pg_scope()).
 //                Nomor tujuan = NomorBarang (pada tiket / view). Tabel tiket HANYA DIBACA; status tiket diubah oleh trigger.
 // Perintah  : pilihan tetap di bawah (PLNOFF, PLNON, PLNSTATUS); TIDAK lagi dari tabel baku_outbox.
@@ -16,8 +16,8 @@ $maks_kirim   = 50;      // batas perangkat per sekali kirim
 $sumber_barang = 'vw_terpasang';
 $db_gateway    = 'smsd';
 $tiket_cfg = [   // sumber tiket: tabel, kolom kunci, label, perintah yang disarankan
-    'putus' => ['tabel' => 'trx_order_putus', 'pk' => 'TiketPutus', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus'],
-    'nyala' => ['tabel' => 'trx_order_nyala', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala'],
+    'putus' => ['tabel' => 'trx_order_putus_s41', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus_s41'],
+    'nyala' => ['tabel' => 'trx_order_nyala_s41', 'pk' => 'TiketNyala', 'label' => 'Tiket Nyala', 'saran' => 'PLNON', 'ta' => 'trx_tindakan_nyala_s41'],
 ];
 $sumber = (string) ($_POST['sumber'] ?? $_GET['sumber'] ?? 'putus');
 if (!isset($tiket_cfg[$sumber]) && $sumber !== 'barang') $sumber = 'putus';
@@ -81,7 +81,7 @@ if (!function_exists('pr_nomor')) {
 $keyword = trim($_GET['keyword'] ?? '');
 $relay   = in_array($_GET['relay'] ?? '', ['ON', 'OFF'], true) ? $_GET['relay'] : '';
 $status  = in_array($_GET['status'] ?? 'AKTIF', ['AKTIF', 'TIDAK', 'SEMUA'], true) ? ($_GET['status'] ?? 'AKTIF') : 'AKTIF';   // status tiket (default AKTIF)
-// status tindakan (trx_tindakan_putus / trx_tindakan_nyala): BELUM = tiket macet (belum ada tindakan), default BELUM
+// status tindakan (trx_tindakan_putus_s41 / trx_tindakan_nyala_s41): BELUM = tiket macet (belum ada tindakan), default BELUM
 $tindakan = in_array($_GET['tindakan'] ?? 'BELUM', ['BELUM', 'SUDAH', 'SEMUA'], true) ? ($_GET['tindakan'] ?? 'BELUM') : 'BELUM';
 $limit   = (int) ($_GET['limit'] ?? 25);
 if (!in_array($limit, [10, 25, 50, 100], true)) $limit = 25;
@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!headers_sent()) {
         $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error];
-        header('Location: ' . pg_url('input_perintah', [
+        header('Location: ' . pg_url('input_perintah_s41', [
             'sumber' => $sumber === 'putus' ? '' : $sumber, 'status' => ($_POST['f_status'] ?? 'AKTIF') === 'AKTIF' ? '' : ($_POST['f_status'] ?? ''),
             'tindakan' => ($_POST['f_tindakan'] ?? 'BELUM') === 'BELUM' ? '' : ($_POST['f_tindakan'] ?? ''),
             'keyword' => $_POST['f_keyword'] ?? '', 'relay' => $_POST['f_relay'] ?? '',
@@ -219,7 +219,7 @@ if ($unit_siap) {
                 $w[] = "(t.$pk LIKE :k1 OR t.IdPel LIKE :k2 OR t.NomorBarang LIKE :k3 OR l.Nama LIKE :k4)";
                 foreach (['k1', 'k2', 'k3', 'k4'] as $k) $p[":$k"] = '%' . $keyword . '%';
             }
-            $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala n ON n.TiketPutus = t.TiketPutus" : '') . " WHERE " . implode(' AND ', $w);
+            $from = "FROM `$tb` t LEFT JOIN `{$c['ta']}` a ON a.$pk = t.$pk LEFT JOIN dil l ON l.IdPel = t.IdPel" . ($sumber === 'putus' ? " LEFT JOIN trx_order_nyala_s41 n ON n.TiketPutusS41 = t.TiketPutusS41" : '') . " WHERE " . implode(' AND ', $w);
 
             $st = $conn->prepare("SELECT COUNT(DISTINCT t.$pk) $from");
             $st->execute($p);
@@ -241,6 +241,6 @@ if ($unit_siap) {
     }
 }
 
-$boleh_monitor = pga_boleh('monitor_perintah');
+$boleh_monitor = pga_boleh('monitor_perintah_s41');
 
-include __DIR__ . '/../../templates/penggunaan/input_perintah.php';
+include __DIR__ . '/../../templates/penggunaan/input_perintah_s41.php';

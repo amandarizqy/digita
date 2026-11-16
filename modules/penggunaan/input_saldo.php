@@ -344,6 +344,6 @@ if ($unit_lengkap) {
 }
 
 // tombol ke monitoring hanya bila akun berhak membukanya
-$boleh_monitor = pga_boleh('monitor_saldo');
+$boleh_monitor = false;   // menu Monitoring Saldo sudah tidak ada (lihat pg_menu()), jadi tombolnya disembunyikan
 
 include __DIR__ . '/../../templates/penggunaan/input_saldo.php';

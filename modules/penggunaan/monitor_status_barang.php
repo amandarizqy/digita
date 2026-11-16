@@ -1,7 +1,7 @@
 <?php
 // modules/penggunaan/monitor_status_barang.php  -  Monitoring Status Barang (hanya baca)
 // Menjawab per barang (tabel master_barang): apakah TERPASANG (IdPel terisi) atau BELUM, apakah AKTIF atau NONAKTIF (StatusData,
-// diubah trigger saat tiket terbit), status relay ON/OFF, apakah punya TIKET AKTIF (trx_order_putus / trx_order_nyala), dan apakah sedang
+// diubah trigger saat tiket terbit), status relay ON/OFF, apakah punya TIKET AKTIF (trx_order_putus_s41 / trx_order_nyala_s41), dan apakah sedang
 // MENGIRIM PESAN (antrean sms_outbox) beserta balasan terakhir (sms_inbox).
 // Wilayah : kode unit session (pg_scope()); akun tanpa AP / UP memilih Unit AP dahulu (pg_filter_unit()). Barang tanpa kode unit tidak tampil.
 // Penautan: barang -> tiket lewat IdPel + NomorBarang (dari view vw_terpasang); barang -> SMS lewat 9 digit terakhir NomorBarang.
@@ -65,8 +65,8 @@ if (!$unit_siap) {
         [$ringkas['total'], $ringkas['pasang'], $ringkas['aktif']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
 
         // barang punya tiket AKTIF (putus atau nyala) -> kondisi dipakai juga sebagai filter "proses"
-        $ada_tiket = "(EXISTS (SELECT 1 FROM trx_order_putus tp WHERE tp.StatusData = 'AKTIF' AND tp.IdPel = b.IdPel AND tp.NomorBarang = v.NomorBarang)
-                       OR EXISTS (SELECT 1 FROM trx_order_nyala tn WHERE tn.StatusData = 'AKTIF' AND tn.IdPel = b.IdPel AND tn.NomorBarang = v.NomorBarang))";
+        $ada_tiket = "(EXISTS (SELECT 1 FROM trx_order_putus_s41 tp WHERE tp.StatusData = 'AKTIF' AND tp.IdPel = b.IdPel AND tp.NomorBarang = v.NomorBarang)
+                       OR EXISTS (SELECT 1 FROM trx_order_nyala_s41 tn WHERE tn.StatusData = 'AKTIF' AND tn.IdPel = b.IdPel AND tn.NomorBarang = v.NomorBarang))";
         $st = $conn->prepare("SELECT COUNT(DISTINCT b.NoRef) FROM master_barang b INNER JOIN `$sumber_barang` v ON v.NoRef = b.NoRef WHERE $scope AND $ada_tiket");
         $st->execute($p);
         $ringkas['tiket'] = (int) $st->fetchColumn();
@@ -112,7 +112,7 @@ if (!$unit_siap) {
         if ($nomor) {
             $ph = implode(',', array_fill(0, count($nomor), '?'));
             $tk = ['putus' => [], 'nyala' => []];
-            foreach (['putus' => ['trx_order_putus', 'TiketPutus'], 'nyala' => ['trx_order_nyala', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
+            foreach (['putus' => ['trx_order_putus_s41', 'TiketPutus'], 'nyala' => ['trx_order_nyala_s41', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
                 $st = $conn->prepare("SELECT NomorBarang, $pkt AS Tiket, JenisTiket, WaktuData FROM $tb WHERE StatusData = 'AKTIF' AND NomorBarang IN ($ph) ORDER BY WaktuData DESC");
                 $st->execute($nomor);
                 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) if (!isset($tk[$jenis][$r['NomorBarang']])) $tk[$jenis][$r['NomorBarang']] = $r;   // terbaru per nomor

@@ -53,17 +53,17 @@ if (!$unit_siap) {
             $periode = $tahun . $bulan_f;                    // awalan ThBlRek: YYYY atau YYYYMM
             $like    = $periode . '%';
 
-            // ---- ringkasan (tahun/bulan terpilih, wilayah akun) ----
+            // // ---- ringkasan (tahun/bulan terpilih, wilayah akun) ----
             $p = [':per' => $like]; $scope = pg_scope($u, 'p', 'Unit', $p);
-            $st = $conn->prepare("SELECT COUNT(*), COALESCE(SUM(p.RpTag),0), COALESCE(SUM(p.RpBK),0) FROM pelunasan_ap2t p WHERE p.ThBlRek LIKE :per AND $scope");
-            $st->execute($p);
-            [$ringkas['lunas'], $ringkas['rp_tag'], $ringkas['rp_bk']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
+            // $st = $conn->prepare("SELECT COUNT(*), COALESCE(SUM(p.RpTag),0), COALESCE(SUM(p.RpBK),0) FROM pelunasan_ap2t p WHERE p.ThBlRek LIKE :per AND $scope");
+            // $st->execute($p);
+            // [$ringkas['lunas'], $ringkas['rp_tag'], $ringkas['rp_bk']] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
 
-            $pd = [':per' => $like]; $scope_d = pg_scope($u, 'd', 'Unit', $pd);
-            $st = $conn->prepare("SELECT COUNT(*) FROM dpp d LEFT JOIN pelunasan_ap2t p ON p.IdPel = d.IdPel AND p.ThBlRek = d.ThBlRek
-                                  WHERE d.ThBlRek LIKE :per AND p.IdPel IS NULL AND $scope_d");
-            $st->execute($pd);
-            $ringkas['belum'] = (int) $st->fetchColumn();
+            // $pd = [':per' => $like]; $scope_d = pg_scope($u, 'd', 'Unit', $pd);
+            // $st = $conn->prepare("SELECT COUNT(*) FROM dpp d LEFT JOIN pelunasan_ap2t p ON p.IdPel = d.IdPel AND p.ThBlRek = d.ThBlRek
+            //                       WHERE d.ThBlRek LIKE :per AND p.IdPel IS NULL AND $scope_d");
+            // $st->execute($pd);
+            // $ringkas['belum'] = (int) $st->fetchColumn();
 
             // ---- daftar ----
             $w = ['p.ThBlRek LIKE :per', $scope]; $p2 = $p;

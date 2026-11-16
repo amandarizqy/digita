@@ -13,6 +13,7 @@ if (!ph_akses_mutasi()) {
 }
 
 $sub_ini   = 'mutasi_pemeliharaan';
+$url_cetak_pk = BASE_URL . '/modules/pemeliharaan/cetak_pk.php';
 $nama_akun = substr(trim((string) ($_SESSION['NamaAkun'] ?? '')), 0, 20);
 
 /** Membaca isian satu sisi formulir ($s = 'bongkar' | 'pasang'). */
@@ -183,8 +184,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
         foreach ($lepas as $ref) {
             $conn->prepare('UPDATE master_barang SET IdPel = NULL WHERE NoRef = ? AND IdPel = ?')->execute([$ref, $pk['IdPel']]);
         }
-        $conn->prepare("UPDATE master_barang SET IdPel = ? WHERE NoRef = ? AND (IdPel IS NULL OR IdPel = '' OR IdPel = ?)")
-             ->execute([$pk['IdPel'], $ref_final, $pk['IdPel']]);
+        $diganti = ($ref_final !== $ref_bongkar);
+        if ($diganti) {
+            // Penggantian SIM ID / IMEI modem: IdPel pindah ke No Ref baru beserta SIM ID dan IMEI barunya, status tetap AKTIF.
+            $conn->prepare("UPDATE master_barang SET IdPel = ?, SimId = ?, ImeiModem = ?, StatusData = 'AKTIF'
+                            WHERE NoRef = ? AND (IdPel IS NULL OR IdPel = '' OR IdPel = ?)")
+                 ->execute([$pk['IdPel'], $dev_ps['SimId'], $dev_ps['ImeiModem'], $ref_final, $pk['IdPel']]);
+        } else {
+            $conn->prepare("UPDATE master_barang SET IdPel = ? WHERE NoRef = ? AND (IdPel IS NULL OR IdPel = '' OR IdPel = ?)")
+                 ->execute([$pk['IdPel'], $ref_final, $pk['IdPel']]);
+        }
+
+        // Alat lama yang digantikan otomatis masuk ke modul Penghapusan (FPK BERHENTI) setelah BA pemeliharaan SELESAI.
+        // Bila BA dikembalikan ke PENDING / tidak jadi diganti, antrean otomatis yang belum diorderkan dibatalkan.
+        $info_antri = '';
+        if ($diganti && $status === 'AKTIF') {
+            $no_fpk_hapus = ph_antri_penghapusan($conn, $pk, $dev_bk, $no_fpk, $nama_akun);
+            if ($no_fpk_hapus !== null) {
+                $info_antri = " Alat lama $ref_bongkar masuk ke Penghapusan (FPK $no_fpk_hapus).";
+            }
+        } else {
+            ph_batal_antri_penghapusan($conn, $ref_bongkar, $no_fpk);
+        }
 
         $conn->prepare('UPDATE frm_ba SET StatusData = ?, NamaAkun = ?, WaktuData = NOW() WHERE NoFba = ?')
              ->execute([$status, $nama_akun, $no_fba]);
@@ -192,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
              ->execute([$status, $no_fpk]);
 
         $conn->commit();
-        ph_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan.");
+        ph_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan." . $info_antri);
     } catch (Throwable $e) {
         if ($conn->inTransaction()) $conn->rollBack();
         error_log('pemeliharaan eksekusi: ' . $e->getMessage());
@@ -329,6 +350,8 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                             <td><?= $ada_ba ? ph_badge_status($row['StatusBa']) : '<span class="badge bg-primary-subtle text-primary">BELUM</span>' ?></td>
                             <td class="text-end pe-4 text-nowrap">
                                 <div class="btn-group btn-group-sm">
+                                    <a href="<?= ph_e($url_cetak_pk . '?no_fpk=' . urlencode($row['NoFpk'])) ?>" target="_blank" rel="noopener"
+                                       class="btn btn-outline-secondary py-1 px-2" title="Cetak Perintah Kerja (PK)"><i class="bi bi-printer-fill"></i></a>
                                     <button type="button"
                                             class="btn <?= $ada_ba ? 'btn-outline-primary' : 'btn-primary' ?> py-1 px-2 btn-eksekusi"
                                             title="<?= $ada_ba ? 'Ubah Berita Acara' : 'Eksekusi Pekerjaan' ?>"
@@ -482,6 +505,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                     </div>
                 </div>
                 <div class="modal-footer border-top p-3 justify-content-end gap-2 bg-light">
+                    <a href="#" target="_blank" rel="noopener" id="eks_cetak_pk" class="btn btn-outline-secondary rounded-3 px-4 me-auto"><i class="bi bi-printer-fill me-1"></i>Cetak PK</a>
                     <button type="button" class="btn btn-outline-secondary rounded-3 px-4" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary fw-bold rounded-3 px-4">Simpan Berita Acara</button>
                 </div>
@@ -549,6 +573,7 @@ document.addEventListener("DOMContentLoaded", function () {
             var d = JSON.parse(this.dataset.row);
             cur = d;
             el("eks_nofpk").value = d.nofpk;
+            el("eks_cetak_pk").href = <?= json_encode($url_cetak_pk) ?> + "?no_fpk=" + encodeURIComponent(d.nofpk);
             teks("eks_t_order", d.order); teks("eks_t_nofpk", d.nofpk); teks("eks_t_idpel", d.idpel);
             teks("eks_t_nofba", d.nofba || "(otomatis)");
 

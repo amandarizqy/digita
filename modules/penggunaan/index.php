@@ -29,19 +29,31 @@ if ($action === '' || !pga_boleh($action)) {
 }
 
 switch ($action) {
-    // INPUT
+    // S41
     case 'input_dil':          include __DIR__ . '/input_dil.php'; break;
     case 'input_saldo':        include __DIR__ . '/input_saldo.php'; break;
     case 'input_pelunasan':    include __DIR__ . '/input_pelunasan.php'; break;
-    case 'isi_pulsa':          include __DIR__ . '/isi_pulsa.php'; break;
     case 'upload_tul':         include __DIR__ . '/upload_tul.php'; break;
-    case 'input_perintah':     include __DIR__ . '/input_perintah.php'; break;
+    case 'shuntrip':           include __DIR__ . '/shuntrip.php'; break;
+    // KARTU
+    case 'isi_pulsa':          include __DIR__ . '/isi_pulsa.php'; break;
+    case 'input_perintah_s41':     include __DIR__ . '/input_perintah_s41.php'; break;
+    // AMI
+    case 'pemutusan_ami':      include __DIR__ . '/pemutusan_ami.php'; break;
+    case 'penyalaan_ami':      include __DIR__ . '/penyalaan_ami.php'; break;
+    // AMR  
+    case 'pemutusan_amr':      include __DIR__ . '/pemutusan_amr.php'; break;   
+    case 'penyalaan_amr':      include __DIR__ . '/penyalaan_amr.php'; break;
+    // SDU
+    case 'pemutusan_sdu':      include __DIR__ . '/pemutusan_sdu.php'; break;
+    case 'penyalaan_sdu':      include __DIR__ . '/penyalaan_sdu.php'; break;
     // MONITORING
     case 'monitor_dil':        include __DIR__ . '/monitor_dil.php'; break;
+    case 'monitor_tul':        include __DIR__ . '/monitor_tul.php'; break;
     case 'monitor_pelunasan':  include __DIR__ . '/monitor_pelunasan.php'; break;
     case 'monitor_isi_pulsa':      include __DIR__ . '/monitor_isi_pulsa.php'; break;
-    case 'monitor_tul':        include __DIR__ . '/monitor_tul.php'; break;
-    case 'monitor_perintah':   include __DIR__ . '/monitor_perintah.php'; break;
+    case 'monitor_perintah_s41':   include __DIR__ . '/monitor_perintah_s41.php'; break;
+
     case 'monitor_status_barang': include __DIR__ . '/monitor_status_barang.php'; break;
     default:
         include __DIR__ . '/' . ($menu_pertama ?: 'monitor_dil') . '.php';

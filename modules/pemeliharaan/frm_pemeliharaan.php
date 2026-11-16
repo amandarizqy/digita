@@ -123,6 +123,7 @@ $data_pk = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 $list_pelanggan = [];
 $list_pk_bebas  = [];
+$list_orders    = [];
 $list_alat_baru = [];
 
 try {
@@ -178,6 +179,14 @@ try {
                           ORDER BY p.TglFpk DESC, p.NoFpk DESC LIMIT 200");
     $st->execute($sp);
     $list_pk_bebas = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    // Daftar order untuk pilihan "Cetak Order" (100 order terbaru di unit pengguna)
+    [$sc, $sp] = ph_scope('o');
+    $st = $conn->prepare("SELECT o.NoFormOrder, o.TglOrder FROM frm_order o
+                          WHERE o.StatusData = 'AKTIF'" . $sc . "
+                          ORDER BY o.WaktuData DESC, o.NoFormOrder DESC LIMIT 100");
+    $st->execute($sp);
+    $list_orders = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('pemeliharaan frm_pemeliharaan: ' . $e->getMessage());
     $pesan_error = 'Gagal memuat data pemeliharaan dari database.' . (ph_role() === 'SA.KP' ? ' Detail: ' . $e->getMessage() : '');
@@ -251,13 +260,9 @@ try {
                                 <?php endif; ?>
                             </td>
                             <td class="text-end pe-4">
-                                <?php if (!empty($row['NoFormOrder'])): ?>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="<?= ph_e($url_cetak_order . '?no_order=' . urlencode($row['NoFormOrder'])) ?>" target="_blank" rel="noopener" class="btn btn-outline-primary py-1 px-2" title="Cetak Formulir Order Perintah Kerja"><i class="bi bi-printer-fill"></i></a>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-muted small">-</span>
-                                <?php endif; ?>
+                                <div class="d-flex justify-content-end align-items-center gap-1">
+                                    <a href="<?= ph_e(BASE_URL . '/modules/pemeliharaan/cetak_pk.php?no_fpk=' . urlencode($row['NoFpk'])) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary px-2 py-1" title="Cetak FPK"><i class="bi bi-printer-fill"></i></a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -267,6 +272,39 @@ try {
     </div>
     </div>
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
+</div>
+
+<!-- MODAL CETAK ORDER -->
+<div class="modal fade" id="modalCetakOrder" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="<?= ph_e($url_cetak_order) ?>" method="GET" target="_blank" class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="bi bi-printer me-2"></i>Cetak Order &amp; FPK</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Pilih Order Perintah Kerja</label>
+                    <select name="no_order" class="form-select" required>
+                        <option value="">-- Pilih Nomor Order --</option>
+                        <?php foreach ($list_orders as $ord): ?>
+                            <option value="<?= ph_e($ord['NoFormOrder']) ?>">
+                                <?= ph_e($ord['NoFormOrder']) ?> (Tgl: <?= !empty($ord['TglOrder']) ? ph_e(date('d/m/Y', strtotime($ord['TglOrder']))) : '-' ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (empty($list_orders)): ?>
+                        <div class="form-text text-danger">Belum ada order. Buat order terlebih dahulu.</div>
+                    <?php endif; ?>
+                </div>
+                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Sistem akan mencetak 1 halaman Formulir Order ditambah dengan semua halaman FPK yang tergabung di dalamnya.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-info text-white fw-bold px-4"><i class="bi bi-printer me-1"></i> Cetak Sekarang</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- MODAL 1: BUAT FPK -->

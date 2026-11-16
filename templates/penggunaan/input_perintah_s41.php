@@ -5,15 +5,15 @@
 //   $csrf, $u, $unit_siap, $maks_kirim, $boleh_monitor, $pesan_sukses, $pesan_error
 
 $tiket_mode = $sumber !== 'barang';
-$url_pr = fn(array $ubah = []) => pg_url('input_perintah', array_merge(
+$url_pr = fn(array $ubah = []) => pg_url('input_perintah_s41', array_merge(
     ['sumber' => $sumber === 'putus' ? '' : $sumber, 'status' => $status === 'AKTIF' ? '' : $status, 'keyword' => $keyword, 'relay' => $relay,
      'tindakan' => $tindakan === 'BELUM' ? '' : $tindakan, 'limit' => $limit == 25 ? '' : $limit], $ubah));
 
 echo pg_header([
     'title'    => 'Input Perintah',
     'subtitle' => 'Kirim perintah ke perangkat lewat SMS Gateway, dari tiket atau langsung dari perangkat. Wilayah: ' . $u['label'] . '.',
-    'action'   => 'input_perintah',
-    'buttons'  => $boleh_monitor ? [['label' => 'Monitoring Perintah', 'icon' => 'bi-display', 'href' => pg_url('monitor_perintah'),
+    'action'   => 'input_perintah_s41',
+    'buttons'  => $boleh_monitor ? [['label' => 'Monitoring Perintah', 'icon' => 'bi-display', 'href' => pg_url('monitor_perintah_s41'),
                                      'class' => 'btn btn-outline-primary btn-sm px-3 shadow-sm rounded-2 bg-white']] : [],
 ]);
 
@@ -32,7 +32,7 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
 <ul class="nav nav-tabs mb-3">
     <?php foreach ($tab as $k => [$lbl, $ic]): ?>
     <li class="nav-item"><a class="nav-link <?= $sumber === $k ? 'active fw-semibold' : 'text-secondary' ?>"
-        href="<?= pg_e(pg_url('input_perintah', ['sumber' => $k === 'putus' ? '' : $k])) ?>"><i class="bi <?= $ic ?> me-1"></i><?= $lbl ?></a></li>
+        href="<?= pg_e(pg_url('input_perintah_s41', ['sumber' => $k === 'putus' ? '' : $k])) ?>"><i class="bi <?= $ic ?> me-1"></i><?= $lbl ?></a></li>
     <?php endforeach; ?>
 </ul>
 
@@ -55,7 +55,7 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
     <div class="card-body p-4 pb-2">
         <!-- FILTER -->
         <form method="GET" action="" class="row g-2 align-items-center mb-3">
-            <?= pg_hidden('input_perintah', ['sumber' => $sumber === 'putus' ? '' : $sumber]) ?>
+            <?= pg_hidden('input_perintah_s41', ['sumber' => $sumber === 'putus' ? '' : $sumber]) ?>
             <div class="col-md-3">
                 <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm"
                        placeholder="<?= $tiket_mode ? 'Cari nomor tiket, IdPel, nomor barang, atau nama...' : 'Cari NoRef, nomor barang, IMEI, IdPel, atau nama...' ?>">
@@ -93,7 +93,7 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
             </div>
             <div class="col-md d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary px-3"><i class="bi bi-search me-1"></i>Cari</button>
-                <?php if ($keyword !== '' || $relay !== '' || $status !== 'AKTIF' || ($tiket_mode && $tindakan !== 'BELUM')): ?><a href="<?= pg_e(pg_url('input_perintah', ['sumber' => $sumber === 'putus' ? '' : $sumber])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
+                <?php if ($keyword !== '' || $relay !== '' || $status !== 'AKTIF' || ($tiket_mode && $tindakan !== 'BELUM')): ?><a href="<?= pg_e(pg_url('input_perintah_s41', ['sumber' => $sumber === 'putus' ? '' : $sumber])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
             </div>
         </form>
     </div>

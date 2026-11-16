@@ -2,7 +2,7 @@
 // modules/pengaturan/bot_handlers.php
 // Logika unggah per JenisBot, dipakai oleh bot_cron.php (CLI). Tidak memakai $_SESSION.
 // Aturan validasi & penyimpanan SAMA dengan halaman web-nya (lihat bot_jenis_daftar()['sumber']);
-// bedanya: wilayah tujuan & nama akun diambil dari baris pengaturan_bot, bukan dari akun yang login.
+// bedanya: wilayah tujuan diambil dari lokasi folder + baris bot_akses, nama akun = 'BOT_<IdBot>', bukan dari akun yang login.
 //
 // Setiap handler mengembalikan:
 //   ['status' => 'sukses'|'gagal'|'tidak_pasti', 'pesan' => string, 'tersimpan' => int, 'ditolak' => int, 'detail' => string[]]
@@ -10,6 +10,7 @@
 //   gagal       : file/isi ditolak permanen   -> file dipindah ke folder gagal (+ .txt alasan)
 //   tidak_pasti : gangguan sementara (DB putus, deadlock) -> file dibiarkan, dicoba lagi pada putaran berikutnya
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
+require_once __DIR__ . '/bot_helper.php';   // aturan folder & cakupan unit (satu sumber dengan bot.php & bot_cron.php)
 
 const BH_CHUNK = 500;
 
@@ -101,41 +102,19 @@ function bh_periode($v): ?int
     return preg_match('/^\d{4}$/', $v) && $v >= 1901 && $v <= 2155 ? (int) $v : null;
 }
 
-/** Nama akun pengunggah yang dicatat di kolom NamaAkun (maks 20): NamaAkun bot, cadangan KodeBot. */
+/** Nama akun pengunggah yang dicatat di kolom NamaAkun (maks 20): 'BOT_<IdBot>'. Tabel bot_akses tidak punya kolom NamaAkun/KodeBot. */
 function bh_akun(array $bot): string
 {
-    $n = trim((string) ($bot['NamaAkun'] ?? ''));
-    return mb_substr($n !== '' ? $n : (string) $bot['KodeBot'], 0, 20);
+    return mb_substr('BOT_' . (int) $bot['IdBot'], 0, 20);
 }
 
 // ============================================================
 // Wilayah
 // ============================================================
-/**
- * Peta unit yang boleh dipakai bot (hanya yang AKTIF dan di dalam wilayah bot).
- * @return array ['ap' => [KODE_BESAR => kodeAsli], 'up' => [KODE_BESAR => ['kode' => kodeAsli, 'ap' => kodeAp]]]
- */
+/** Peta unit yang boleh dipakai bot. Logika ada di bot_helper.php (bot_peta_unit) agar sama dengan cron & web. */
 function bh_peta_unit(PDO $conn, string $upi, string $ap = '', string $up = ''): array
 {
-    $peta = ['ap' => [], 'up' => []];
-    $sql = "SELECT UnitAp FROM master_ap WHERE UnitUpi = ? AND StatusData = 'AKTIF'";
-    $prm = [$upi];
-    if ($ap !== '') { $sql .= ' AND UnitAp = ?'; $prm[] = $ap; }
-    $st = $conn->prepare($sql);
-    $st->execute($prm);
-    $daftar_ap = array_map('strval', $st->fetchAll(PDO::FETCH_COLUMN));
-    foreach ($daftar_ap as $k) $peta['ap'][strtoupper(trim($k))] = trim($k);
-    if (!$daftar_ap) return $peta;
-
-    $sql = "SELECT UnitAp, UnitUp FROM master_up WHERE UnitAp IN (" . implode(',', array_fill(0, count($daftar_ap), '?')) . ") AND StatusData = 'AKTIF'";
-    $prm = $daftar_ap;
-    if ($up !== '') { $sql .= ' AND UnitUp = ?'; $prm[] = $up; }
-    $st = $conn->prepare($sql);
-    $st->execute($prm);
-    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $peta['up'][strtoupper(trim((string) $r['UnitUp']))] = ['kode' => trim((string) $r['UnitUp']), 'ap' => trim((string) $r['UnitAp'])];
-    }
-    return $peta;
+    return bot_peta_unit($conn, $upi, $ap, $up);
 }
 
 // ============================================================
@@ -157,7 +136,7 @@ function bh_hasil(string $status, string $pesan, int $tersimpan = 0, int $ditola
 
 /**
  * Proses satu file untuk satu bot.
- * @param string $ap,$up  wilayah tujuan dari lokasi folder ('' = tidak ditentukan; hanya boleh untuk DIL)
+ * @param string $ap,$up  wilayah tujuan dari lokasi folder ('' = tidak ditentukan; hanya boleh untuk DIL yang diletakkan langsung di Direktori Utama)
  */
 function bh_jalankan(PDO $conn, array $bot, string $jenis, string $file, string $ap, string $up): array
 {
@@ -198,7 +177,7 @@ function bh_jalankan(PDO $conn, array $bot, string $jenis, string $file, string 
 /** Wilayah tujuan wajib lengkap (AP + UP) untuk semua jenis kecuali DIL. */
 function bh_wajib_wilayah(string $ap, string $up): void
 {
-    if ($ap === '' || $up === '') throw new RuntimeException('Wilayah tujuan (Unit AP / Unit UP) belum ditentukan oleh lokasi folder.');
+    if ($ap === '' || $up === '') throw new RuntimeException('Wilayah tujuan (Unit AP / Unit UP) belum ditentukan oleh lokasi folder (bot level AP/UPI: taruh file di subfolder <KodeUP>).');
 }
 
 // ============================================================
@@ -316,7 +295,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $transit = array_values(array_diff($kolom, ['StatusData']));   // transit_dil tidak punya StatusData
     $header  = [
         'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
-        'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter',
+        'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',
         'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
     ];
     $norm_id = function ($v): string {
@@ -376,7 +355,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         $r_up  = $f_up  !== '' ? $f_up  : $up;
         $alasan = null;
         if (strcasecmp($r_upi, $upi) !== 0)                                   $alasan = "UnitUpi '$r_upi' di luar wilayah bot";
-        elseif ($r_ap === '' || $r_up === '')                                 $alasan = 'UnitAp/UnitUp kosong dan tidak bisa ditentukan dari folder (taruh file di folder <AP>/<UP>)';
+        elseif ($r_ap === '' || $r_up === '')                                 $alasan = 'UnitAp/UnitUp kosong di file dan tidak bisa ditentukan dari folder (isi kolom UNITAP/UNITUP, atau taruh file di subfolder <KodeUP>)';
         elseif (!isset($peta_unit['ap'][strtoupper($r_ap)]))                  $alasan = "UnitAp '$r_ap' tidak dikenal / di luar wilayah bot";
         elseif (!isset($peta_unit['up'][strtoupper($r_up)]))                  $alasan = "UnitUp '$r_up' tidak dikenal / di luar wilayah bot";
         else {
@@ -425,12 +404,14 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 
 // ============================================================
 // TUL -> tul_601   [penggunaan/upload_tul.php]  (IdPel tidak dicek ke master_barang)
+// Logika sama dengan halaman web; bedanya wilayah dari folder/bot dan NamaAkun memakai akun bot
+// (harus ada di master_pengguna karena foreign key, lihat bot_akun_riwayat() di bot_helper.php).
 // ============================================================
 function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
     bh_wajib_wilayah($ap, $up);
     $upi  = trim((string) $bot['UnitUpi']);
-    $akun = bh_akun($bot);
+    $akun = bot_akun_riwayat($conn);          // ?string: akun 'BOT' di master_pengguna, atau NULL bila belum ada
     $int_max = 2147483647;
 
     $wajib = [
@@ -519,8 +500,10 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
             }
         }
 
-        // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong. IdPel tidak dicek ke master_barang.
-        foreach (array_chunk($nama_dil, BH_CHUNK, true) as $paket) {
+        // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong,
+        //     dan hanya untuk IdPel yang benar-benar disimpan (sama dengan halaman web).
+        $nama_pakai = array_intersect_key($nama_dil, array_flip(array_map('strval', array_column($baris, 3))));
+        foreach (array_chunk($nama_pakai, BH_CHUNK, true) as $paket) {
             $case = $param = [];
             foreach ($paket as $idn => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $idn, $nm); }
             $in = implode(',', array_fill(0, count($paket), '?'));

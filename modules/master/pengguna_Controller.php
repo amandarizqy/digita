@@ -47,6 +47,43 @@ $url_kembali = 'index.php?page=master&sub=pengguna';
 // Daftar kode hak akses yang sah (whitelist)
 $role_valid = ['SA.KP', 'MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'];
 
+// Validasi pilihan unit: UnitAp & UnitUp harus ada di master (AKTIF) dan UnitUp harus milik UnitAp tsb.
+// Hak tingkat UP3 (.AP) wajib punya UnitAp; hak tingkat ULP (.UP) wajib punya UnitAp dan UnitUp.
+// Hak lain (UI, VD) boleh mengosongkan unit, tetapi kalau diisi tetap divalidasi.
+// Mengembalikan [unit_ap, unit_up, pesan_error]
+function pg_validasi_unit(PDO $conn, string $kode_hak, string $unit_ap, string $unit_up): array
+{
+    $unit_ap = trim($unit_ap);
+    $unit_up = trim($unit_up);
+    $akhiran = substr($kode_hak, -3);
+    $wajib_ap = in_array($akhiran, ['.AP', '.UP'], true);
+    $wajib_up = ($akhiran === '.UP');
+
+    if ($unit_ap === '') {
+        if ($wajib_ap) {
+            return [null, null, 'Unit UP3 wajib dipilih untuk hak akses ' . $kode_hak . '.'];
+        }
+        return [null, null, null];
+    }
+    $st = $conn->prepare("SELECT 1 FROM master_ap WHERE UnitAp = ? AND StatusData = 'AKTIF'");
+    $st->execute([$unit_ap]);
+    if (!$st->fetchColumn()) {
+        return [null, null, 'Unit UP3 yang dipilih tidak valid.'];
+    }
+    if ($unit_up === '') {
+        if ($wajib_up) {
+            return [null, null, 'Unit ULP wajib dipilih untuk hak akses ' . $kode_hak . '.'];
+        }
+        return [$unit_ap, null, null];
+    }
+    $st = $conn->prepare("SELECT 1 FROM master_up WHERE UnitUp = ? AND UnitAp = ? AND StatusData = 'AKTIF'");
+    $st->execute([$unit_up, $unit_ap]);
+    if (!$st->fetchColumn()) {
+        return [null, null, 'Unit ULP yang dipilih bukan milik UP3 tersebut.'];
+    }
+    return [$unit_ap, $unit_up, null];
+}
+
 // 3. Tambah Pengguna (POST - store)
 // Kode hak akses HANYA ditentukan di sini (saat akun dibuat) dan tidak bisa diubah lagi.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store') {
@@ -57,8 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
     $kata_kunci  = trim($_POST['KataKunci'] ?? '');
     $kode_hak    = (string) ($_POST['KodeHak'] ?? '');
     $unit_upi    = '56';
-    $unit_ap     = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : ($_SESSION['UnitAp'] ?? null);
-    $unit_up     = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : ($_SESSION['UnitUp'] ?? null);
     $status_data = (($_POST['StatusData'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
 
     if ($nama_akun === '' || $kata_kunci === '') {
@@ -79,6 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
     }
 
     try {
+        [$unit_ap, $unit_up, $err_unit] = pg_validasi_unit($conn, $kode_hak, (string) ($_POST['UnitAp'] ?? ''), (string) ($_POST['UnitUp'] ?? ''));
+        if ($err_unit !== null) {
+            ms_redirect($url_kembali, 'gagal', $err_unit);
+        }
         $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
         $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
@@ -118,12 +157,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         ms_redirect($url_kembali, 'gagal', 'Format alamat email tidak valid.');
     }
 
-    // Jika input UnitAp/UnitUp kosong, pertahankan nilai lama di DB
     $unit_upi = '56';
-    $unit_ap  = !empty($_POST['UnitAp']) ? $_POST['UnitAp'] : $old_data['UnitAp'];
-    $unit_up  = !empty($_POST['UnitUp']) ? $_POST['UnitUp'] : $old_data['UnitUp'];
 
     try {
+        // Unit dipilih dari dropdown; ULP harus milik UP3 yang dipilih
+        [$unit_ap, $unit_up, $err_unit] = pg_validasi_unit($conn, (string) $old_data['KodeHak'], (string) ($_POST['UnitAp'] ?? ''), (string) ($_POST['UnitUp'] ?? ''));
+        if ($err_unit !== null) {
+            ms_redirect($url_kembali, 'gagal', $err_unit);
+        }
         if ($kata_kunci !== '') {
             $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
             $conn->prepare("UPDATE master_pengguna SET AlamatEmail = ?, NamaPengguna = ?, NomorKontak = ?, KataKunci = ?, UnitUpi = ?, UnitAp = ?, UnitUp = ?, StatusData = ?, WaktuData = NOW() WHERE NamaAkun = ?")
@@ -195,6 +236,10 @@ foreach ($users as $pg) {
     if (($pg['StatusData'] ?? '') === 'AKTIF') $total_aktif++;
 }
 $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
+
+// Data pilihan unit untuk dropdown berantai (UP3 -> ULP)
+$daftar_ap = $conn->query("SELECT UnitAp, SingkatanNama, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
+$daftar_up = $conn->query("SELECT UnitUp, UnitAp, SingkatanNama, NamaUnit FROM master_up WHERE StatusData = 'AKTIF' ORDER BY UnitUp ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $page_title = "Master Pengguna - Digitas";
 

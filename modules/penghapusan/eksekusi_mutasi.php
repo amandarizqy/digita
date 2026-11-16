@@ -83,6 +83,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
         if (!$pk) throw new RuntimeException('FPK tidak ditemukan, belum diorderkan, atau di luar unit Anda.');
         if (empty($pk['B_NoRef'])) throw new RuntimeException('FPK ini belum memiliki data perangkat yang akan dibongkar.');
 
+        // BA yang sudah SELESAI berarti perangkat sudah dihapus permanen dari database, jadi tidak bisa diubah lagi.
+        $st = $conn->prepare("SELECT StatusData FROM frm_ba WHERE NoFpk = ? AND JenisPekerjaan = 'BONGKAR' LIMIT 1");
+        $st->execute([$no_fpk]);
+        if ((string) $st->fetchColumn() === 'AKTIF') {
+            throw new RuntimeException('BA ini sudah SELESAI dan perangkat sudah dihapus dari database, sehingga tidak dapat diubah lagi.');
+        }
+
         $st = $conn->prepare('SELECT NoRef, SimId, ImeiModem, IdPel, StatusData FROM master_barang WHERE NoRef = ?');
         $st->execute([$pk['B_NoRef']]);
         $dev = $st->fetch(PDO::FETCH_ASSOC);
@@ -111,13 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
         // Detil BA: hanya sisi BONGKAR
         ek_simpan_bongkar($conn, $no_fba, $dev, $kontak, $bk);
 
-        // Master barang mengikuti status BA (aman diulang saat Ubah BA).
-        // Pasang-kembali HANYA bila BA sebelumnya sudah SELESAI (alat sudah dilepas). BA yang baru disimpan sebagai
-        // PENDING tidak boleh menyentuh master_barang.StatusData, karena kolom itu juga diubah trigger tiket (putus/nyala).
+        // BA SELESAI: perangkat lama dihapus permanen dari master_barang (SIM ID / IMEI / No Ref lama hilang dari master).
+        // BA PENDING tidak menyentuh master_barang, karena StatusData juga diubah trigger tiket (putus/nyala).
         if ($status === 'AKTIF') {
-            pgh_lepas_barang($conn, (string) $dev['NoRef'], (string) $pk['IdPel']);
-        } elseif ($status_lama === 'AKTIF') {
-            pgh_pasang_kembali_barang($conn, (string) $dev['NoRef'], (string) $pk['IdPel']);
+            pgh_hapus_barang($conn, (string) $dev['NoRef'], (string) $pk['IdPel']);
         }
 
         $conn->prepare('UPDATE frm_ba SET StatusData = ?, NamaAkun = ?, WaktuData = NOW() WHERE NoFba = ?')
@@ -126,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
              ->execute([$status, $no_fpk]);
 
         $conn->commit();
-        pgh_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan" . ($status === 'AKTIF' ? ' dan alat telah dilepas dari pelanggan.' : ' (status pending).'));
+        pgh_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan" . ($status === 'AKTIF' ? ' dan perangkat ' . $dev['NoRef'] . ' telah dihapus dari database.' : ' (status pending).'));
     } catch (Throwable $e) {
         if ($conn->inTransaction()) $conn->rollBack();
         error_log('penghapusan eksekusi: ' . $e->getMessage());
@@ -242,11 +246,15 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                             <td><?= pgh_badge_relay($row['BLampu'] ?? '') ?></td>
                             <td><?= $ada_ba ? pgh_badge_status($row['StatusBa']) : '<span class="badge bg-primary-subtle text-primary">BELUM</span>' ?></td>
                             <td class="text-end pe-4">
+                                <?php if ($ada_ba && ($row['StatusBa'] ?? '') === 'AKTIF'): ?>
+                                    <span class="badge bg-success-subtle text-success" title="Perangkat sudah dihapus dari database; BA dikunci."><i class="bi bi-lock-fill me-1"></i>SELESAI</span>
+                                <?php else: ?>
                                 <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-3 py-1 fw-bold btn-eksekusi"
                                         data-row="<?= pgh_e(json_encode($js, JSON_UNESCAPED_UNICODE)) ?>"
                                         data-status="<?= pgh_e($row['StatusBa'] ?? 'TIDAK') ?>">
                                     <i class="bi bi-tools me-1"></i> <?= $ada_ba ? 'Ubah BA' : 'Eksekusi' ?>
                                 </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -5,14 +5,14 @@
 //   $batas_sms, $u, $unit_siap, $boleh_input, $pesan_error
 
 $tiket = $tab === 'putus' || $tab === 'nyala';
-$url_mp = fn(array $ubah = []) => pg_url('monitor_perintah', array_merge(
+$url_mp = fn(array $ubah = []) => pg_url('monitor_perintah_s41', array_merge(
     ['tab' => $tab === 'putus' ? '' : $tab, 'status' => $status, 'keyword' => $keyword, 'limit' => $limit == 25 ? '' : $limit], $ubah));
 
 echo pg_header([
     'title'    => 'Monitoring Perintah',
     'subtitle' => 'Tiket putus dan nyala, serta SMS perintah keluar dan balasan perangkat. Wilayah: ' . $u['label'] . '.',
-    'action'   => 'monitor_perintah',
-    'buttons'  => $boleh_input ? [['label' => 'Input Perintah', 'icon' => 'bi-plus-lg', 'href' => pg_url('input_perintah')]] : [],
+    'action'   => 'monitor_perintah_s41',
+    'buttons'  => $boleh_input ? [['label' => 'Input Perintah', 'icon' => 'bi-plus-lg', 'href' => pg_url('input_perintah_s41')]] : [],
 ]);
 
 if (!empty($pesan_error)) echo pg_alert('danger', $pesan_error);
@@ -23,7 +23,7 @@ $daftar_tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala',
 <ul class="nav nav-tabs mb-3">
     <?php foreach ($daftar_tab as $k => [$lbl, $ic]): ?>
     <li class="nav-item"><a class="nav-link <?= $tab === $k ? 'active fw-semibold' : 'text-secondary' ?>"
-        href="<?= pg_e(pg_url('monitor_perintah', ['tab' => $k === 'putus' ? '' : $k])) ?>"><i class="bi <?= $ic ?> me-1"></i><?= $lbl ?></a></li>
+        href="<?= pg_e(pg_url('monitor_perintah_s41', ['tab' => $k === 'putus' ? '' : $k])) ?>"><i class="bi <?= $ic ?> me-1"></i><?= $lbl ?></a></li>
     <?php endforeach; ?>
 </ul>
 
@@ -46,7 +46,7 @@ $daftar_tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala',
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4 pb-2">
         <form method="GET" action="" class="row g-2 align-items-center mb-3">
-            <?= pg_hidden('monitor_perintah', ['tab' => $tab === 'putus' ? '' : $tab]) ?>
+            <?= pg_hidden('monitor_perintah_s41', ['tab' => $tab === 'putus' ? '' : $tab]) ?>
             <div class="col-md-5">
                 <input type="text" name="keyword" value="<?= pg_e($keyword) ?>" class="form-control form-control-sm"
                        placeholder="<?= $tiket ? 'Cari nomor tiket, IdPel, nomor barang, atau nama...' : 'Cari nomor, isi pesan, tiket, IdPel, atau nama...' ?>">
@@ -74,7 +74,7 @@ $daftar_tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala',
             </div>
             <div class="col-md-3 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary px-3"><i class="bi bi-search me-1"></i>Cari</button>
-                <?php if ($keyword !== '' || $status !== ''): ?><a href="<?= pg_e(pg_url('monitor_perintah', ['tab' => $tab === 'putus' ? '' : $tab])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
+                <?php if ($keyword !== '' || $status !== ''): ?><a href="<?= pg_e(pg_url('monitor_perintah_s41', ['tab' => $tab === 'putus' ? '' : $tab])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
             </div>
         </form>
     </div>

@@ -22,7 +22,7 @@ if (!$unit_siap) return;
 
 <?php if ($u['ap'] === '' || $u['up'] === ''): ?>
 <!-- FILTER UNIT (akun tanpa AP / UP di session) -->
-<div class="card border-0 shadow-sm rounded-4 mb-4">
+<div class="card border-0 shadow-sm rounded-4 mb-4 d-flex flex-column">
     <div class="card-body p-4">
         <h6 class="fw-bold mb-3"><span class="badge <?= $perlu_filter ? 'bg-primary' : 'bg-success' ?> rounded-circle me-2"><?= $perlu_filter ? '1' : '✓' ?></span>Filter Unit
             <span class="fw-normal text-muted small">(pilih dahulu untuk menampilkan data)</span></h6>
