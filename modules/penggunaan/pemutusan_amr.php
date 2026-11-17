@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sesi === '') {
                 $pesan_error = 'Tidak ada sesi aktif untuk dihapus.';
             } else {
-                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = '' WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = NULL WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
                                       AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
                 $st->execute([':sesi' => $sesi]);
                 $dilepas = $st->rowCount();

@@ -7,7 +7,7 @@
 //     ... session_destroy();
 //
 // Efeknya sama dengan tombol "Hapus Sesi" di tiap halaman: tiket sesi yang belum selesai (AKTIF, belum ditindak)
-// dilepas kembali ke antrean (Sesi dikosongkan). Tiket yang sudah ditindak tetap menyimpan Sesi-nya sebagai riwayat.
+// dilepas kembali ke antrean (Sesi diisi NULL). Tiket yang sudah ditindak tetap menyimpan Sesi-nya sebagai riwayat.
 
 /**
  * @return int jumlah tiket yang dilepas ke antrean (dari semua halaman).
@@ -30,7 +30,7 @@ function pg_lepas_sesi_tiket(PDO $conn): int
         $sesi  = (string) ($_SESSION[$kunci] ?? '');
         if ($sesi === '') continue;
         try {
-            $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = '' WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+            $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = NULL WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
                                   AND NOT EXISTS (SELECT 1 FROM `$tindakan` x WHERE x.`$pk` = t.`$pk`)");
             $st->execute([':sesi' => $sesi]);
             $dilepas += $st->rowCount();
