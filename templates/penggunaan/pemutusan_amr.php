@@ -39,6 +39,8 @@ if ($ada) {
     $rincian[] = ['Periode', $periode];
     $rincian[] = ['No. Meter', $meter];
     $rincian[] = ['No. HP', $hp];
+    $rincian[] = ['Skala Prioritas', trim((string) ($row['SkalaPrioritas'] ?? ''))];
+    $rincian[] = ['Peringkat', trim((string) ($row['Peringkat'] ?? ''))];
     $rincian[] = ['Dibuat', (string) $row['WaktuData']];
 }
 ?>
