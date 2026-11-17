@@ -34,7 +34,6 @@ switch ($action) {
     case 'input_survey':       include __DIR__ . '/input_survey.php'; break;
     case 'proses_risiko':      include __DIR__ . '/proses_risiko.php'; break;
     case 'proses_prioritas':   include __DIR__ . '/proses_prioritas.php'; break;
-    case 'data_riwayat':       include __DIR__ . '/data_riwayat.php'; break;
     case 'hasil_kepentingan':  include __DIR__ . '/hasil_kepentingan.php'; break;
     case 'hasil_survey':       include __DIR__ . '/hasil_survey.php'; break;
     case 'hasil_risiko':       include __DIR__ . '/hasil_risiko.php'; break;

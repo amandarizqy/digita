@@ -7,7 +7,6 @@ echo pr_header([
     'title'    => 'Unggah Riwayat Pelunasan',
     'subtitle' => 'Unggah file Excel (.xlsx)',
     'action'   => 'upload_riwayat',
-    'buttons'  => [['label' => 'Lihat Data Riwayat', 'icon' => 'bi-clock-history', 'href' => pr_url('data_riwayat'), 'class' => 'btn btn-outline-primary btn-sm px-3 rounded-2']],
 ]);
 
 if ($pesan_sukses) echo pr_alert('success', pr_e($pesan_sukses) . ' <a href="' . pr_e(pr_url('data_riwayat')) . '" class="alert-link">Lihat datanya &rarr;</a>');
