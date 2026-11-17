@@ -44,6 +44,14 @@ $sub    = $_GET['filter'] ?? 'semua';
 $action = $_GET['action'] ?? 'index';
 $url_kembali = 'index.php?page=master&sub=pengguna';
 
+// Tab "Sub Entitas" asal form (ui/up3/ulp/vendor) -> akhiran kode hak yang diizinkan.
+// Dipakai agar form tambah di tab tertentu hanya menerima hak tingkat itu, dan setelah simpan kembali ke tab yang sama.
+$filter_valid = ['ui' => '.UI', 'up3' => '.AP', 'ulp' => '.UP', 'vendor' => '.VD'];
+$filter_post  = (string) ($_POST['filter'] ?? '');
+if (isset($filter_valid[$filter_post])) {
+    $url_kembali .= '&filter=' . $filter_post;
+}
+
 // Daftar kode hak akses yang sah (whitelist)
 $role_valid = ['SA.KP', 'MB.UI', 'AM.UI', 'AM.AP', 'ML.UP', 'TL.AP', 'TL.UP', 'SF.UI', 'SF.AP', 'SF.UP', 'SF.VD'];
 
@@ -56,6 +64,16 @@ function pg_validasi_unit(PDO $conn, string $kode_hak, string $unit_ap, string $
     $unit_ap = trim($unit_ap);
     $unit_up = trim($unit_up);
     $akhiran = substr($kode_hak, -3);
+
+    // Form tingkat ULP hanya mengirim ULP: UP3 diturunkan otomatis dari ULP tsb.
+    if ($unit_ap === '' && $unit_up !== '') {
+        $st = $conn->prepare("SELECT UnitAp FROM master_up WHERE UnitUp = ? AND StatusData = 'AKTIF'");
+        $st->execute([$unit_up]);
+        $unit_ap = (string) $st->fetchColumn();
+        if ($unit_ap === '') {
+            return [null, null, 'Unit ULP yang dipilih tidak valid.'];
+        }
+    }
     $wajib_ap = in_array($akhiran, ['.AP', '.UP'], true);
     $wajib_up = ($akhiran === '.UP');
 
@@ -84,6 +102,30 @@ function pg_validasi_unit(PDO $conn, string $kode_hak, string $unit_ap, string $
     return [$unit_ap, $unit_up, null];
 }
 
+// Validasi UID (UnitUpi). Hanya akun vendor (.VD) yang boleh memilih UID; hak lain tetap '56' seperti semula.
+// Kalau UP3 ikut dipilih, UP3 itu harus milik UID tersebut.
+// Mengembalikan [unit_upi, pesan_error]
+function pg_validasi_upi(PDO $conn, string $kode_hak, string $unit_upi, ?string $unit_ap): array
+{
+    $unit_upi = trim($unit_upi);
+    if (substr($kode_hak, -3) !== '.VD' || $unit_upi === '') {
+        return ['56', null];
+    }
+    $st = $conn->prepare("SELECT 1 FROM master_upi WHERE UnitUpi = ? AND StatusData = 'AKTIF'");
+    $st->execute([$unit_upi]);
+    if (!$st->fetchColumn()) {
+        return [null, 'UID yang dipilih tidak valid.'];
+    }
+    if ($unit_ap !== null && $unit_ap !== '') {
+        $st = $conn->prepare("SELECT 1 FROM master_ap WHERE UnitAp = ? AND UnitUpi = ?");
+        $st->execute([$unit_ap, $unit_upi]);
+        if (!$st->fetchColumn()) {
+            return [null, 'UP3 yang dipilih bukan milik UID tersebut.'];
+        }
+    }
+    return [$unit_upi, null];
+}
+
 // 3. Tambah Pengguna (POST - store)
 // Kode hak akses HANYA ditentukan di sini (saat akun dibuat) dan tidak bisa diubah lagi.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store') {
@@ -93,7 +135,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
     $kontak      = trim($_POST['NomorKontak'] ?? '');
     $kata_kunci  = trim($_POST['KataKunci'] ?? '');
     $kode_hak    = (string) ($_POST['KodeHak'] ?? '');
-    $unit_upi    = '56';
     $status_data = (($_POST['StatusData'] ?? 'AKTIF') === 'TIDAK') ? 'TIDAK' : 'AKTIF';
 
     if ($nama_akun === '' || $kata_kunci === '') {
@@ -108,6 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
     if (!in_array($kode_hak, $role_valid, true)) {
         ms_redirect($url_kembali, 'gagal', 'Kode hak akses tidak valid.');
     }
+    // Form dibuka dari tab tingkat tertentu: hak akses harus sesuai tingkat tab itu
+    if (isset($filter_valid[$filter_post]) && substr($kode_hak, -3) !== $filter_valid[$filter_post]) {
+        ms_redirect($url_kembali, 'gagal', 'Kode hak akses tidak sesuai dengan tab tingkat yang sedang dibuka.');
+    }
     // Proteksi privilege escalation: hanya SA.KP yang boleh membuat akun SA.KP
     if ($kode_hak === 'SA.KP' && $user_role !== 'SA.KP') {
         ms_redirect($url_kembali, 'gagal', 'Anda tidak memiliki wewenang untuk membuat akun Super Admin (SA.KP).');
@@ -117,6 +162,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
         [$unit_ap, $unit_up, $err_unit] = pg_validasi_unit($conn, $kode_hak, (string) ($_POST['UnitAp'] ?? ''), (string) ($_POST['UnitUp'] ?? ''));
         if ($err_unit !== null) {
             ms_redirect($url_kembali, 'gagal', $err_unit);
+        }
+        [$unit_upi, $err_upi] = pg_validasi_upi($conn, $kode_hak, (string) ($_POST['UnitUpi'] ?? ''), $unit_ap);
+        if ($err_upi !== null) {
+            ms_redirect($url_kembali, 'gagal', $err_upi);
         }
         $hash_kunci = password_hash($kata_kunci, PASSWORD_DEFAULT);
         $conn->prepare("INSERT INTO master_pengguna (NamaAkun, AlamatEmail, NamaPengguna, NomorKontak, KataKunci, KodeHak, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData)
@@ -157,7 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         ms_redirect($url_kembali, 'gagal', 'Format alamat email tidak valid.');
     }
 
-    $unit_upi = '56';
+    // UID akun dipertahankan (akun vendor bisa punya UID pilihan); default '56'
+    $unit_upi = ($old_data['UnitUpi'] ?? '') !== '' ? $old_data['UnitUpi'] : '56';
 
     try {
         // Unit dipilih dari dropdown; ULP harus milik UP3 yang dipilih
@@ -238,8 +288,10 @@ foreach ($users as $pg) {
 $persentase_aktif = ($total_akun > 0) ? round(($total_aktif / $total_akun) * 100) : 0;
 
 // Data pilihan unit untuk dropdown berantai (UP3 -> ULP)
-$daftar_ap = $conn->query("SELECT UnitAp, SingkatanNama, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
+$daftar_ap = $conn->query("SELECT UnitAp, UnitUpi, SingkatanNama, NamaUnit FROM master_ap WHERE StatusData = 'AKTIF' ORDER BY UnitAp ASC")->fetchAll(PDO::FETCH_ASSOC);
 $daftar_up = $conn->query("SELECT UnitUp, UnitAp, SingkatanNama, NamaUnit FROM master_up WHERE StatusData = 'AKTIF' ORDER BY UnitUp ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+$daftar_upi = $conn->query("SELECT UnitUpi, SingkatanNama, NamaUnit FROM master_upi WHERE StatusData = 'AKTIF' ORDER BY UnitUpi ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $page_title = "Master Pengguna - Digitas";
 
