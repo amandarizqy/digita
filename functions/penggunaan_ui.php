@@ -42,7 +42,7 @@ function pg_menu(): array
                 'input_saldo'     => ['Saldo Tunggakan', 'bi-wallet2'],
                 'input_pelunasan' => ['Pelunasan', 'bi-cash-coin'],
                 'upload_tul'      => ['Upload TUL', 'bi-type'],
-                'shuntrip'        => ['Shuntrip', 'bi-truck'],
+                // 'shuntrip'        => ['Shuntrip', 'bi-truck'],
             ],
         ],
         'S41' => [

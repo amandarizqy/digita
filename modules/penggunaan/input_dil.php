@@ -33,17 +33,17 @@ if (!function_exists('pg_norm_idpel')) {
 
 /** Kolom tabel dil yang diisi dari Excel (urutan = urutan INSERT). */
 const DIL_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                   'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
+                   'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
 
 /** transit_dil tidak punya StatusData: kolomnya sama dengan dil tanpa StatusData. StatusData (AKTIF) diberikan saat pindah ke dil. */
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
+                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
 /** Kolom dil yang boleh diperbarui lewat menu Update DIL: kolom => label. */
-const UPDATE_KOLOM = ['NomorMeter' => 'Nomor Meter', 'SkalaPrioritas' => 'Skala Prioritas', 'Peringkat' => 'Peringkat'];
+const UPDATE_KOLOM = ['NomorMeter' => 'Nomor Meter', 'SkalaPrioritas' => 'Skala Prioritas', 'Peringkat' => 'Peringkat', 'JenisShuntrip' => 'Jenis Shuntrip'];
 
 /** Judul kolom Excel (huruf besar, tanpa spasi/simbol) untuk Update DIL => kolom dil. Excel PLN masih menulis NOMORKWH. */
-const UPDATE_HEADER = ['NOMORMETER' => 'NomorMeter', 'NOMORKWH' => 'NomorMeter', 'SKALAPRIORITAS' => 'SkalaPrioritas', 'SKALA' => 'SkalaPrioritas', 'PERINGKAT' => 'Peringkat'];
+const UPDATE_HEADER = ['NOMORMETER' => 'NomorMeter', 'NOMORKWH' => 'NomorMeter', 'SKALAPRIORITAS' => 'SkalaPrioritas', 'SKALA' => 'SkalaPrioritas', 'PERINGKAT' => 'Peringkat', 'JENISSHUNTRIP' => 'JenisShuntrip'];
 
 /** Nilai ENUM dil.JenisShuntrip. */
 const JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU'];
@@ -53,7 +53,7 @@ const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
     'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
    
-    'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
+    'AKTIFASI' => 'Aktifasi','JenisShuntrip' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
 
 /** Rapikan teks sel: buang spasi ganda/tepi (Excel PLN sering berisi ' ') lalu potong sesuai panjang kolom. */

@@ -25,7 +25,7 @@ if (!function_exists('pga_matriks')) {
             'input_saldo'       => $input,      // Saldo Tunggakan
             'input_pelunasan'   => $input,      // Pelunasan
             'upload_tul'        => $input,      // Upload TUL
-            'shuntrip'          => $input,      // SHUN Trip
+            // 'shuntrip'          => $input,      // SHUN Trip
             // AMI
             'pemutusan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Pemutusan AMI
             'penyalaan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Penyalaan AMI
