@@ -1,7 +1,8 @@
 <?php
 // templates/penggunaan/input_dil.php  -  Input DIL
 // Variabel dari modules/penggunaan/input_dil.php:
-//   $csrf, $unit_awal, $form_lama, $boleh_monitor, $pesan_sukses, $pesan_error, $detail_import, konstanta JENIS_SHUNTRIP
+//   $csrf, $unit_awal, $form_lama, $boleh_monitor, $pesan_sukses, $pesan_error, $pesan_info, $detail_import, $ud_meta, $form_update, $buka_modal,
+//   konstanta JENIS_SHUNTRIP, UPDATE_KOLOM
 // Form tambah pelanggan tampil sebagai pop-up bertab (Identitas -> Layanan & Meter -> Unit), jadi tidak perlu scroll halaman.
 
 $lama = $form_lama ?? [];   // isian terakhir bila penyimpanan gagal -> pop-up dibuka lagi otomatis
@@ -24,6 +25,7 @@ echo pg_header([
 ]);
 
 if (!empty($pesan_sukses)) echo pg_alert('success', $pesan_sukses);
+if (!empty($pesan_info))   echo pg_alert('info', $pesan_info);
 if (!empty($pesan_error))  echo pg_alert('danger', $pesan_error);
 if (!empty($detail_import)) {
     echo '<div class="alert alert-warning border-0 shadow-sm rounded-3 small"><strong>Baris yang dilewati'
@@ -50,18 +52,34 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
 <!-- PINTASAN -->
 <div class="row g-3 mb-4">
     <div class="col-md-6">
-        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalTambahDil">
+        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 h-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalTambahDil">
             <div class="d-flex align-items-center gap-3">
-                <span class="rounded-circle bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center" style="width:52px;height:52px;"><i class="bi bi-person-plus fs-4"></i></span>
+                <span class="rounded-circle bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-person-plus fs-4"></i></span>
                 <span><span class="d-block fw-bold text-dark">Tambah Pelanggan</span><span class="small text-muted">Isi satu pelanggan lewat form pop-up (status otomatis AKTIF).</span></span>
             </div>
         </button>
     </div>
     <div class="col-md-6">
-        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalImportDil">
+        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 h-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalImportDil">
             <div class="d-flex align-items-center gap-3">
-                <span class="rounded-circle bg-success bg-opacity-10 text-success d-inline-flex align-items-center justify-content-center" style="width:52px;height:52px;"><i class="bi bi-file-earmark-excel fs-4"></i></span>
+                <span class="rounded-circle bg-success bg-opacity-10 text-success d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-file-earmark-excel fs-4"></i></span>
                 <span><span class="d-block fw-bold text-dark">Import Excel</span><span class="small text-muted">Muat banyak pelanggan sekaligus dari file Monitoring DIL Detail.</span></span>
+            </div>
+        </button>
+    </div>
+    <div class="col-md-6">
+        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 h-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalUpdateDil">
+            <div class="d-flex align-items-center gap-3">
+                <span class="rounded-circle bg-warning bg-opacity-10 text-warning d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-pencil-square fs-4"></i></span>
+                <span><span class="d-block fw-bold text-dark">Update DIL</span><span class="small text-muted">Perbarui Nomor Meter, Skala Prioritas, atau Peringkat satu IdPel.</span></span>
+            </div>
+        </button>
+    </div>
+    <div class="col-md-6">
+        <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 h-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalUpdateExcel">
+            <div class="d-flex align-items-center gap-3">
+                <span class="rounded-circle bg-info bg-opacity-10 text-info d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-file-earmark-arrow-up fs-4"></i></span>
+                <span><span class="d-block fw-bold text-dark">Update DIL via Excel</span><span class="small text-muted">Perbarui banyak IdPel sekaligus lewat file Excel.</span></span>
             </div>
         </button>
     </div>
@@ -168,6 +186,141 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
     </div>
 </div>
 
+<!-- POP-UP: UPDATE DIL (SATU IDPEL) -->
+<?php $fu = $form_update ?? []; ?>
+<div class="modal fade" id="modalUpdateDil" tabindex="-1" aria-labelledby="judulUpdateDil" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" class="modal-content border-0 shadow rounded-4">
+            <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
+            <input type="hidden" name="aksi" value="update_satu">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="judulUpdateDil"><i class="bi bi-pencil-square text-warning me-2"></i>Update Data DIL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="ud_kolom" class="form-label small fw-bold text-secondary text-uppercase">Kolom yang diperbarui *</label>
+                    <select class="form-select" id="ud_kolom" name="kolom" required>
+                        <option value="">- pilih kolom -</option>
+                        <?php foreach (UPDATE_KOLOM as $k => $lbl): $ada = !empty($ud_meta[$k]['ada']); ?>
+                        <option value="<?= pg_e($k) ?>" <?= !$ada ? 'disabled' : '' ?> <?= ($fu['kolom'] ?? '') === $k ? 'selected' : '' ?>><?= pg_e($lbl) ?><?= !$ada ? ' (belum ada di tabel dil)' : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="ud_idpel" class="form-label small fw-bold text-secondary text-uppercase">IdPel *</label>
+                    <input type="text" class="form-control font-monospace" id="ud_idpel" name="idpel" maxlength="12" minlength="12" pattern="[A-Za-z0-9]{12}"
+                           placeholder="12 karakter" value="<?= pg_e($fu['idpel'] ?? '') ?>" required autocomplete="off">
+                </div>
+                <div class="mb-2">
+                    <label for="ud_nilai" class="form-label small fw-bold text-secondary text-uppercase">Nilai baru *</label>
+                    <input type="text" class="form-control" id="ud_nilai" name="nilai" required disabled placeholder="Pilih kolom dulu">
+                    <select class="form-select d-none" id="ud_nilai_pil" name="nilai" required disabled></select>
+                    <div class="form-text" id="ud_hint">Pilih kolom untuk melihat format nilainya.</div>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="ud_lanjut" name="lanjut" value="1" <?= !empty($fu['lanjut']) ? 'checked' : '' ?>>
+                    <label class="form-check-label small" for="ud_lanjut">Tetap buka form setelah simpan (untuk IdPel berikutnya)</label>
+                </div>
+                <div class="small text-muted">Hanya IdPel yang sudah ada di DIL pada wilayah Anda yang bisa diperbarui; kolom lain tidak berubah.</div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-warning px-4"><i class="bi bi-save me-1"></i>Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- POP-UP: UPDATE DIL VIA EXCEL -->
+<div class="modal fade" id="modalUpdateExcel" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" enctype="multipart/form-data" class="modal-content border-0 shadow rounded-4">
+            <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
+            <input type="hidden" name="aksi" value="update_excel">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-arrow-up text-info me-2"></i>Update DIL via Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small fw-bold text-secondary text-uppercase mb-2">Kolom yang diperbarui</p>
+                <div class="d-flex flex-wrap gap-3 mb-3">
+                    <?php foreach (UPDATE_KOLOM as $k => $lbl): $ada = !empty($ud_meta[$k]['ada']); ?>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="kolom[]" id="ux_<?= pg_e($k) ?>" value="<?= pg_e($k) ?>" <?= $ada ? 'checked' : 'disabled' ?>>
+                        <label class="form-check-label small" for="ux_<?= pg_e($k) ?>"><?= pg_e($lbl) ?><?= !$ada ? ' <span class="text-muted">(belum ada di tabel)</span>' : '' ?></label>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 10 MB), sheet pertama. Baris judul dicari otomatis; urutan kolom bebas. Isi kolom <strong>IdPel</strong> dan kolom yang dicentang di atas:</p>
+                <table class="table table-sm table-bordered small text-center mb-3">
+                    <thead class="table-light"><tr><th>IdPel</th><th>NomorMeter</th><th>SkalaPrioritas</th><th>Peringkat</th></tr></thead>
+                    <tbody><tr><td>546100000119</td><td>123456789012345</td><td>5</td><td>12</td></tr></tbody>
+                </table>
+                <ul class="small text-muted ps-3">
+                    <li>Judul kolom Nomor Meter juga dikenali sebagai <code>NOMORKWH</code>.</li>
+                    <li>Hanya IdPel yang sudah ada di DIL pada wilayah Anda yang diperbarui; tidak ada pelanggan baru yang dibuat.</li>
+                    <li>Sel yang kosong = kolom itu tidak diubah. Nilai yang sama dengan data sekarang dilewati. Bila IdPel muncul dua kali, baris terakhir dipakai.</li>
+                    <li>Semua perubahan disimpan dalam satu transaksi; bila terjadi error, tidak ada data yang berubah.</li>
+                </ul>
+                <input type="file" name="file_update" class="form-control" accept=".xlsx" required>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-info text-white px-4"><i class="bi bi-upload me-1"></i>Upload &amp; Proses</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Pop-up Update DIL: bentuk isian nilai mengikuti kolom yang dipilih (teks / angka / pilihan) -->
+<script>
+(function () {
+    var meta = <?= json_encode($ud_meta ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    var kolom = document.getElementById('ud_kolom'), inp = document.getElementById('ud_nilai'), pil = document.getElementById('ud_nilai_pil'), hint = document.getElementById('ud_hint');
+    if (!kolom) return;
+    var awal = <?= json_encode((string) ($fu['nilai'] ?? '')) ?>;
+    function atur(isi) {
+        var m = meta[kolom.value];
+        inp.value = ''; inp.removeAttribute('min'); inp.removeAttribute('max'); inp.removeAttribute('maxlength'); inp.step = '';
+        if (!m || !m.ada) {
+            inp.type = 'text'; inp.disabled = true; inp.classList.remove('d-none'); pil.classList.add('d-none'); pil.disabled = true;
+            inp.placeholder = 'Pilih kolom dulu'; hint.textContent = 'Pilih kolom untuk melihat format nilainya.'; return;
+        }
+        if (m.tipe === 'pilihan') {
+            inp.classList.add('d-none'); inp.disabled = true; pil.classList.remove('d-none'); pil.disabled = false;
+            pil.innerHTML = '<option value="">- pilih -</option>' + m.pilihan.map(function (o) { return '<option value="' + o.replace(/"/g, '&quot;') + '">' + o + '</option>'; }).join('');
+            if (isi) pil.value = isi;
+            hint.textContent = 'Pilih salah satu nilai.';
+            return;
+        }
+        pil.classList.add('d-none'); pil.disabled = true; inp.classList.remove('d-none'); inp.disabled = false;
+        if (m.tipe === 'angka') {
+            inp.type = 'number'; inp.step = '1';
+            if (m.min !== null) inp.min = m.min; if (m.maksNilai !== null) inp.max = m.maksNilai;
+            inp.placeholder = 'Angka bulat'; hint.textContent = 'Angka bulat' + (m.min !== null && m.maksNilai !== null ? ' antara ' + m.min + ' dan ' + m.maksNilai : '') + '.';
+        } else if (m.tipe === 'desimal') {
+            inp.type = 'number'; inp.step = 'any'; inp.placeholder = 'Angka'; hint.textContent = 'Angka (boleh desimal).';
+        } else {
+            inp.type = 'text'; inp.maxLength = m.maks; inp.placeholder = 'Nilai baru'; hint.textContent = 'Teks, maksimal ' + m.maks + ' karakter.';
+        }
+        if (isi) inp.value = isi;
+    }
+    kolom.addEventListener('change', function () { atur(''); });
+    atur(awal);
+})();
+</script>
+<?php if (($buka_modal ?? '') === 'update'): ?>
+<script>
+// buka kembali pop-up Update DIL (gagal simpan, atau "tetap buka form" dicentang)
+document.addEventListener('DOMContentLoaded', function () {
+    var m = document.getElementById('modalUpdateDil'); if (!m || !window.bootstrap) return;
+    m.addEventListener('shown.bs.modal', function () { var i = document.getElementById('ud_idpel'); if (i) { i.focus(); i.select(); } }, { once: true });
+    bootstrap.Modal.getOrCreateInstance(m).show();
+});
+</script>
+<?php endif; ?>
+
 <!-- Navigasi tab pop-up tambah: Sebelumnya / Berikutnya, lompat ke tab yang berisi isian tidak valid, buka otomatis bila ada isian lama -->
 <script>
 (function () {
@@ -227,10 +380,10 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
     }
     document.querySelectorAll('form').forEach(function (f) {
         var aksi = f.querySelector('input[name="aksi"]');
-        if (!aksi || (aksi.value !== 'tambah' && aksi.value !== 'import')) return;
+        if (!aksi || ['tambah', 'import', 'update_satu', 'update_excel'].indexOf(aksi.value) < 0) return;
         f.addEventListener('submit', function (e) {
             if (e.defaultPrevented) return;
-            tampil(aksi.value === 'import' ? 'Mengimpor data DIL, mohon tunggu…' : 'Menyimpan…');
+            tampil(aksi.value === 'import' ? 'Mengimpor data DIL, mohon tunggu…' : (aksi.value === 'update_excel' ? 'Memproses file Excel, mohon tunggu…' : 'Menyimpan…'));
         });
     });
     // kembali lewat tombol Back: pastikan overlay tidak tertinggal

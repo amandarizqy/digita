@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_ami.php  -  Penyalaan AMI
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap: 1. PPOB -> 2. MDMS / Lunas -> 3. Gagal ON / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap: 1. MDMS / Lunas -> 2. Gagal ON / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_ami.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -11,8 +11,8 @@ $sufiks = $putus ? 'OFF' : 'ON';
 
 echo pg_header([
     'title'    => $judul,
-    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.'
-                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, proses di MDMS, dan catat hasilnya.',
+    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu proses di MDMS dan catat hasilnya.'
+                         : 'Create mengambil tiket penyalaan berikutnya, lalu proses di MDMS dan catat hasilnya.',
     'action'   => $halaman,
 ]);
 
@@ -63,7 +63,7 @@ if ($ada) {
             <div class="small" style="min-width:0;">
                 <div class="text-muted">Tiket berjalan</div>
                 <div class="fw-bold font-monospace text-break"><?= pg_e($tiket) ?></div>
-                <div class="text-truncate"><?= pg_e($nama) ?> &middot; <span class="font-monospace"><?= pg_e($idpel) ?></span></div>
+                <div class="text-truncate"><?= pg_e($nama) ?> · <span class="font-monospace"><?= pg_e($idpel) ?></span></div>
             </div>
             <button type="button" class="btn btn-primary btn-sm px-3 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalTiket"><i class="bi bi-box-arrow-up-right me-1"></i> Buka tiket</button>
         </div>
@@ -185,7 +185,7 @@ if ($ada) {
 
             <div class="modal-header border-0 pb-0 px-4 pt-4">
                 <div style="min-width:0;">
-                    <div class="small text-muted text-uppercase fw-bold" style="letter-spacing:.5px;"><?= pg_e($judul) ?> &middot; Sesi <span class="font-monospace"><?= pg_e($sesi) ?></span></div>
+                    <div class="small text-muted text-uppercase fw-bold" style="letter-spacing:.5px;"><?= pg_e($judul) ?> · Sesi <span class="font-monospace"><?= pg_e($sesi) ?></span></div>
                     <h5 class="modal-title font-monospace fw-bold text-break mt-1" id="judulTiket"><?= pg_e($tiket) ?></h5>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
@@ -211,27 +211,22 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. MDMS / Lunas  ->  3. Gagal ON / Ready ON -->
+                <!-- LANGKAH TOMBOL: 1. MDMS / Lunas  ->  2. Gagal ON / Ready ON -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
                     <div class="d-flex gap-2" data-langkah="1">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <a id="btnPpob" class="btn btn-primary flex-fill fw-semibold" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-wallet2 me-1"></i> PPOB</a>
-                    </div>
-
-                    <div class="d-flex gap-2 d-none" data-langkah="2">
-                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
                         <a id="btnMdms" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-hdd-network me-1"></i> MDMS</a>
                         <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
                     </div>
 
-                    <div class="d-flex gap-2 d-none" data-langkah="3">
+                    <div class="d-flex gap-2 d-none" data-langkah="2">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
                         <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal ON</button>
                         <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
                     </div>
-                    <div class="small text-muted mt-2 d-none" data-langkah="3">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
+                    <div class="small text-muted mt-2 d-none" data-langkah="2">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> · Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
                 </div>
                 <div id="infoTombol" class="small text-muted mt-2" style="min-height:1.2em;"></div>
             </div>
@@ -242,8 +237,6 @@ if ($ada) {
 <script>
 (function () {
     var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah');
-    // Cara PPOB menyalin: 'terpisah' = 3 salinan berurutan (HP, No Meter, IDPEL; isi clipboard saat ini = IDPEL, sisanya di riwayat clipboard),
-    //                    'gabung'   = 1 salinan berisi 3 baris (IDPEL, No Meter, No HP).
     var MODE_SALIN = 'terpisah';
     var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
     function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
@@ -251,13 +244,12 @@ if ($ada) {
     // ---- kartu pop-up terbuka otomatis saat halaman dimuat ----
     window.addEventListener('load', function () {
         if (window.bootstrap && bootstrap.Modal) { bootstrap.Modal.getOrCreateInstance(modal).show(); }
-        else { modal.classList.add('show'); modal.style.display = 'block'; modal.removeAttribute('aria-hidden'); }   // cadangan bila Bootstrap JS tidak termuat
+        else { modal.classList.add('show'); modal.style.display = 'block'; modal.removeAttribute('aria-hidden'); }
     });
 
     // ---- langkah tombol ----
-    var judul = {1: 'Langkah 1 dari 3 \u00b7 Cek tagihan di PPOB',
-                 2: 'Langkah 2 dari 3 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
-                 3: 'Langkah 3 dari 3 \u00b7 Catat kondisi meter setelah proses di MDMS'};
+    var judul = {1: 'Langkah 1 dari 2 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
+                 2: 'Langkah 2 dari 2 \u00b7 Catat kondisi meter setelah proses di MDMS'};
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
         penanda.textContent = judul[n];
@@ -265,39 +257,41 @@ if ($ada) {
     tampil(1);
     document.querySelectorAll('[data-ulangi]').forEach(function (b) { b.addEventListener('click', function () { tampil(1); kabar('Kembali ke langkah 1.'); }); });
 
-    // ---- salin ke clipboard ----
-    function salin(teks) {
-        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(teks);
-        return new Promise(function (ok, gagal) {
-            var t = document.createElement('textarea'); t.value = teks; t.style.position = 'fixed'; t.style.opacity = '0';
-            modal.appendChild(t); t.select();                                  // di dalam modal agar fokus tidak ditahan modal
-            try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
-        });
-    }
-    function salinData() {
+    // ---- salin ke clipboard secara langsung saat tombol MDMS diklik ----
+    function salinDataDanLanjut(e) {
+        var a = document.getElementById('btnMdms');
+        if (a.getAttribute('href') === '#') {
+            e.preventDefault();
+            kabar('Tautan MDMS belum diatur (isi $link di modules/penggunaan/penyalaan_ami.php).');
+            return;
+        }
+
         var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
-        if (!item.length) { kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.'); return; }
-        var kosong = [['IDPEL', data.idpel], ['No Meter', data.meter], ['No HP', data.hp]].filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
-        var catatan = kosong.length ? ' (' + kosong.join(', ') + ' kosong, dilewati)' : '';
-        var nama = item.slice().reverse().map(function (x) { return x[0]; }).join(', ');
-        var proses = MODE_SALIN === 'gabung'
-            ? salin(item.slice().reverse().map(function (x) { return x[1]; }).join('\n'))
-            : item.reduce(function (p, x) { return p.then(function () { return salin(String(x[1]).trim()); }); }, Promise.resolve());
-        proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
-                    function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
+        if (!item.length) {
+            kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.');
+            tampil(2);
+            return;
+        }
+
+        var teksSalin = MODE_SALIN === 'gabung'
+            ? item.slice().reverse().map(function (x) { return x[1]; }).join('\n')
+            : String(item[item.length - 1][1]).trim(); // Menyalin IDPEL
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(teksSalin).then(function () {
+                kabar('Berhasil menyalin data ke clipboard!');
+            }).catch(function () {
+                kabar('Gagal menyalin otomatis ke clipboard.');
+            });
+        }
+
+        tampil(2);
     }
 
-    // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
-    // ---- MDMS: buka tautan, lanjut langkah 3 ----
-    function pasang(id, tautan, sesudah, nama) {
-        var a = document.getElementById(id);
-        a.addEventListener('click', function (e) {
-            if (a.getAttribute('href') === '#') { e.preventDefault(); kabar('Tautan ' + nama + ' belum diatur (isi $link di modules/penggunaan/penyalaan_ami.php).'); }
-            sesudah();
-        });
+    var btnMdms = document.getElementById('btnMdms');
+    if (btnMdms) {
+        btnMdms.addEventListener('click', salinDataDanLanjut);
     }
-    pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
-    pasang('btnMdms', 'mdms', function () { tampil(3); }, 'MDMS');
 
 })();
 </script>

@@ -32,8 +32,8 @@ $putus_tindakan_tabel  = 'trx_tindakan_putus_sdu';
 $putus_tindakan_syarat = ['PADAM'];      // jenis tindakan putus yang boleh dinyalakan (hanya meter yang benar-benar diputus)
 $syarat_putus = " AND EXISTS (SELECT 1 FROM `$putus_tindakan_tabel` pt WHERE pt.`$fk` = p.`$fk` AND pt.JenisTindakan IN ("
               . implode(',', array_map(fn($j) => $conn->quote($j), $putus_tindakan_syarat)) . "))";
-// Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
-$link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln'];
+// // Tautan tombol. Isi URL lengkap bila sudah ada; '#' = belum diatur (tombol hanya menampilkan pesan).
+// $link = ['ppob' => 'https://www.hotelmurah.com/pulsa/pln'];
 
 $pesan_sukses = $pesan_error = $pesan_info = '';
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
