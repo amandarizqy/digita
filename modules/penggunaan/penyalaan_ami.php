@@ -5,7 +5,7 @@
 // Alur:
 //   1. [Create]  -> buat SessionID baru (disimpan di session login, per halaman).
 //   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
-//        UPDATE trx_order_nyala_ami SET Sesi = SessionID ... ORDER BY TiketNyalaAmi ASC LIMIT 1
+//        dipilih dari view vw_tiket_nyala_ami_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_ami) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
 //   4. Tombol hasil menulis ke trx_tindakan_nyala_ami:  Ready ON = NYALA, gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
@@ -17,6 +17,8 @@
 $halaman        = 'penyalaan_ami';
 $judul          = 'Penyalaan AMI';
 $tabel          = 'trx_order_nyala_ami';          // tabel tiket
+$view           = 'vw_tiket_nyala_ami_open';   // view tiket terbuka (dibaca untuk antrean, hitungan & tiket sesi); UPDATE Sesi tetap ke $tabel
+$urut_view      = 'v.NomorUrut ASC';            // urutan antrean dari kolom view (NomorUrut / Peringkat / SkalaPrioritas / TglBayar)
 $pk             = 'TiketNyalaAmi';             // kunci tiket
 $thbl_len       = 8;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_nyala_ami';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
@@ -49,15 +51,25 @@ $sesi       = (string) ($_SESSION[$kunci_sesi] ?? '');
 /** SessionID: S + yymmddHHMMSS + '-' + 6 hex acak. Contoh: S261106153012-A1B2C3 */
 $buat_sesi = fn() => 'S' . date('ymdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
 
-/** Langkah 2a: tandai tiket AKTIF yang belum diambil & belum ditindak dengan SessionID (yang terlama). true bila ada yang terambil. */
-$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel): bool {
-    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = :sesi
-                          WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                            AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)
-                          ORDER BY t.`$pk` ASC LIMIT 1");
-    $st->execute([':sesi' => $sesi_id] + $p);
-    return $st->rowCount() === 1;
+/** Langkah 2a: pilih tiket terdepan dari VIEW (belum punya Sesi, di wilayah akun), lalu tandai tabel tiket dengan SessionID.
+ *  View tidak punya kolom Unit & tidak bisa di-UPDATE, jadi: SELECT dari view (di-JOIN ke tabel hanya untuk pg_scope), UPDATE ke tabel.
+ *  UPDATE dijaga (Sesi masih kosong, AKTIF, belum ditindak); bila keduluan pengguna lain, ulangi memilih (maks 5 kali). true bila ada yang terambil. */
+$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $view, $urut_view, $pk, $tindakan_tabel): bool {
+    for ($coba = 0; $coba < 5; $coba++) {
+        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+        $st = $conn->prepare("SELECT v.`$pk` FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk`
+                              WHERE (v.Sesi IS NULL OR v.Sesi = '') AND $sc
+                              ORDER BY $urut_view, v.`$pk` ASC LIMIT 1");
+        $st->execute($p);
+        $id = $st->fetchColumn();
+        if ($id === false) return false;
+        $up = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = :sesi
+                              WHERE t.`$pk` = :id AND t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '')
+                                AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+        $up->execute([':sesi' => $sesi_id, ':id' => $id]);
+        if ($up->rowCount() === 1) return true;
+    }
+    return false;
 };
 
 /** Langkah 2b: BUAT tiket baru atas nama SessionID. ID tiket diisi TRIGGER database, lalu dibaca kembali. '' bila tidak ada sumber. Panggil di dalam transaksi. */
@@ -98,11 +110,12 @@ $ambil_berikutnya = function (string $sesi_id) use ($klaim, $buat_tiket): string
     return $buat_tiket($sesi_id) !== '' ? 'baru' : '';
 };
 
-/** Langkah 3: tiket milik SessionID yang belum ditindak (null bila tidak ada). */
-$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel, $fk, $putus_tabel): ?array {
+/** Langkah 3: tiket milik SessionID yang masih terbuka, dibaca dari VIEW (null bila tidak ada).
+ *  Tabel tiket di-JOIN untuk wilayah akun (Unit) dan kolom rujukan $fk; tabel putus di-JOIN untuk No TUL. */
+$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $view, $pk, $fk, $putus_tabel): ?array {
     if ($sesi_id === '') return null;
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT t.*, p.NoTul AS NoTulTampil FROM `$tabel` t LEFT JOIN `$putus_tabel` p ON p.`$fk` = t.`$fk` WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF' AND $sc AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`) ORDER BY t.`$pk` ASC LIMIT 1");
+    $st = $conn->prepare("SELECT v.*, t.`$fk`, p.NoTul AS NoTulTampil FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk` LEFT JOIN `$putus_tabel` p ON p.`$fk` = t.`$fk` WHERE v.Sesi = :sesi AND $sc ORDER BY v.`$pk` ASC LIMIT 1");
     $st->execute([':sesi' => $sesi_id] + $p);
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 };
@@ -125,10 +138,9 @@ $pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya
 
 /** Jumlah tiket yang bisa diambil/dibuat sekarang: tiket nyala yang belum punya Sesi, ditambah tiket putus yang sudah ditindak
  *  dan belum punya tiket nyala (akan dibuatkan tiket saat Create). Dipakai tampilan halaman dan pengecekan berkala (?hitung=1). */
-$hitung_sisa = function () use ($conn, $u, $tabel, $pk, $tindakan_tabel, $fk, $putus_tabel, $syarat_putus): int {
+$hitung_sisa = function () use ($conn, $u, $tabel, $view, $pk, $tindakan_tabel, $fk, $putus_tabel, $syarat_putus): int {
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                          AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+    $st = $conn->prepare("SELECT COUNT(*) FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk` WHERE (v.Sesi IS NULL OR v.Sesi = '') AND $sc");
     $st->execute($p);
     $jumlah = (int) $st->fetchColumn();
     $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
