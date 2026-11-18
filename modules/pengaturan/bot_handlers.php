@@ -230,7 +230,7 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
     $dibaca = $tolak = $dup = 0;
     $peta = null;
 
-    foreach (xlsx_baris($file) as $no => $sel) {
+    foreach (bh_xlsx_baris($file) as $no => $sel) {
         if ($peta === null) {                                     // a. cari baris judul
             if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
             $kol = [];
@@ -243,7 +243,6 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;             // b. baris data
-        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $dibaca++;
         $g = fn($f) => $sel[$peta[$f]] ?? '';
 
@@ -351,7 +350,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $conn->beginTransaction();
     $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);   // sisa import yang gagal sebelumnya
 
-    foreach (xlsx_baris($file) as $no => $sel) {
+    foreach (bh_xlsx_baris($file) as $no => $sel) {
         if (!$peta) {                                             // cari baris judul
             if ($no > 30) throw new RuntimeException('Baris judul kolom (IDPEL, NAMA, ...) tidak ditemukan di 30 baris pertama.');
             $tmp = [];
@@ -366,7 +365,6 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
             }
             continue;
         }
-        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $g = fn(string $k, int $m) => isset($peta[$k]) ? bh_teks($sel[$peta[$k]] ?? '', $m) : '';
 
         $idpel_mentah = trim((string) ($sel[$peta['IdPel']] ?? ''));
@@ -456,8 +454,10 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 // ============================================================
 
 /**
- * Baris footer/catatan kaki (mis. "Dicetak oleh ...") yang biasanya di-merge: hanya satu sel terisi dan isinya teks biasa.
- * Baris seperti ini dilewati, bukan dihitung sebagai baris gagal.
+ * Baris footer/catatan kaki (mis. "Dicetak oleh ...") yang biasanya di-merge: hanya SATU sel terisi dan isinya
+ * bukan IdPel (bukan 12 karakter alfanumerik, bukan angka 11/12 digit yang bisa dinormalkan bh_idpel()).
+ * Ini hanya cek per baris. Apakah baris itu benar-benar footer (tidak ada data lagi di bawahnya)
+ * diputuskan oleh bh_xlsx_baris().
  */
 function bh_baris_footer(array $sel): bool
 {
@@ -467,8 +467,29 @@ function bh_baris_footer(array $sel): bool
         if ($v !== '') $isi[] = $v;
     }
     if (count($isi) !== 1) return false;
-    if (preg_match('/^[A-Za-z0-9]{12}$/', $isi[0])) return false;   // mungkin IdPel alfanumerik yang kolom lainnya kosong: tetap diperiksa
-    return (bool) preg_match('/\p{L}{2,}/u', $isi[0]);              // harus ada huruf, bukan angka murni
+    if (bh_idpel($isi[0]) !== null) return false;                   // IdPel angka 12 digit (atau 11 digit yang nolnya hilang)
+    if (preg_match('/^[A-Za-z0-9]{12}$/', $isi[0])) return false;   // IdPel alfanumerik 12 karakter: tetap diperiksa
+    return true;
+}
+
+/**
+ * Pembungkus xlsx_baris(): membuang footer di AKHIR file, yaitu baris-baris (bh_baris_footer) yang setelahnya
+ * sudah tidak ada baris data lagi. Baris seperti ini tidak sampai ke handler, jadi tidak dihitung dibaca/gagal.
+ * Baris satu-sel yang MASIH diikuti baris data tetap diteruskan apa adanya (mis. kop surat sebelum judul kolom,
+ * atau data nyata yang kolom lainnya kosong), sehingga diperiksa dan bisa ditolak seperti baris biasa.
+ * Nomor baris asli ($no) dipertahankan. Hanya baris kandidat footer & baris kosong di antaranya yang ditahan.
+ */
+function bh_xlsx_baris(string $file): Generator
+{
+    $tunda = [];   // no => sel: kandidat footer (dan baris kosong di sela-selanya) yang belum jelas nasibnya
+    foreach (xlsx_baris($file) as $no => $sel) {
+        if (bh_baris_footer($sel)) { $tunda[$no] = $sel; continue; }
+        if ($tunda && trim(implode('', array_map('strval', $sel))) === '') { $tunda[$no] = $sel; continue; }
+        foreach ($tunda as $n => $s) yield $n => $s;   // ternyata masih ada baris data di bawahnya -> bukan footer
+        $tunda = [];
+        yield $no => $sel;
+    }
+    // $tunda yang tersisa = footer di akhir file -> dibuang
 }
 
 function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): array
@@ -499,7 +520,7 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $dibaca = $tolak = $dup = $bentrok = 0;
     $peta = null;
 
-    foreach (xlsx_baris($file) as $no => $sel) {
+    foreach (bh_xlsx_baris($file) as $no => $sel) {
         if ($peta === null) {                                     // laporan AP2T: kop surat + judul 2 tingkat; dipakai baris "Id Pelanggan"
             if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
             $kol = [];
@@ -513,7 +534,6 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         }
         if (trim(implode('', $sel)) === '') continue;
         if (strtoupper(trim((string) reset($sel))) === 'TOTAL') continue;   // baris jumlah di akhir laporan
-        if (bh_baris_footer($sel)) continue;                                // footer / catatan kaki (sel merge)
         $dibaca++;
         $g = fn($f) => isset($peta[$f]) ? ($sel[$peta[$f]] ?? '') : '';
 
@@ -617,7 +637,7 @@ function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): 
     $peta = null; $baris = []; $detail = [];
     $dibaca = $salah = $dobel = $tidak_dil = $sudah_ada = 0;
 
-    foreach (xlsx_baris($file) as $no => $sel) {
+    foreach (bh_xlsx_baris($file) as $no => $sel) {
         if ($peta === null) {                                     // cari baris judul (20 baris pertama)
             if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
             $kol = [];
@@ -630,7 +650,6 @@ function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): 
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;
-        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $dibaca++;
         $id = bh_idpel_ketat($sel[$peta['idpel']] ?? '');
         $bl = bh_bulan_saldo($sel[$peta['bulan']] ?? '');
@@ -771,7 +790,7 @@ function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string
     $detail = [];
     $dibaca = $tolak = $dup = 0;
 
-    foreach (xlsx_baris($file) as $no => $sel) {
+    foreach (bh_xlsx_baris($file) as $no => $sel) {
         if ($kolId === null) {
             if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
             $kol = [];
@@ -784,7 +803,6 @@ function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;
-        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $dibaca++;
         $id    = bh_idpel($sel[$kolId] ?? '');
         $nilai = $norm($sel[$kolNilai] ?? '');
