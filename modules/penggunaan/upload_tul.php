@@ -2,7 +2,7 @@
 // modules/penggunaan/upload_tul.php
 // Unggah XLSX "Daftar TUL VI-01 yang belum lunas" (laporan AP2T) -> tabel tul_601.
 // Pola sama dengan perencanaan/upload_riwayat.php: file dibaca streaming, disimpan per 500 baris
-// dalam 1 transaksi, dan kunci unik (NoTul) yang sudah ada otomatis DIPERBARUI, bukan dobel.
+// dalam 1 transaksi; bila NoTul sudah ada, hanya ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui (bukan dobel).
 //
 // Struktur tul_601:
 //   NoTul VARCHAR(30) PK | WaktuCetak DATETIME | IdPel CHAR(12) | ThBlRekAwal CHAR(6) | ThBlRekAkhir CHAR(6)
@@ -226,13 +226,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          ->execute($param);
                 }
 
-                // c2. tul_601. StatusData baris lama TIDAK diubah; StandBaca/TglBaca lama dipertahankan bila file baru kosong;
-                //     NomorPengirim tidak disentuh (diisi proses lain).
+                // c2. tul_601. NoTul baru -> INSERT penuh (StatusData 'AKTIF').
+                //     NoTul yang sudah ada -> HANYA ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui.
+                //     Kolom lain (WaktuCetak, IdPel, StandBaca, TglBaca, NamaAkun, unit, StatusData, WaktuData, NomorPengirim) tidak disentuh.
                 $namaAkunInput = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
                 $head = "INSERT INTO tul_601 (NoTul, WaktuCetak, IdPel, ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag, StandBaca, TglBaca, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES ";
-                $tail = " ON DUPLICATE KEY UPDATE WaktuCetak = VALUES(WaktuCetak), IdPel = VALUES(IdPel), ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir),
-                          Lembar = VALUES(Lembar), RpTag = VALUES(RpTag), StandBaca = COALESCE(VALUES(StandBaca), StandBaca), TglBaca = COALESCE(VALUES(TglBaca), TglBaca),
-                          NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = VALUES(WaktuData)";
+                $tail = " ON DUPLICATE KEY UPDATE ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir), Lembar = VALUES(Lembar), RpTag = VALUES(RpTag)";
                 foreach (array_chunk(array_values($baris), $tul_chunk) as $paket) {
                     $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), "(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")) . $tail);
                     $param = [];

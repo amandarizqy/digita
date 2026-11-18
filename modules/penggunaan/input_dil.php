@@ -5,7 +5,7 @@
 //            (Kuadran & SkalaPrioritas diisi modul Perencanaan; NamaAkun, StatusData, WaktuData otomatis.)
 // Fitur: tambah manual lewat pop-up form bertab (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
 //        UPDATE DIL: memperbarui kolom NomorMeter / SkalaPrioritas / Peringkat pada IdPel yang SUDAH ADA di dil (wilayah akun saja),
-//        lewat pop-up satu IdPel atau upload Excel. Tipe & batas nilai tiap kolom dibaca dari struktur tabel dil (SHOW COLUMNS).
+//        lewat pop-up satu IdPel (dengan saran IdPel otomatis saat mengetik) atau upload Excel. Tipe & batas nilai tiap kolom dibaca dari struktur tabel dil (SHOW COLUMNS).
 // Import: baris Excel dimasukkan ke tabel penampung `transit_dil`, dipindahkan ke `dil`, lalu transit_dil dikosongkan lagi.
 // Daftar, pencarian, edit, dan aktif/nonaktif ada di Monitoring > DIL (monitor_dil.php).
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
@@ -31,11 +31,7 @@ if (!function_exists('pg_norm_idpel')) {
     }
 }
 
-/** Kolom tabel dil yang diisi dari Excel (urutan = urutan INSERT). */
-const DIL_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                   'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
-
-/** transit_dil tidak punya StatusData: kolomnya sama dengan dil tanpa StatusData. StatusData (AKTIF) diberikan saat pindah ke dil. */
+/** Kolom transit_dil = kolom dil tanpa StatusData. StatusData (AKTIF) diberikan saat pindah ke dil. JenisShuntrip hanya dipakai bila Excel memuat kolomnya. */
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
                        'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
@@ -53,7 +49,7 @@ const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
     'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
    
-    'AKTIFASI' => 'Aktifasi','JenisShuntrip' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
+    'AKTIFASI' => 'Aktifasi','JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
 
 /** Rapikan teks sel: buang spasi ganda/tepi (Excel PLN sering berisi ' ') lalu potong sesuai panjang kolom. */
@@ -134,6 +130,58 @@ if (!function_exists('ud_meta')) {
 $u         = pg_unit_akun($conn);
 $unit_siap = $u['upi'] !== '';
 $ud_meta   = ud_meta($conn);
+
+// ---------------------------------------------------------
+// AJAX (GET, hanya baca): saran IdPel & detail satu IdPel untuk pop-up Update DIL.
+// Diletakkan SEBELUM pembacaan flash supaya pesan flash tidak ikut terhapus oleh request AJAX.
+// ---------------------------------------------------------
+if (isset($_GET['ajax']) && in_array($_GET['ajax'], ['saran_idpel', 'cek_idpel'], true)) {
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+
+    try {
+        if (!$unit_siap) { echo json_encode(['found' => false, 'items' => []]); exit; }
+
+        if ($_GET['ajax'] === 'saran_idpel') {
+            // saran: IdPel yang DIAWALI karakter yang diketik (memakai index primary key), maksimal 10, hanya wilayah akun
+            $q = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_GET['q'] ?? ''));
+            if (strlen($q) < 3 || strlen($q) > 12) { echo json_encode(['items' => []]); exit; }
+            $p = [':q' => $q . '%'];
+            $scope = pg_scope($u, 'd', 'Unit', $p);
+            $st = $conn->prepare("SELECT d.IdPel, d.Nama FROM dil d WHERE d.IdPel LIKE :q AND $scope ORDER BY d.IdPel LIMIT 10");
+            $st->execute($p);
+            $items = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $items[] = ['idpel' => trim((string) $r['IdPel']), 'nama' => trim((string) ($r['Nama'] ?? ''))];
+            echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // cek_idpel: detail satu IdPel (hanya kolom yang benar-benar ada di tabel dil)
+        $idpel = pg_norm_idpel($_GET['idpel'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9]{12}$/', $idpel)) { echo json_encode(['found' => false]); exit; }
+        $kolom_ada = array_keys(array_filter($ud_meta, fn($x) => !empty($x['ada'])));
+        $sel = $kolom_ada ? ', ' . implode(', ', array_map(fn($k) => "d.`$k`", $kolom_ada)) : '';
+        $p = [':id' => $idpel];
+        $scope = pg_scope($u, 'd', 'Unit', $p);
+        $st = $conn->prepare("SELECT d.Nama $sel FROM dil d WHERE d.IdPel = :id AND $scope LIMIT 1");
+        $st->execute($p);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { echo json_encode(['found' => false]); exit; }
+        $nilai = fn(string $k) => isset($row[$k]) ? trim((string) $row[$k]) : '';
+        echo json_encode([
+            'found'          => true,
+            'nama'           => trim((string) ($row['Nama'] ?? '')) ?: '-',
+            'jenisshuntrip'  => $nilai('JenisShuntrip'),
+            'nomormeter'     => $nilai('NomorMeter'),
+            'skalaprioritas' => $nilai('SkalaPrioritas'),
+            'peringkat'      => $nilai('Peringkat'),
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        echo json_encode(['found' => false, 'items' => [], 'error' => 'Query gagal']);
+    }
+    exit;
+}
 
 // ---- pesan hasil proses sebelumnya (post-redirect-get) ----
 if (!empty($_SESSION['pg_flash'])) {
@@ -233,14 +281,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $seen  = [];
             $peta  = [];            // kolom dil => huruf kolom Excel
             $batch = [];            // baris yang menunggu dikirim ke transit_dil
-            $kol_dil     = implode(', ', DIL_KOLOM);
-            $kol_transit = implode(', ', TRANSIT_KOLOM);
-            // SELECT dari transit_dil mengikuti urutan DIL_KOLOM; StatusData diisi konstanta AKTIF
-            $kol_pilih   = implode(', ', array_map(fn($k) => $k === 'StatusData' ? "'AKTIF'" : $k, DIL_KOLOM));
-            $per_baris   = '(' . implode(', ', array_fill(0, count(TRANSIT_KOLOM) - 1, '?')) . ', NOW())';   // WaktuData = NOW()
-            $kirim = function (array $rows) use ($conn, $kol_transit, $per_baris) {
+            $cols  = [];            // kolom yang diisi (tanpa WaktuData): ditentukan setelah baris judul ditemukan
+            $kirim = function (array $rows) use ($conn, &$cols) {
                 if (!$rows) return;
-                $conn->prepare("INSERT INTO transit_dil ($kol_transit) VALUES " . implode(', ', array_fill(0, count($rows), $per_baris)))
+                $per_baris = '(' . implode(', ', array_fill(0, count($cols), '?')) . ', NOW())';   // WaktuData = NOW()
+                $conn->prepare('INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, count($rows), $per_baris)))
                      ->execute(array_merge(...$rows));
             };
             try {
@@ -255,7 +300,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $kunci = preg_replace('/[^A-Z0-9]/', '', strtoupper((string) $isi));
                             if (isset(DIL_HEADER[$kunci]) && !isset($tmp[DIL_HEADER[$kunci]])) $tmp[DIL_HEADER[$kunci]] = $huruf;
                         }
-                        if (isset($tmp['IdPel'], $tmp['Nama'])) $peta = $tmp;
+                        if (isset($tmp['IdPel'], $tmp['Nama'])) {
+                            $peta = $tmp;
+                            // JenisShuntrip hanya disertakan bila Excel memuat kolomnya (selain itu memakai nilai bawaan database)
+                            $cols = array_values(array_filter(TRANSIT_KOLOM, fn($k) => $k !== 'WaktuData' && ($k !== 'JenisShuntrip' || isset($peta['JenisShuntrip']))));
+                        }
                         continue;
                     }
                     $g = fn(string $k, int $m) => isset($peta[$k]) ? pg_dil_teks($sel[$peta[$k]] ?? '', $m) : '';
@@ -278,20 +327,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $seen[$idpel] = true;
 
                     $teg = strtoupper($g('TegUkur', 2));
-                    $batch[] = [
-                        $idpel, $nama, $g('Alamat', 100), $g('JenisMk', 10), $g('NomorTlp', 20), $g('NomorHp', 20),
-                        $g('GolTar', 5), (int) round((float) str_replace(',', '.', $g('Daya', 15))),
-                        in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-                        $g('KdPembMeter', 1), $g('NomorMeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
-                        $akun, $g('UnitUp', 5), $g('UnitAp', 5), $g('UnitUpi', 2),
+                    $sh  = strtoupper($g('JenisShuntrip', 10));
+                    $baris = [
+                        'IdPel' => $idpel, 'Nama' => $nama, 'Alamat' => $g('Alamat', 100), 'JenisMk' => $g('JenisMk', 10),
+                        'NomorTlp' => $g('NomorTlp', 20), 'NomorHp' => $g('NomorHp', 20), 'GolTar' => $g('GolTar', 5),
+                        'Daya' => (int) round((float) str_replace(',', '.', $g('Daya', 15))),
+                        'TegUkur' => in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
+                        'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'Aktifasi' => $g('Aktifasi', 15),
+                        'ProdukPrabayar' => $g('ProdukPrabayar', 50),
+                        'JenisShuntrip' => in_array($sh, JENIS_SHUNTRIP, true) ? $sh : null,
+                        'NamaAkun' => $akun, 'UnitUp' => $g('UnitUp', 5), 'UnitAp' => $g('UnitAp', 5), 'UnitUpi' => $g('UnitUpi', 2),
                     ];
+                    $batch[] = array_map(fn($c) => $baris[$c], $cols);      // urutan nilai selalu sama dengan $cols
                     if (count($batch) >= 500) { $kirim($batch); $batch = []; }
                 }
                 if (!$peta) throw new RuntimeException('Baris judul kolom (IDPEL, NAMA, ...) tidak ditemukan. Pastikan file adalah "Monitoring DIL Detail".');
                 $kirim($batch);
 
                 // transit_dil -> dil (IdPel yang sudah ada dilewati), lalu transit_dil dikosongkan
-                $in = $conn->prepare("INSERT IGNORE INTO dil ($kol_dil) SELECT $kol_pilih FROM transit_dil WHERE NamaAkun = ?");
+                $kol_isi = implode(', ', $cols);
+                $in = $conn->prepare("INSERT IGNORE INTO dil ($kol_isi, StatusData, WaktuData) SELECT $kol_isi, 'AKTIF', WaktuData FROM transit_dil WHERE NamaAkun = ?");
                 $in->execute([$akun]);
                 $ok = $in->rowCount();
                 $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);
@@ -312,46 +367,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($aksi === 'update_satu') {
-        // ---- UPDATE DIL: satu IdPel, satu kolom ----
-        $kol    = (string) ($_POST['kolom'] ?? '');
+        // ---- UPDATE DIL: satu IdPel, satu atau beberapa kolom sekaligus (kolom yang dikosongkan = tidak diubah) ----
         $idpel  = pg_norm_idpel($_POST['idpel'] ?? '');
         $lanjut = !empty($_POST['lanjut']);
-        $nilai_mentah = (string) ($_POST['nilai'] ?? '');
+        $isian  = [   // kolom dil (daftar putih UPDATE_KOLOM) => isian mentah dari form
+            'JenisShuntrip'  => (string) ($_POST['jenisshuntrip'] ?? ''),
+            'NomorMeter'     => (string) ($_POST['nomormeter'] ?? ''),
+            'SkalaPrioritas' => (string) ($_POST['skalaprioritas'] ?? ''),
+            'Peringkat'      => (string) ($_POST['peringkat'] ?? ''),
+        ];
+        $baru = []; $galat = [];
+        foreach ($isian as $kol => $mentah) {
+            if (trim($mentah) === '') continue;
+            if (!$ud_meta[$kol]['ada']) { $galat[] = 'Kolom ' . UPDATE_KOLOM[$kol] . ' belum ada di tabel dil'; continue; }
+            [$ok_n, $nilai] = ud_nilai($kol, $ud_meta[$kol], $mentah);
+            if ($ok_n) $baru[$kol] = $nilai; else $galat[] = UPDATE_KOLOM[$kol] . ' tidak valid: ' . $nilai;
+        }
         if (!$unit_siap) {
             $pesan_error = 'Akun Anda belum memiliki Unit UPI, sehingga data tidak dapat diperbarui. Hubungi administrator.';
-        } elseif (!isset(UPDATE_KOLOM[$kol])) {
-            $pesan_error = 'Pilih kolom yang akan diperbarui.';
-        } elseif (!$ud_meta[$kol]['ada']) {
-            $pesan_error = 'Kolom ' . pg_e(UPDATE_KOLOM[$kol]) . ' belum ada di tabel dil.';
         } elseif (!preg_match('/^[A-Za-z0-9]{12}$/', $idpel)) {
             $pesan_error = 'IdPel harus 12 karakter (huruf/angka).';
+        } elseif ($galat) {
+            $pesan_error = implode('; ', array_map('pg_e', $galat)) . '.';
+        } elseif (!$baru) {
+            $pesan_error = 'Isi minimal satu kolom yang akan diperbarui.';
         } else {
-            [$ok_n, $nilai] = ud_nilai($kol, $ud_meta[$kol], $nilai_mentah);
-            if (!$ok_n) {
-                $pesan_error = 'Nilai ' . pg_e(UPDATE_KOLOM[$kol]) . ' tidak valid: ' . pg_e($nilai) . '.';
-            } else {
-                try {
-                    $p = [':id' => $idpel]; $scope = pg_scope($u, 'd', 'Unit', $p);
-                    $st = $conn->prepare("SELECT d.Nama, d.`$kol` AS nilai_lama FROM dil d WHERE d.IdPel = :id AND $scope LIMIT 1");   // $kol sudah divalidasi (daftar putih)
-                    $st->execute($p);
-                    $row = $st->fetch(PDO::FETCH_ASSOC);
-                    if (!$row) {
-                        $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak ditemukan di DIL pada wilayah Anda.';
-                    } elseif (ud_sama($ud_meta[$kol], $row['nilai_lama'], $nilai)) {
-                        $pesan_info = 'IdPel <strong>' . pg_e($idpel) . '</strong> (' . pg_e($row['Nama']) . ') sudah memiliki ' . pg_e(UPDATE_KOLOM[$kol]) . ' <strong>' . pg_e($nilai) . '</strong>, tidak ada perubahan.';
+            try {
+                $kols = array_keys($baru);                                             // nama kolom berasal dari daftar putih
+                $sel  = implode(', ', array_map(fn($k) => "d.`$k`", $kols));
+                $p = [':id' => $idpel]; $scope = pg_scope($u, 'd', 'Unit', $p);
+                $st = $conn->prepare("SELECT d.Nama, $sel FROM dil d WHERE d.IdPel = :id AND $scope LIMIT 1");
+                $st->execute($p);
+                $row = $st->fetch(PDO::FETCH_ASSOC);
+                if (!$row) {
+                    $pesan_error = 'IdPel <strong>' . pg_e($idpel) . '</strong> tidak ditemukan di DIL pada wilayah Anda.';
+                } else {
+                    $beda = [];
+                    foreach ($baru as $kol => $nilai) if (!ud_sama($ud_meta[$kol], $row[$kol] ?? null, $nilai)) $beda[$kol] = $nilai;
+                    if (!$beda) {
+                        $pesan_info = 'IdPel <strong>' . pg_e($idpel) . '</strong> (' . pg_e($row['Nama']) . ') sudah memiliki nilai yang sama, tidak ada perubahan.';
                     } else {
-                        $pu = [':id' => $idpel, ':nv' => $nilai]; $scope_u = pg_scope($u, 'd', 'Unit', $pu);
-                        $conn->prepare("UPDATE dil d SET d.`$kol` = :nv, d.WaktuData = NOW() WHERE d.IdPel = :id AND $scope_u")->execute($pu);
-                        $pesan_sukses = 'IdPel <strong>' . pg_e($idpel) . '</strong> (' . pg_e($row['Nama']) . '): ' . pg_e(UPDATE_KOLOM[$kol]) . ' '
-                                      . ($row['nilai_lama'] === null || $row['nilai_lama'] === '' ? '<em>kosong</em>' : pg_e($row['nilai_lama'])) . ' &rarr; <strong>' . pg_e($nilai) . '</strong>.';
+                        $set = []; $pu = [':id' => $idpel]; $rinci = [];
+                        foreach (array_keys($beda) as $i => $kol) {
+                            $set[] = "d.`$kol` = :v$i"; $pu[":v$i"] = $beda[$kol];
+                            $lama  = trim((string) ($row[$kol] ?? ''));
+                            $rinci[] = pg_e(UPDATE_KOLOM[$kol]) . ' ' . ($lama === '' ? '<em>kosong</em>' : pg_e($lama)) . ' &rarr; <strong>' . pg_e($beda[$kol]) . '</strong>';
+                        }
+                        $scope_u = pg_scope($u, 'd', 'Unit', $pu);
+                        $conn->prepare("UPDATE dil d SET " . implode(', ', $set) . ", d.WaktuData = NOW() WHERE d.IdPel = :id AND $scope_u")->execute($pu);
+                        $pesan_sukses = 'IdPel <strong>' . pg_e($idpel) . '</strong> (' . pg_e($row['Nama']) . '): ' . implode('; ', $rinci) . '.';
                     }
-                } catch (PDOException $e) {
-                    $pesan_error = 'Gagal memperbarui: ' . pg_e($e->getMessage());
                 }
+            } catch (PDOException $e) {
+                $pesan_error = 'Gagal memperbarui: ' . pg_e($e->getMessage());
             }
         }
-        if ($pesan_error !== '') { $form_update = ['kolom' => $kol, 'idpel' => $idpel, 'nilai' => mb_substr($nilai_mentah, 0, 100), 'lanjut' => $lanjut ? '1' : '']; $buka_modal = 'update'; }
-        elseif ($lanjut)         { $form_update = ['kolom' => $kol, 'idpel' => '', 'nilai' => '', 'lanjut' => '1']; $buka_modal = 'update'; }   // siap IdPel berikutnya
+        if ($pesan_error !== '') {   // buka lagi pop-up dengan isian terakhir
+            $form_update = ['idpel' => $idpel, 'jenisshuntrip' => mb_substr($isian['JenisShuntrip'], 0, 20), 'nomormeter' => mb_substr($isian['NomorMeter'], 0, 15),
+                            'skalaprioritas' => mb_substr($isian['SkalaPrioritas'], 0, 5), 'peringkat' => mb_substr($isian['Peringkat'], 0, 12), 'lanjut' => $lanjut ? '1' : ''];
+            $buka_modal = 'update';
+        } elseif ($lanjut) {         // siap IdPel berikutnya
+            $form_update = ['lanjut' => '1']; $buka_modal = 'update';
+        }
 
     } elseif ($aksi === 'update_excel') {
         // ---- UPDATE DIL: upload Excel (IdPel + satu/lebih kolom: NomorMeter, SkalaPrioritas, Peringkat) ----

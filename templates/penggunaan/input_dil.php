@@ -71,7 +71,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
         <button type="button" class="card border-0 shadow-sm rounded-4 p-4 w-100 h-100 text-start bg-white" data-bs-toggle="modal" data-bs-target="#modalUpdateDil">
             <div class="d-flex align-items-center gap-3">
                 <span class="rounded-circle bg-warning bg-opacity-10 text-warning d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;"><i class="bi bi-pencil-square fs-4"></i></span>
-                <span><span class="d-block fw-bold text-dark">Update DIL</span><span class="small text-muted">Perbarui Nomor Meter, Skala Prioritas, atau Peringkat satu IdPel.</span></span>
+                <span><span class="d-block fw-bold text-dark">Update DIL</span><span class="small text-muted">Ketik IdPel (muncul saran), lalu perbarui Jenis Shuntrip, Nomor Meter, Skala Prioritas, atau Peringkat.</span></span>
             </div>
         </button>
     </div>
@@ -198,35 +198,73 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
+                <!-- Cari IdPel (dengan saran otomatis) -->
+                <div class="mb-3 position-relative">
+                    <label for="ud_idpel" class="form-label small fw-bold text-secondary text-uppercase">Cari IdPel *</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="ud_idpel" name="idpel" maxlength="12" minlength="12" pattern="[A-Za-z0-9]{12}"
+                               placeholder="Ketik min. 3 karakter IdPel" value="<?= pg_e($fu['idpel'] ?? '') ?>" required
+                               autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ud_saran">
+                        <button class="btn btn-outline-secondary" type="button" id="btnCekIdpel" title="Cari data IdPel">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <!-- Daftar saran IdPel -->
+                    <div id="ud_saran" class="list-group position-absolute shadow border rounded-3 d-none" role="listbox"
+                         style="z-index:1090;left:0;right:0;max-height:260px;overflow-y:auto;"></div>
+                    <!-- Status / keterangan hasil pencarian -->
+                    <div id="ud_idpel_status" class="form-text small mt-1">Ketik minimal 3 karakter IdPel, lalu pilih dari daftar saran.</div>
+                </div>
+
+                <hr class="text-muted opacity-25 my-3">
+                <p class="small text-muted mb-3">Isi kolom di bawah ini sesuai data yang ingin diperbarui. Kosongkan jika tidak ingin mengubah kolom tersebut.</p>
+
+                <!-- Jenis Shuntrip -->
                 <div class="mb-3">
-                    <label for="ud_kolom" class="form-label small fw-bold text-secondary text-uppercase">Kolom yang diperbarui *</label>
-                    <select class="form-select" id="ud_kolom" name="kolom" required>
-                        <option value="">- pilih kolom -</option>
-                        <?php foreach (UPDATE_KOLOM as $k => $lbl): $ada = !empty($ud_meta[$k]['ada']); ?>
-                        <option value="<?= pg_e($k) ?>" <?= !$ada ? 'disabled' : '' ?> <?= ($fu['kolom'] ?? '') === $k ? 'selected' : '' ?>><?= pg_e($lbl) ?><?= !$ada ? ' (belum ada di tabel dil)' : '' ?></option>
+                    <label for="ud_jenisshuntrip" class="form-label small fw-bold text-secondary text-uppercase">Jenis Shuntrip</label>
+                    <select class="form-select" id="ud_jenisshuntrip" name="jenisshuntrip">
+                        <option value="">- tidak diubah / kosong -</option>
+                        <?php foreach (JENIS_SHUNTRIP as $js): ?>
+                        <option value="<?= pg_e($js) ?>" <?= (($fu['jenisshuntrip'] ?? '') === $js) ? 'selected' : '' ?>><?= pg_e($js) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+
+                <!-- Nomor Meter -->
                 <div class="mb-3">
-                    <label for="ud_idpel" class="form-label small fw-bold text-secondary text-uppercase">IdPel *</label>
-                    <input type="text" class="form-control font-monospace" id="ud_idpel" name="idpel" maxlength="12" minlength="12" pattern="[A-Za-z0-9]{12}"
-                           placeholder="12 karakter" value="<?= pg_e($fu['idpel'] ?? '') ?>" required autocomplete="off">
+                    <label for="ud_nomormeter" class="form-label small fw-bold text-secondary text-uppercase">Nomor Meter</label>
+                    <input type="text" class="form-control" id="ud_nomormeter" name="nomormeter" maxlength="15" 
+                           placeholder="Opsional" value="<?= pg_e($fu['nomormeter'] ?? '') ?>">
                 </div>
-                <div class="mb-2">
-                    <label for="ud_nilai" class="form-label small fw-bold text-secondary text-uppercase">Nilai baru *</label>
-                    <input type="text" class="form-control" id="ud_nilai" name="nilai" required disabled placeholder="Pilih kolom dulu">
-                    <select class="form-select d-none" id="ud_nilai_pil" name="nilai" required disabled></select>
-                    <div class="form-text" id="ud_hint">Pilih kolom untuk melihat format nilainya.</div>
+
+                <!-- Skala Prioritas & Peringkat -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="ud_skalaprioritas" class="form-label small fw-bold text-secondary text-uppercase">Skala Prioritas</label>
+                        <input type="number" class="form-control" id="ud_skalaprioritas" name="skalaprioritas" min="1" max="9" step="1" 
+                               placeholder="1 - 9 (Opsional)" value="<?= pg_e($fu['skalaprioritas'] ?? '') ?>"
+                               oninput="if(this.value !== ''){ let v = parseInt(this.value, 10); if(v < 1) this.value = 1; if(v > 9) this.value = 9; }">
+                        <div class="form-text" style="font-size: 0.75rem;">Angka bulat 1 – 9.</div>
+                    </div>
+
+                    <!-- Peringkat -->
+                    <div class="col-md-6 mb-3">
+                        <label for="ud_peringkat" class="form-label small fw-bold text-secondary text-uppercase">Peringkat</label>
+                        <input type="number" class="form-control" id="ud_peringkat" name="peringkat" min="1" step="1" 
+                               placeholder="Min. 1 (Opsional)" value="<?= pg_e($fu['peringkat'] ?? '') ?>"
+                               oninput="if(this.value !== '' && parseInt(this.value, 10) < 1) this.value = 1;">
+                        <div class="form-text" style="font-size: 0.75rem;">Angka bulat ≥ 1.</div>
+                    </div>
                 </div>
+
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="ud_lanjut" name="lanjut" value="1" <?= !empty($fu['lanjut']) ? 'checked' : '' ?>>
                     <label class="form-check-label small" for="ud_lanjut">Tetap buka form setelah simpan (untuk IdPel berikutnya)</label>
                 </div>
-                <div class="small text-muted">Hanya IdPel yang sudah ada di DIL pada wilayah Anda yang bisa diperbarui; kolom lain tidak berubah.</div>
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-warning px-4"><i class="bi bi-save me-1"></i>Simpan</button>
+                <button type="submit" class="btn btn-warning px-4"><i class="bi bi-save me-1"></i>Simpan Perubahan</button>
             </div>
         </form>
     </div>
@@ -273,43 +311,6 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
     </div>
 </div>
 
-<!-- Pop-up Update DIL: bentuk isian nilai mengikuti kolom yang dipilih (teks / angka / pilihan) -->
-<script>
-(function () {
-    var meta = <?= json_encode($ud_meta ?? [], JSON_UNESCAPED_UNICODE) ?>;
-    var kolom = document.getElementById('ud_kolom'), inp = document.getElementById('ud_nilai'), pil = document.getElementById('ud_nilai_pil'), hint = document.getElementById('ud_hint');
-    if (!kolom) return;
-    var awal = <?= json_encode((string) ($fu['nilai'] ?? '')) ?>;
-    function atur(isi) {
-        var m = meta[kolom.value];
-        inp.value = ''; inp.removeAttribute('min'); inp.removeAttribute('max'); inp.removeAttribute('maxlength'); inp.step = '';
-        if (!m || !m.ada) {
-            inp.type = 'text'; inp.disabled = true; inp.classList.remove('d-none'); pil.classList.add('d-none'); pil.disabled = true;
-            inp.placeholder = 'Pilih kolom dulu'; hint.textContent = 'Pilih kolom untuk melihat format nilainya.'; return;
-        }
-        if (m.tipe === 'pilihan') {
-            inp.classList.add('d-none'); inp.disabled = true; pil.classList.remove('d-none'); pil.disabled = false;
-            pil.innerHTML = '<option value="">- pilih -</option>' + m.pilihan.map(function (o) { return '<option value="' + o.replace(/"/g, '&quot;') + '">' + o + '</option>'; }).join('');
-            if (isi) pil.value = isi;
-            hint.textContent = 'Pilih salah satu nilai.';
-            return;
-        }
-        pil.classList.add('d-none'); pil.disabled = true; inp.classList.remove('d-none'); inp.disabled = false;
-        if (m.tipe === 'angka') {
-            inp.type = 'number'; inp.step = '1';
-            if (m.min !== null) inp.min = m.min; if (m.maksNilai !== null) inp.max = m.maksNilai;
-            inp.placeholder = 'Angka bulat'; hint.textContent = 'Angka bulat' + (m.min !== null && m.maksNilai !== null ? ' antara ' + m.min + ' dan ' + m.maksNilai : '') + '.';
-        } else if (m.tipe === 'desimal') {
-            inp.type = 'number'; inp.step = 'any'; inp.placeholder = 'Angka'; hint.textContent = 'Angka (boleh desimal).';
-        } else {
-            inp.type = 'text'; inp.maxLength = m.maks; inp.placeholder = 'Nilai baru'; hint.textContent = 'Teks, maksimal ' + m.maks + ' karakter.';
-        }
-        if (isi) inp.value = isi;
-    }
-    kolom.addEventListener('change', function () { atur(''); });
-    atur(awal);
-})();
-</script>
 <?php if (($buka_modal ?? '') === 'update'): ?>
 <script>
 // buka kembali pop-up Update DIL (gagal simpan, atau "tetap buka form" dicentang)
@@ -393,4 +394,125 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof window.hidePageLoader === 'function') window.hidePageLoader();
     });
 })();
+</script>
+
+<!-- Pop-up Update DIL: saran IdPel saat mengetik + isi otomatis data IdPel yang dipilih -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var inp     = document.getElementById('ud_idpel');
+    if (!inp) return;
+    var saran   = document.getElementById('ud_saran');
+    var status  = document.getElementById('ud_idpel_status');
+    var btnCek  = document.getElementById('btnCekIdpel');
+    var f = {
+        jenisshuntrip:  document.getElementById('ud_jenisshuntrip'),
+        nomormeter:     document.getElementById('ud_nomormeter'),
+        skalaprioritas: document.getElementById('ud_skalaprioritas'),
+        peringkat:      document.getElementById('ud_peringkat')
+    };
+    var BASE    = <?= json_encode(pg_url('input_dil')) ?>;
+    var MIN     = 3;                       // minimal karakter sebelum saran muncul
+    var teksAwal = 'Ketik minimal ' + MIN + ' karakter IdPel, lalu pilih dari daftar saran.';
+    var timer = null, ctrlSaran = null, ctrlCek = null, aktif = -1, terisi = false;
+
+    function url(params) {
+        return BASE + (BASE.indexOf('?') >= 0 ? '&' : '?') + params;      // aman bila pg_url() sudah memuat query string
+    }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+    function info(html) { status.innerHTML = html; }
+    function ambilJson(u, ctrl) {
+        return fetch(u, { signal: ctrl.signal, credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.text(); })
+            .then(function (t) { try { return JSON.parse(t); } catch (e) { throw new Error('Respons server bukan JSON'); } });
+    }
+
+    function tutupSaran() { saran.classList.add('d-none'); saran.innerHTML = ''; aktif = -1; inp.setAttribute('aria-expanded', 'false'); }
+    function kosongkanIsian() { Object.keys(f).forEach(function (k) { if (f[k]) f[k].value = ''; }); terisi = false; }
+
+    function tampilSaran(items) {
+        if (!items.length) {
+            saran.innerHTML = '<div class="list-group-item small text-muted">Tidak ada IdPel yang cocok di wilayah Anda.</div>';
+            saran.classList.remove('d-none'); aktif = -1; return;
+        }
+        saran.innerHTML = items.map(function (it, i) {
+            return '<button type="button" class="list-group-item list-group-item-action py-2" role="option" data-idpel="' + esc(it.idpel) + '" data-i="' + i + '">'
+                 + '<span class="font-monospace fw-bold">' + esc(it.idpel) + '</span>'
+                 + '<span class="small text-muted ms-2">' + esc(it.nama) + '</span></button>';
+        }).join('');
+        saran.classList.remove('d-none'); aktif = -1; inp.setAttribute('aria-expanded', 'true');
+    }
+
+    function cariSaran() {
+        var q = inp.value.trim();
+        if (q.length < MIN || q.length >= 12) { tutupSaran(); return; }
+        if (ctrlSaran) ctrlSaran.abort();
+        ctrlSaran = new AbortController();
+        ambilJson(url('ajax=saran_idpel&q=' + encodeURIComponent(q)), ctrlSaran)
+            .then(function (d) { if (inp.value.trim() === q) tampilSaran(d.items || []); })
+            .catch(function (e) { if (e.name !== 'AbortError') { tutupSaran(); info('<span class="text-warning">Gagal memuat saran IdPel.</span>'); } });
+    }
+
+    function cariData() {
+        var id = inp.value.trim();
+        if (id.length !== 12) { info('<span class="text-muted">' + teksAwal + '</span>'); return; }
+        if (ctrlCek) ctrlCek.abort();
+        ctrlCek = new AbortController();
+        info('<span class="text-primary"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Mencari data IdPel...</span>');
+        ambilJson(url('ajax=cek_idpel&idpel=' + encodeURIComponent(id)), ctrlCek)
+            .then(function (d) {
+                if (inp.value.trim() !== id) return;                      // input sudah berubah
+                if (d.found) {
+                    info('<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>Pelanggan ditemukan: ' + esc(d.nama) + '</span>');
+                    if (f.jenisshuntrip)  f.jenisshuntrip.value  = d.jenisshuntrip || '';
+                    if (f.nomormeter)     f.nomormeter.value     = d.nomormeter || '';
+                    if (f.skalaprioritas) f.skalaprioritas.value = d.skalaprioritas || '';
+                    if (f.peringkat)      f.peringkat.value      = d.peringkat || '';
+                    terisi = true;
+                } else {
+                    kosongkanIsian();
+                    info('<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>IdPel tidak ditemukan di wilayah Anda atau belum terdaftar.</span>');
+                }
+            })
+            .catch(function (e) { if (e.name !== 'AbortError') info('<span class="text-warning">Gagal memeriksa IdPel (periksa koneksi).</span>'); });
+    }
+
+    function pilih(id) { inp.value = id; tutupSaran(); cariData(); inp.focus(); }
+
+    inp.addEventListener('input', function () {
+        this.value = this.value.replace(/[^A-Za-z0-9]/g, '');            // hanya huruf/angka
+        if (terisi) kosongkanIsian();                                     // IdPel berubah: buang isian otomatis lama
+        clearTimeout(timer);
+        var n = this.value.length;
+        if (n === 12) { tutupSaran(); cariData(); return; }
+        info('<span class="text-muted">' + (n >= MIN ? 'Pilih IdPel dari daftar saran, atau lengkapi 12 karakter.' : teksAwal) + '</span>');
+        timer = setTimeout(cariSaran, 250);                               // jeda 250 ms agar tidak membanjiri server
+    });
+
+    inp.addEventListener('keydown', function (e) {
+        var btns = saran.querySelectorAll('button[data-idpel]');
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!btns.length) return;
+            e.preventDefault();
+            aktif = e.key === 'ArrowDown' ? (aktif + 1) % btns.length : (aktif <= 0 ? btns.length - 1 : aktif - 1);
+            btns.forEach(function (b, i) { b.classList.toggle('active', i === aktif); });
+            btns[aktif].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            if (aktif >= 0 && btns[aktif]) { e.preventDefault(); pilih(btns[aktif].getAttribute('data-idpel')); }
+        } else if (e.key === 'Escape') {
+            if (!saran.classList.contains('d-none')) { e.stopPropagation(); tutupSaran(); }
+        }
+    });
+
+    // mousedown (bukan click) supaya terpilih sebelum input kehilangan fokus
+    saran.addEventListener('mousedown', function (e) {
+        var b = e.target.closest('button[data-idpel]');
+        if (b) { e.preventDefault(); pilih(b.getAttribute('data-idpel')); }
+    });
+    inp.addEventListener('focus', function () { if (inp.value.trim().length >= MIN && inp.value.trim().length < 12) cariSaran(); });
+    document.addEventListener('click', function (e) { if (!saran.contains(e.target) && e.target !== inp) tutupSaran(); });
+    if (btnCek) btnCek.addEventListener('click', function () { tutupSaran(); cariData(); });
+
+    var modal = document.getElementById('modalUpdateDil');
+    if (modal) modal.addEventListener('hidden.bs.modal', tutupSaran);
+});
 </script>
