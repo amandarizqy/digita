@@ -42,7 +42,7 @@ const UPDATE_KOLOM = ['NomorMeter' => 'Nomor Meter', 'SkalaPrioritas' => 'Skala 
 const UPDATE_HEADER = ['NOMORMETER' => 'NomorMeter', 'NOMORKWH' => 'NomorMeter', 'SKALAPRIORITAS' => 'SkalaPrioritas', 'SKALA' => 'SkalaPrioritas', 'PERINGKAT' => 'Peringkat', 'JENISSHUNTRIP' => 'JenisShuntrip'];
 
 /** Nilai ENUM dil.JenisShuntrip. */
-const JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU'];
+const JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU', '-'];
 
 /** Judul kolom Excel (huruf besar, tanpa spasi/simbol) => kolom dil. */
 const DIL_HEADER = [

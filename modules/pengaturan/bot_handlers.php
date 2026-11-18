@@ -14,6 +14,9 @@ require_once __DIR__ . '/bot_helper.php';   // aturan folder & cakupan unit (sat
 
 const BH_CHUNK = 500;
 
+/** Nilai ENUM dil.JenisShuntrip (sama dengan JENIS_SHUNTRIP di penggunaan/input_dil.php). */
+const BH_JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU', '-'];
+
 // ============================================================
 // Normalisasi nilai (sama dengan fungsi rw_*/tul_*/pi_* di halaman web)
 // ============================================================
@@ -96,6 +99,31 @@ function bh_norm_kepentingan($v): ?string
     return in_array($v, ['RENDAH', 'MODERAT', 'TINGGI'], true) ? $v : null;
 }
 
+/** IdPel untuk saldo (dpp): angka ilmiah/".0" Excel dibereskan, TANPA pelengkap nol (wajib persis 12 digit). null = bukan angka. */
+function bh_idpel_ketat($v): ?string
+{
+    $v = trim((string) $v);
+    if (preg_match('/^\d+(\.0+)?$/', $v))                  return preg_replace('/\.0+$/', '', $v);
+    if (preg_match('/^\d+(\.\d+)?[eE]\+?\d+$/', $v))       return sprintf('%.0f', (float) $v);
+    return null;
+}
+
+/** Alasan penolakan IdPel saldo (null bila valid: persis 12 digit). */
+function bh_idpel_ketat_alasan(?string $v): ?string
+{
+    if ($v === null)     return 'IdPel harus berupa angka';
+    if (strlen($v) < 12) return 'IdPel kurang dari 12 karakter, tidak disimpan';
+    if (strlen($v) > 12) return 'IdPel lebih dari 12 karakter, tidak disimpan';
+    return null;
+}
+
+/** ThBlRek saldo: YYYYMM atau YYYYMMDD. */
+function bh_bulan_saldo($v): ?string
+{
+    $v = preg_replace('/\.0+$/', '', trim((string) $v));
+    return preg_match('/^(19|20)\d{2}(0[1-9]|1[0-2])((0[1-9]|[12]\d|3[01]))?$/', $v) ? $v : null;
+}
+
 function bh_periode($v): ?int
 {
     $v = preg_replace('/\.0+$/', '', trim((string) $v));
@@ -153,6 +181,7 @@ function bh_jalankan(PDO $conn, array $bot, string $jenis, string $file, string 
             case 'PELUNASAN':   return bh_pelunasan($conn, $bot, $file, $ap, $up);
             case 'DIL':         return bh_dil($conn, $bot, $file, $ap, $up);
             case 'TUL':         return bh_tul($conn, $bot, $file, $ap, $up);
+            case 'SALDO_TUNGGAKAN': return bh_saldo($conn, $bot, $file, $ap, $up);
             case 'SURVEY':      return bh_kategorisasi($conn, $bot, $file, $ap, $up, [
                                     'kolom' => 'PosisiSR', 'nama_excel' => 'PosisiSR', 'alias' => ['posisisr', 'sr'],
                                     'format' => '0 atau 1', 'norm' => 'bh_norm_sr', 'label' => 'Posisi SR']);
@@ -214,6 +243,7 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;             // b. baris data
+        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $dibaca++;
         $g = fn($f) => $sel[$peta[$f]] ?? '';
 
@@ -282,7 +312,10 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
 
 // ============================================================
 // DIL -> dil (lewat transit_dil)   [penggunaan/input_dil.php]
-// Kolom unit di file boleh kosong (diisi dari folder/bot) tetapi bila ada harus di dalam wilayah bot.
+// Alur sama dengan import web: kosongkan sisa transit_dil milik akun -> isi transit_dil -> salin ke dil (StatusData = AKTIF)
+// -> kosongkan transit_dil. JenisShuntrip hanya ikut diisi bila Excel memuat kolomnya (selain itu memakai nilai bawaan database).
+// Beda dengan web (karena bot tidak punya akun login): kolom unit di file boleh kosong (diisi dari folder/bot),
+// tetapi bila ada harus di dalam wilayah bot.
 // ============================================================
 function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
@@ -290,26 +323,25 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $akun = bh_akun($bot);
     $peta_unit = bh_peta_unit($conn, $upi, trim((string) ($bot['UnitAp'] ?? '')), trim((string) ($bot['UnitUp'] ?? '')));
 
-    $kolom   = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'StatusData', 'WaktuData'];
-    $transit = array_values(array_diff($kolom, ['StatusData']));   // transit_dil tidak punya StatusData
+    // Kolom transit_dil = kolom dil tanpa StatusData (diberikan saat pindah ke dil). WaktuData diisi NOW() terpisah.
+    $kolom_transit = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
+                      'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
     $header  = [
         'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
         'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',
-        'AKTIFASI' => 'Aktifasi', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
+        'AKTIFASI' => 'Aktifasi', 'JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar',
+        'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
     ];
     $norm_id = function ($v): string {
         $v = trim((string) $v);
         return preg_match('/^\d{1,12}$/', $v) ? str_pad($v, 12, '0', STR_PAD_LEFT) : $v;
     };
 
-    $kol_dil   = implode(', ', $kolom);
-    $kol_trans = implode(', ', $transit);
-    $kol_pilih = implode(', ', array_map(fn($k) => $k === 'StatusData' ? "'AKTIF'" : $k, $kolom));
-    $per_baris = '(' . implode(', ', array_fill(0, count($transit) - 1, '?')) . ', NOW())';   // WaktuData = NOW()
-    $kirim = function (array $rows) use ($conn, $kol_trans, $per_baris) {
+    $cols = [];                                                   // kolom yang diisi: ditentukan setelah baris judul ditemukan
+    $kirim = function (array $rows) use ($conn, &$cols) {
         if (!$rows) return;
-        $conn->prepare("INSERT INTO transit_dil ($kol_trans) VALUES " . implode(', ', array_fill(0, count($rows), $per_baris)))
+        $per_baris = '(' . implode(', ', array_fill(0, count($cols), '?')) . ', NOW())';   // WaktuData = NOW()
+        $conn->prepare('INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, count($rows), $per_baris)))
              ->execute(array_merge(...$rows));
     };
 
@@ -327,9 +359,14 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                 $kunci = preg_replace('/[^A-Z0-9]/', '', strtoupper((string) $isi));
                 if (isset($header[$kunci]) && !isset($tmp[$header[$kunci]])) $tmp[$header[$kunci]] = $huruf;
             }
-            if (isset($tmp['IdPel'], $tmp['Nama'])) $peta = $tmp;
+            if (isset($tmp['IdPel'], $tmp['Nama'])) {
+                $peta = $tmp;
+                // JenisShuntrip hanya disertakan bila Excel memuat kolomnya
+                $cols = array_values(array_filter($kolom_transit, fn($k) => $k !== 'JenisShuntrip' || isset($peta['JenisShuntrip'])));
+            }
             continue;
         }
+        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $g = fn(string $k, int $m) => isset($peta[$k]) ? bh_teks($sel[$peta[$k]] ?? '', $m) : '';
 
         $idpel_mentah = trim((string) ($sel[$peta['IdPel']] ?? ''));
@@ -374,20 +411,26 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         $seen[$idpel] = true;
 
         $teg = strtoupper($g('TegUkur', 2));
-        $batch[] = [
-            $idpel, $nama, $g('Alamat', 100), $g('JenisMk', 10), $g('NomorTlp', 20), $g('NomorHp', 20),
-            $g('GolTar', 5), (int) round((float) str_replace(',', '.', $g('Daya', 15))),
-            in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-            $g('KdPembMeter', 1), $g('NomorMeter', 15), $g('Aktifasi', 15), $g('ProdukPrabayar', 50),
-            $akun, $r_up, $r_ap, $r_upi,
+        $sh  = strtoupper($g('JenisShuntrip', 10));
+        $baris = [
+            'IdPel' => $idpel, 'Nama' => $nama, 'Alamat' => $g('Alamat', 100), 'JenisMk' => $g('JenisMk', 10),
+            'NomorTlp' => $g('NomorTlp', 20), 'NomorHp' => $g('NomorHp', 20), 'GolTar' => $g('GolTar', 5),
+            'Daya' => (int) round((float) str_replace(',', '.', $g('Daya', 15))),
+            'TegUkur' => in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
+            'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'Aktifasi' => $g('Aktifasi', 15),
+            'ProdukPrabayar' => $g('ProdukPrabayar', 50),
+            'JenisShuntrip' => in_array($sh, BH_JENIS_SHUNTRIP, true) ? $sh : null,
+            'NamaAkun' => $akun, 'UnitUp' => $r_up, 'UnitAp' => $r_ap, 'UnitUpi' => $r_upi,
         ];
+        $batch[] = array_map(fn($c) => $baris[$c], $cols);        // urutan nilai selalu sama dengan $cols
         if (count($batch) >= BH_CHUNK) { $kirim($batch); $batch = []; }
     }
     if (!$peta) throw new RuntimeException('Baris judul kolom (IDPEL, NAMA, ...) tidak ditemukan. Pastikan file adalah "Monitoring DIL Detail".');
     $kirim($batch);
 
     // transit_dil -> dil (IdPel yang sudah ada dilewati), lalu transit_dil dikosongkan
-    $in = $conn->prepare("INSERT IGNORE INTO dil ($kol_dil) SELECT $kol_pilih FROM transit_dil WHERE NamaAkun = ?");
+    $kol_isi = implode(', ', $cols);
+    $in = $conn->prepare("INSERT IGNORE INTO dil ($kol_isi, StatusData, WaktuData) SELECT $kol_isi, 'AKTIF', WaktuData FROM transit_dil WHERE NamaAkun = ?");
     $in->execute([$akun]);
     $ok = $in->rowCount();
     $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);
@@ -404,14 +447,35 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 
 // ============================================================
 // TUL -> tul_601   [penggunaan/upload_tul.php]  (IdPel tidak dicek ke master_barang)
-// Logika sama dengan halaman web; bedanya wilayah dari folder/bot dan NamaAkun memakai akun bot
-// (harus ada di master_pengguna karena foreign key, lihat bot_akun_riwayat() di bot_helper.php).
+// Logika sama dengan halaman web; bedanya wilayah dari folder/bot dan NamaAkun = 'BOT_<IdBot>' (bh_akun), bukan akun yang login.
+//
+// NoTul baru        -> INSERT penuh (StatusData 'AKTIF').
+// NoTul sudah ada   -> HANYA ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui.
+//                      Kolom lain (WaktuCetak, IdPel, StandBaca, TglBaca, NamaAkun, unit, StatusData, WaktuData) tidak disentuh.
+// NoTul milik wilayah lain -> ditolak (tidak menimpa data unit lain).
 // ============================================================
+
+/**
+ * Baris footer/catatan kaki (mis. "Dicetak oleh ...") yang biasanya di-merge: hanya satu sel terisi dan isinya teks biasa.
+ * Baris seperti ini dilewati, bukan dihitung sebagai baris gagal.
+ */
+function bh_baris_footer(array $sel): bool
+{
+    $isi = [];
+    foreach ($sel as $v) {
+        $v = trim((string) $v);
+        if ($v !== '') $isi[] = $v;
+    }
+    if (count($isi) !== 1) return false;
+    if (preg_match('/^[A-Za-z0-9]{12}$/', $isi[0])) return false;   // mungkin IdPel alfanumerik yang kolom lainnya kosong: tetap diperiksa
+    return (bool) preg_match('/\p{L}{2,}/u', $isi[0]);              // harus ada huruf, bukan angka murni
+}
+
 function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
     bh_wajib_wilayah($ap, $up);
     $upi  = trim((string) $bot['UnitUpi']);
-    $akun = bot_akun_riwayat($conn);          // ?string: akun 'BOT' di master_pengguna, atau NULL bila belum ada
+    $akun = bh_akun($bot);                    // 'BOT_<IdBot>', sama dengan pelunasan, DIL, dan saldo
     $int_max = 2147483647;
 
     $wajib = [
@@ -449,6 +513,7 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         }
         if (trim(implode('', $sel)) === '') continue;
         if (strtoupper(trim((string) reset($sel))) === 'TOTAL') continue;   // baris jumlah di akhir laporan
+        if (bh_baris_footer($sel)) continue;                                // footer / catatan kaki (sel merge)
         $dibaca++;
         $g = fn($f) => isset($peta[$f]) ? ($sel[$peta[$f]] ?? '') : '';
 
@@ -512,11 +577,11 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                  ->execute($param);
         }
 
-        // c2. tul_601. StatusData baris lama TIDAK diubah; StandBaca/TglBaca lama dipertahankan bila file baru kosong.
+        // c2. tul_601. NoTul baru -> INSERT penuh (StatusData 'AKTIF').
+        //     NoTul yang sudah ada -> HANYA ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui (sama dengan halaman web).
+        //     Kolom lain (WaktuCetak, IdPel, StandBaca, TglBaca, NamaAkun, unit, StatusData, WaktuData) tidak disentuh.
         $head = "INSERT INTO tul_601 (NoTul, WaktuCetak, IdPel, ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag, StandBaca, TglBaca, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES ";
-        $tail = " ON DUPLICATE KEY UPDATE WaktuCetak = VALUES(WaktuCetak), IdPel = VALUES(IdPel), ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir),
-                  Lembar = VALUES(Lembar), RpTag = VALUES(RpTag), StandBaca = COALESCE(VALUES(StandBaca), StandBaca), TglBaca = COALESCE(VALUES(TglBaca), TglBaca),
-                  NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = VALUES(WaktuData)";
+        $tail = " ON DUPLICATE KEY UPDATE ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir), Lembar = VALUES(Lembar), RpTag = VALUES(RpTag)";
         foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
             $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), "(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")) . $tail);
             $param = [];
@@ -533,6 +598,113 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
            . ($bentrok ? ", $bentrok ditolak (wilayah lain)" : '')
            . (($tolak - $bentrok) > 0 ? ', ' . ($tolak - $bentrok) . ' tidak valid' : '');
     return bh_hasil('sukses', $pesan, count($baris), $tolak, $detail);
+}
+
+// ============================================================
+// SALDO_TUNGGAKAN -> dpp   [penggunaan/input_saldo.php]
+// Hanya MENAMBAH data: IdPel + ThBlRek yang sudah ada di dpp dilewati (tidak diperbarui).
+// IdPel wajib persis 12 digit (tanpa pelengkap nol) dan wajib sudah ada di dil; bot tidak pernah menambah dil.
+// ============================================================
+function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): array
+{
+    bh_wajib_wilayah($ap, $up);
+    $upi  = trim((string) $bot['UnitUpi']);
+    $akun = bh_akun($bot);
+
+    $alias    = ['idpel' => ['idpel'], 'bulan' => ['thblrek', 'bulan'], 'rp' => ['rptag', 'rptagihan', 'saldo']];
+    $nama_kol = ['idpel' => 'IdPel', 'bulan' => 'ThBlRek', 'rp' => 'RpTag'];
+
+    $peta = null; $baris = []; $detail = [];
+    $dibaca = $salah = $dobel = $tidak_dil = $sudah_ada = 0;
+
+    foreach (xlsx_baris($file) as $no => $sel) {
+        if ($peta === null) {                                     // cari baris judul (20 baris pertama)
+            if ($no > 20) throw new RuntimeException('Baris judul kolom tidak ditemukan pada 20 baris pertama.');
+            $kol = [];
+            foreach ($sel as $h => $n) $kol[bh_header($n)] = $h;
+            if (!isset($kol['idpel'])) continue;
+            $peta = [];
+            foreach ($alias as $fld => $al) foreach ($al as $a) if (isset($kol[$a])) { $peta[$fld] = $kol[$a]; break; }
+            $kurang = array_diff(array_keys($alias), array_keys($peta));
+            if ($kurang) throw new RuntimeException('Kolom wajib tidak ditemukan: ' . implode(', ', array_map(fn($k) => $nama_kol[$k], $kurang)) . '.');
+            continue;
+        }
+        if (trim(implode('', $sel)) === '') continue;
+        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
+        $dibaca++;
+        $id = bh_idpel_ketat($sel[$peta['idpel']] ?? '');
+        $bl = bh_bulan_saldo($sel[$peta['bulan']] ?? '');
+        $rp = bh_int($sel[$peta['rp']] ?? '');
+        $alasan = bh_idpel_ketat_alasan($id) ?? ($bl === null ? 'ThBlRek harus YYYYMM/YYYYMMDD' : ($rp === null ? 'RpTag kosong/bukan angka/negatif' : null));
+        if ($alasan !== null) {
+            $salah++;
+            if (count($detail) < 50) $detail[] = "Baris $no: $alasan (" . trim((string) ($sel[$peta['idpel']] ?? '')) . ')';
+            continue;
+        }
+        if (isset($baris[$id . '|' . $bl])) $dobel++;             // baris terakhir yang dipakai
+        $baris[$id . '|' . $bl] = [$id, $bl, $rp, $no];
+    }
+    if ($peta === null) throw new RuntimeException('Baris judul kolom (IdPel, ThBlRek, RpTag) tidak ditemukan.');
+
+    // IdPel WAJIB sudah terdaftar di DIL: yang tidak ada dilewati (tidak pernah ditambahkan ke DIL)
+    if ($baris) {
+        $ada = [];
+        foreach (array_chunk(array_values(array_unique(array_column($baris, 0))), 1000) as $paket) {
+            $st = $conn->prepare("SELECT IdPel FROM dil WHERE IdPel IN (" . implode(',', array_fill(0, count($paket), '?')) . ")");
+            $st->execute($paket);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $x) $ada[(string) $x] = true;
+        }
+        foreach ($baris as $k => $b) {
+            if (isset($ada[$b[0]])) continue;
+            $tidak_dil++;
+            if (count($detail) < 50) $detail[] = 'Baris ' . $b[3] . ': IdPel ' . $b[0] . ' tidak terdaftar di DIL, tidak disimpan';
+            unset($baris[$k]);
+        }
+    }
+
+    // IdPel + ThBlRek yang sudah ada di dpp TIDAK diperbarui (dilewati)
+    if ($baris) {
+        $sudah = [];
+        foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
+            $st = $conn->prepare("SELECT IdPel, ThBlRek FROM dpp WHERE (IdPel, ThBlRek) IN (" . implode(',', array_fill(0, count($paket), '(?,?)')) . ")");
+            $prm = [];
+            foreach ($paket as $b) array_push($prm, $b[0], $b[1]);
+            $st->execute($prm);
+            foreach ($st->fetchAll(PDO::FETCH_NUM) as $r) $sudah[trim((string) $r[0]) . '|' . trim((string) $r[1])] = true;
+        }
+        foreach ($baris as $k => $b) {
+            if (!isset($sudah[$b[0] . '|' . $b[1]])) continue;
+            $sudah_ada++;
+            if (count($detail) < 50) $detail[] = 'Baris ' . $b[3] . ': IdPel ' . $b[0] . ' periode ' . $b[1] . ' sudah ada di DPP, tidak diperbarui';
+            unset($baris[$k]);
+        }
+    }
+
+    // INSERT IGNORE sebagai pengaman bila ada input bersamaan; yang dihitung = baris yang benar-benar masuk
+    $baru = 0;
+    if ($baris) {
+        $conn->beginTransaction();
+        foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
+            $prm = [];
+            foreach ($paket as $b) array_push($prm, $b[0], $b[1], $b[2], $akun, $up, $ap, $upi);
+            $stmt = $conn->prepare("INSERT IGNORE INTO dpp (IdPel, ThBlRek, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES "
+                  . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,NOW())')));
+            $stmt->execute($prm);
+            $baru += $stmt->rowCount();
+        }
+        $conn->commit();
+    }
+
+    $ditolak = $salah + $tidak_dil;
+    if ($baru + $sudah_ada === 0) {
+        return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($ditolak ? " ($ditolak baris ditolak)." : '.'), 0, $ditolak, $detail);
+    }
+    $pesan = "$baru baris saldo baru disimpan"
+           . ($sudah_ada ? ", $sudah_ada sudah ada di DPP (tidak diperbarui)" : '')
+           . ($dobel ? ", $dobel dobel dalam file" : '')
+           . ($salah ? ", $salah tidak valid" : '')
+           . ($tidak_dil ? ", $tidak_dil dilewati (IdPel tidak ada di DIL)" : '');
+    return bh_hasil('sukses', $pesan, $baru, $ditolak, $detail);
 }
 
 // ============================================================
@@ -612,6 +784,7 @@ function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;
+        if (bh_baris_footer($sel)) continue;                      // footer / catatan kaki (sel merge)
         $dibaca++;
         $id    = bh_idpel($sel[$kolId] ?? '');
         $nilai = $norm($sel[$kolNilai] ?? '');

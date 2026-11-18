@@ -35,7 +35,7 @@ const BOT_NAMA_AKUN = 'BOT';
 const BOT_HAK_SUPER = 'SA.KP';
 const BOT_HAK_JENIS = [
     'DIL'         => ['SF.UI', 'SF.AP', 'SFUP'],
-    // 'SALDO_TUNGGAKAN' => ['SF.UI', 'SF.AP', 'SFUP'],   // aktifkan setelah jenis bot ini ditambahkan ke bot_jenis_daftar() & ENUM JenisBot
+    'SALDO_TUNGGAKAN' => ['SF.UI', 'SF.AP', 'SFUP'],      // butuh ENUM JenisBot memuat 'SALDO_TUNGGAKAN' (lihat bot_jenis_daftar())
     'PELUNASAN'   => ['SF.UP'],
     'TUL'         => ['SF.UP'],
     'SURVEY'      => ['SF.AP', 'SFUP'],
@@ -65,6 +65,12 @@ if (!function_exists('bot_jenis_daftar')) {
                 'tabel'  => 'tul_601',
                 'format' => 'Laporan AP2T "TUL VI-01 belum lunas": Nomer Tul VI-01, Tgl Pencetakan, Id Pelanggan, Bulan Rekening Awal/Akhir, Jumlah Lembar, Rp. Tagihan.',
                 'sumber' => 'penggunaan/upload_tul.php',
+            ],
+            'SALDO_TUNGGAKAN' => [
+                'label'  => 'Upload Saldo Tunggakan',
+                'tabel'  => 'dpp',
+                'format' => 'Kolom: IdPel (persis 12 digit, wajib sudah ada di DIL), ThBlRek (YYYYMM atau YYYYMMDD), RpTag. Data yang sudah ada tidak diperbarui.',
+                'sumber' => 'penggunaan/input_saldo.php',
             ],
             'SURVEY' => [
                 'label'  => 'Upload Survey SR',
