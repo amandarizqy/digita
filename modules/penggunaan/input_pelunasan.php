@@ -10,7 +10,9 @@
 // Aturan yang sama untuk ketiganya (fungsi pl_simpan) - INSERT TIDAK LAGI MEMBACA TABEL dpp:
 //   - RpTag datang dari input: kolom RpTagihan (Excel) / isian RpTag (manual) / nilai saldo pada baris (daftar)
 //   - Unit: UPI / AP / UP dari session akun (AP / UP kosong bila akun tidak punya)
-//   - pelunasan yang sudah tercatat TIDAK ditimpa (INSERT IGNORE)
+//   - IdPel WAJIB sudah ada di tabel dil (FK). Yang tidak ada DILEWATI dan DILAPORKAN, halaman ini tidak pernah menambah dil
+//   - pelunasan yang sudah tercatat TIDAK ditimpa (dicek dulu, lalu INSERT IGNORE sebagai pengaman)
+//   - baris yang gagal tersimpan (FK / trigger) dihitung dan alasannya ditampilkan, TIDAK lagi dianggap "sudah tercatat"
 //   (tabel dpp hanya dipakai untuk MENAMPILKAN daftar saldo belum lunas)
 //
 // Upload Excel: file dibaca streaming, hanya 5 kolom yang diambil (dicari berdasarkan NAMA kolom, urutan bebas):
@@ -73,30 +75,86 @@ function pl_angka($v): ?float
 
 /**
  * Catat pelunasan langsung ke pelunasan_ap2t (tanpa membaca dpp).
- * $items: [['idpel','bulan','tgl'(Y-m-d),'bk'(int),'tag'(int)], ...] yang SUDAH divalidasi formatnya
- * dan unik per (idpel,bulan). Dipanggil di dalam transaksi milik pemanggil.
- * Return: ['ok' => dicatat baru, 'sudah' => sudah tercatat (dilewati)]
+ * $items: [['idpel','bulan','tgl'(Y-m-d),'bk'(int),'tag'(int), 'no'(opsional, nomor baris file)], ...] yang SUDAH divalidasi
+ * formatnya dan unik per (idpel,bulan). Dipanggil di dalam transaksi milik pemanggil.
+ *
+ * Urutan: (1) IdPel dicek ke dil -> yang tidak ada dilewati; (2) (IdPel,ThBlRek) dicek ke pelunasan_ap2t -> yang sudah ada
+ * dilewati; (3) sisanya di-INSERT IGNORE. Bila ada yang tetap tidak masuk (FK lain / trigger), dihitung sebagai 'gagal'
+ * beserta pesan peringatan MySQL pertama.
+ *
+ * Return: ['ok' => dicatat baru, 'sudah' => benar-benar sudah ada di pelunasan_ap2t, 'tidak_dil' => IdPel tidak ada di dil,
+ *          'gagal' => tidak masuk karena sebab lain, 'sebab_gagal' => pesan MySQL, 'lewat' => contoh baris dilewati (maks 50)]
  */
 function pl_simpan(PDO $conn, array $u, string $namaAkun, array $items, int $chunk = 500): array
 {
-    $hasil = ['ok' => 0, 'sudah' => 0];
+    $hasil = ['ok' => 0, 'sudah' => 0, 'tidak_dil' => 0, 'gagal' => 0, 'sebab_gagal' => '', 'lewat' => []];
     if (!$items) return $hasil;
 
-    $baris = [];
+    // 1. IdPel wajib sudah terdaftar di DIL
+    $ada = [];
+    foreach (array_chunk(array_values(array_unique(array_column($items, 'idpel'))), 1000) as $paket) {
+        $st = $conn->prepare('SELECT IdPel FROM dil WHERE IdPel IN (' . implode(',', array_fill(0, count($paket), '?')) . ')');
+        $st->execute($paket);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $x) $ada[trim((string) $x)] = true;
+    }
+    $lolos = [];
     foreach ($items as $it) {
-        $baris[] = [$it['idpel'], $it['bulan'], $it['tgl'], (int) $it['bk'], (int) $it['tag'], $namaAkun,
-                    (string) ($u['up'] ?? ''), (string) ($u['ap'] ?? ''), $u['upi']];
+        if (!isset($ada[$it['idpel']])) {
+            $hasil['tidak_dil']++;
+            if (count($hasil['lewat']) < 50) $hasil['lewat'][] = ['no' => $it['no'] ?? '-', 'idpel' => $it['idpel'], 'alasan' => 'IdPel tidak terdaftar di DIL, tidak disimpan (periode ' . $it['bulan'] . ')'];
+            continue;
+        }
+        $lolos[] = $it;
     }
 
-    // INSERT IGNORE: yang sudah tercatat tidak ditimpa
-    $head = "INSERT IGNORE INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ";
-    foreach (array_chunk($baris, $chunk) as $paket) {
-        $st = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')));
-        $st->execute(array_merge(...$paket));
-        $hasil['ok'] += $st->rowCount();
+    // 2. yang sudah tercatat tidak ditimpa
+    $ada_lunas = [];
+    foreach (array_chunk($lolos, $chunk) as $paket) {
+        $st  = $conn->prepare('SELECT IdPel, ThBlRek FROM pelunasan_ap2t WHERE (IdPel, ThBlRek) IN (' . implode(',', array_fill(0, count($paket), '(?,?)')) . ')');
+        $prm = [];
+        foreach ($paket as $it) array_push($prm, $it['idpel'], $it['bulan']);
+        $st->execute($prm);
+        foreach ($st->fetchAll(PDO::FETCH_NUM) as $r) $ada_lunas[trim((string) $r[0]) . '|' . trim((string) $r[1])] = true;
     }
-    $hasil['sudah'] = count($baris) - $hasil['ok'];
+    $baru = [];
+    foreach ($lolos as $it) {
+        if (isset($ada_lunas[$it['idpel'] . '|' . $it['bulan']])) { $hasil['sudah']++; continue; }
+        $baru[] = $it;
+    }
+
+    // 3. simpan. INSERT IGNORE hanya pengaman (input bersamaan); selisih dihitung sebagai gagal, BUKAN "sudah tercatat"
+    $head = "INSERT IGNORE INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ";
+    foreach (array_chunk($baru, $chunk) as $paket) {
+        $st  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')));
+        $prm = [];
+        foreach ($paket as $it) array_push($prm, $it['idpel'], $it['bulan'], $it['tgl'], (int) $it['bk'], (int) $it['tag'], $namaAkun,
+                                           (string) ($u['up'] ?? ''), (string) ($u['ap'] ?? ''), $u['upi']);
+        $st->execute($prm);
+        $masuk = $st->rowCount();
+        $hasil['ok'] += $masuk;
+        if ($masuk < count($paket)) {
+            $hasil['gagal'] += count($paket) - $masuk;
+            if ($hasil['sebab_gagal'] === '') {     // pesan peringatan MySQL (mis. FK / trigger) yang ditelan oleh IGNORE
+                try {
+                    $w = $conn->query('SHOW WARNINGS')->fetch(PDO::FETCH_ASSOC);
+                    if ($w) $hasil['sebab_gagal'] = mb_substr(trim((string) ($w['Message'] ?? '')), 0, 250);
+                } catch (Throwable $e) { /* abaikan */ }
+            }
+        }
+    }
+    if ($hasil['gagal'] > 0 && count($hasil['lewat']) < 50) {
+        $hasil['lewat'][] = ['no' => '-', 'idpel' => '-', 'alasan' => $hasil['gagal'] . ' baris gagal tersimpan' . ($hasil['sebab_gagal'] !== '' ? ': ' . $hasil['sebab_gagal'] : '')];
+    }
     return $hasil;
+}
+
+/** Kalimat ringkas untuk baris yang dilewati / gagal (kosong bila tidak ada). Teks sudah di-escape. */
+function pl_ket_gagal(array $r): string
+{
+    $k = [];
+    if (($r['tidak_dil'] ?? 0) > 0) $k[] = pg_n($r['tidak_dil']) . ' baris dilewati karena IdPel tidak terdaftar di DIL';
+    if (($r['gagal'] ?? 0) > 0)     $k[] = pg_n($r['gagal']) . ' baris gagal tersimpan' . (($r['sebab_gagal'] ?? '') !== '' ? ' (' . pg_e($r['sebab_gagal']) . ')' : '');
+    return implode('; ', $k);
 }
 }
 
@@ -161,6 +219,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $r = pl_simpan($conn, $u, $namaAkunInput, [['idpel' => $id, 'bulan' => $bl, 'tgl' => $tgl, 'bk' => (int) $bk, 'tag' => (int) $tag]], $pl_chunk);
                 $conn->commit();
                 if ($r['ok'] > 0)             $pesan_sukses = "Pelunasan IdPel <strong>$id</strong> periode <strong>$bl</strong> berhasil dicatat.";
+                elseif ($r['tidak_dil'] > 0)  $pesan_error  = "IdPel $id belum terdaftar di DIL, pelunasan tidak dicatat. Daftarkan dulu lewat menu DIL.";
+                elseif ($r['gagal'] > 0)      $pesan_error  = "Pelunasan IdPel $id periode $bl gagal tersimpan: " . pl_ket_gagal($r) . '.';
                 else                          $pesan_sukses = "Pelunasan IdPel $id periode $bl sudah tercatat sebelumnya, tidak diubah.";
             } catch (PDOException $e) {
                 if ($conn->inTransaction()) $conn->rollBack();
@@ -230,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $kunci = $id . '|' . $bln;
                     if (isset($baris[$kunci])) $duplikat++;
-                    $baris[$kunci] = ['idpel' => $id, 'bulan' => $bln, 'tgl' => $tgl, 'bk' => (int) round($bk), 'tag' => (int) round($tag)];
+                    $baris[$kunci] = ['idpel' => $id, 'bulan' => $bln, 'tgl' => $tgl, 'bk' => (int) round($bk), 'tag' => (int) round($tag), 'no' => $no];
                     if (count($baris) > $pl_max_upload) throw new RuntimeException('Terlalu banyak baris (maks ' . pg_n($pl_max_upload) . ' per file). Pecah file lalu unggah bertahap.');
                 }
                 if ($peta === null) throw new RuntimeException('Baris judul kolom (Idpel, Bulan, TglTransaksi, RpBK, RpTagihan) tidak ditemukan.');
@@ -243,18 +303,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $conn->commit();
                 }
 
+                foreach ($r['lewat'] as $l) if (count($ditolak) < 50) $ditolak[] = $l;    // IdPel tidak ada di DIL / gagal simpan
                 $upload_hasil = [
                     'nama' => $f['name'], 'dibaca' => $dibaca, 'valid' => count($baris), 'ok' => $r['ok'], 'sudah' => $r['sudah'],
-                    'duplikat' => $duplikat, 'ditolak' => $tolak,
+                    'duplikat' => $duplikat,
+                    'ditolak' => $tolak + $r['tidak_dil'] + $r['gagal'],     // format + tidak ada di DIL + gagal simpan
+                    'tolak_format' => $tolak, 'tidak_dil' => $r['tidak_dil'], 'gagal_simpan' => $r['gagal'],
                     'durasi' => round(microtime(true) - $t0, 2),
                     'contoh_tolak' => $ditolak,
                 ];
+                $ket = pl_ket_gagal($r);
                 if ($r['ok'] > 0) {
                     $pesan_sukses = '<strong>' . pg_n($r['ok']) . '</strong> tagihan berhasil dicatat lunas dari file ' . pg_e($f['name']) . '.';
+                    if ($ket !== '') $pesan_error = $ket . '. Lihat ringkasan di bawah.';
                 } elseif (!$baris) {
                     $pesan_error = 'Tidak ada baris valid yang bisa diproses dari file ini.';
                 } else {
-                    $pesan_error = 'Tidak ada tagihan baru yang dicatat. Lihat ringkasan di bawah.';
+                    $pesan_error = 'Tidak ada tagihan baru yang dicatat' . ($ket !== '' ? ': ' . $ket : '') . '. Lihat ringkasan di bawah.';
                 }
                 $flash_upload = $upload_hasil;
             } catch (RuntimeException $e) {
@@ -301,6 +366,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($r['ok'] > 0) $pesan_sukses = '<strong>' . pg_n($r['ok']) . '</strong> tagihan berhasil dicatat lunas.';
                 if ($r['sudah'] > 0) $pesan_sukses .= ($pesan_sukses ? ' ' : '') . pg_n($r['sudah']) . ' dilewati karena pelunasannya sudah tercatat.';
                 if ($gagal) $pesan_error = pg_n(count($gagal)) . ' tagihan tidak diproses: ' . pg_e(implode('; ', array_slice($gagal, 0, 5))) . (count($gagal) > 5 ? '; …' : '') . '.';
+                $ket = pl_ket_gagal($r);
+                if ($ket !== '') $pesan_error = trim($pesan_error . ' ' . $ket . '.');
             } catch (PDOException $e) {
                 if ($conn->inTransaction()) $conn->rollBack();
                 $pesan_error = 'Gagal menyimpan, tidak ada data yang tersimpan: ' . pg_e($e->getMessage());

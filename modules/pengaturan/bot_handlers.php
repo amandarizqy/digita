@@ -210,7 +210,8 @@ function bh_wajib_wilayah(string $ap, string $up): void
 }
 
 // ============================================================
-// PELUNASAN -> pelunasan_ap2t  (+ dil baru, + kategorisasi_risiko baru)   [perencanaan/upload_riwayat.php]
+// PELUNASAN -> pelunasan_ap2t  (+ kategorisasi_risiko baru)   [perencanaan/upload_riwayat.php]
+// IdPel WAJIB sudah ada di dil: yang tidak ada dilewati dan dilaporkan (bot tidak pernah menambah dil).
 // ============================================================
 function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $up): array
 {
@@ -227,7 +228,7 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
     $nama_kol = ['idpel' => 'Idpel', 'bulan' => 'Bulan', 'tgl' => 'TglTransaksi', 'rpbk' => 'RpBK', 'rptag' => 'RpTagihan'];
 
     $baris = []; $kat = []; $detail = [];
-    $dibaca = $tolak = $dup = 0;
+    $dibaca = $tolak = $dup = $tidakDil = 0;
     $peta = null;
 
     foreach (bh_xlsx_baris($file) as $no => $sel) {
@@ -243,8 +244,10 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
             continue;
         }
         if (trim(implode('', $sel)) === '') continue;             // b. baris data
-        $dibaca++;
         $g = fn($f) => $sel[$peta[$f]] ?? '';
+        // sama dengan halaman web: baris tanpa Idpel DAN tanpa Bulan (footer cetakan di tengah/akhir file) dilewati, tidak dihitung gagal
+        if (trim((string) $g('idpel')) === '' && trim((string) $g('bulan')) === '') continue;
+        $dibaca++;
 
         $id  = bh_idpel($g('idpel'));
         $bln = bh_bulan($g('bulan'));
@@ -265,32 +268,42 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
         }
         $kunci = $id . '|' . $bln;
         if (isset($baris[$kunci])) $dup++;                        // baris terakhir yang dipakai
-        $baris[$kunci] = [$id, $bln, $tgl, (int) round($bk), (int) round($tag)];
-        $kat[$id . '|' . (int) substr($bln, 0, 4)] = [$id, (int) substr($bln, 0, 4)];   // Periode = tahun dari Bulan
+        $baris[$kunci] = [$id, $bln, $tgl, (int) round($bk), (int) round($tag), $no];   // [5] = nomor baris file, untuk laporan
     }
     if ($peta === null) throw new RuntimeException('Baris judul kolom (Idpel, Bulan, ...) tidak ditemukan.');
-    if (!$baris) return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($tolak ? " ($tolak baris ditolak)." : '.'), 0, $tolak, $detail);
+    // IdPel WAJIB sudah terdaftar di DIL: yang tidak ada dilewati dan dilaporkan (tidak pernah ditambahkan ke DIL)
+    if ($baris) {
+        $ada = [];
+        foreach (array_chunk(array_values(array_unique(array_column($baris, 0))), 1000) as $paket) {
+            $st = $conn->prepare("SELECT IdPel FROM dil WHERE IdPel IN (" . implode(',', array_fill(0, count($paket), '?')) . ")");
+            $st->execute($paket);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $x) $ada[trim((string) $x)] = true;
+        }
+        foreach ($baris as $k => $b) {
+            if (isset($ada[$b[0]])) continue;
+            $tidakDil++;
+            if (count($detail) < 50) $detail[] = 'Baris ' . $b[5] . ': IdPel ' . $b[0] . ' tidak terdaftar di DIL, tidak disimpan';
+            unset($baris[$k]);
+        }
+    }
+    // kategorisasi_risiko hanya untuk baris yang lolos cek DIL. Periode = tahun dari Bulan
+    foreach ($baris as $b) {
+        $thn = (int) substr($b[1], 0, 4);
+        $kat[$b[0] . '|' . $thn] = [$b[0], $thn];
+    }
+    $ditolakTotal = $tolak + $tidakDil;
+    if (!$baris) return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($ditolakTotal ? " ($ditolakTotal baris ditolak" . ($tidakDil ? ", $tidakDil di antaranya IdPel tidak ada di DIL" : '') . ').' : '.'), 0, $ditolakTotal, $detail);
 
-    $dilBaru = $katBaru = 0;
+    $katBaru = 0;
     $head = "INSERT INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ";
     $tail = " ON DUPLICATE KEY UPDATE TglBayar = VALUES(TglBayar), RpBK = VALUES(RpBK), RpTag = VALUES(RpTag),
               NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi),
               WaktuData = VALUES(WaktuData)";
     $conn->beginTransaction();
-    // DIL dulu: pelunasan_ap2t & kategorisasi_risiko punya foreign key IdPel -> dil.IdPel.
-    // INSERT IGNORE: pelanggan yang sudah ada di DIL tidak diubah.
-    foreach (array_chunk(array_values(array_unique(array_column($baris, 0))), BH_CHUNK) as $paket) {
-        $stmt = $conn->prepare("INSERT IGNORE INTO dil (IdPel, Nama, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES "
-              . implode(',', array_fill(0, count($paket), "(?, '', ?, ?, ?, ?, 'AKTIF', NOW())")));
-        $param = [];
-        foreach ($paket as $idd) array_push($param, $idd, $akun, $up, $ap, $upi);
-        $stmt->execute($param);
-        $dilBaru += $stmt->rowCount();
-    }
     foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
         $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
         $param = [];
-        foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $akun, $up, $ap, $upi);
+        foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $akun, $up, $ap, $upi);   // $b[5] (no. baris) tidak ikut disimpan
         $stmt->execute($param);
     }
     // kategorisasi_risiko: tambah (IdPel, Periode) yang belum ada; yang sudah ada TIDAK diubah.
@@ -304,9 +317,10 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
     }
     $conn->commit();
 
-    $pesan = count($baris) . ' baris pelunasan' . ($dilBaru ? ", $dilBaru pelanggan baru ke DIL" : '') . ($katBaru ? ", $katBaru kategori risiko baru" : '')
-           . ($dup ? ", $dup dobel dalam file" : '') . ($tolak ? ", $tolak ditolak" : '');
-    return bh_hasil('sukses', $pesan, count($baris), $tolak, $detail);
+    $pesan = count($baris) . ' baris pelunasan' . ($katBaru ? ", $katBaru kategori risiko baru" : '')
+           . ($dup ? ", $dup dobel dalam file" : '') . ($tolak ? ", $tolak tidak valid" : '')
+           . ($tidakDil ? ", $tidakDil dilewati (IdPel tidak ada di DIL)" : '');
+    return bh_hasil('sukses', $pesan, count($baris), $ditolakTotal, $detail);
 }
 
 // ============================================================
@@ -454,8 +468,11 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 // ============================================================
 
 /**
- * Baris footer/catatan kaki (mis. "Dicetak oleh ...") yang biasanya di-merge: hanya SATU sel terisi dan isinya
- * bukan IdPel (bukan 12 karakter alfanumerik, bukan angka 11/12 digit yang bisa dinormalkan bh_idpel()).
+ * Baris footer/catatan kaki cetakan (mis. "Petugas Cetak : ...", "Page 1 of 1", "Dicetak oleh ...").
+ * Footer bisa terdiri dari SATU sel (merge) atau BEBERAPA sel (mis. "Petugas Cetak" di satu kolom dan
+ * "Page 1 of 1" di kolom lain). Sebuah baris dianggap footer bila:
+ *   - TIDAK ada satu pun selnya yang berupa IdPel angka (12 digit, atau 11 digit yang nolnya hilang), DAN
+ *   - (salah satu sel memuat pola footer cetakan, ATAU hanya satu sel terisi yang bukan IdPel alfanumerik 12 karakter).
  * Ini hanya cek per baris. Apakah baris itu benar-benar footer (tidak ada data lagi di bawahnya)
  * diputuskan oleh bh_xlsx_baris().
  */
@@ -466,10 +483,14 @@ function bh_baris_footer(array $sel): bool
         $v = trim((string) $v);
         if ($v !== '') $isi[] = $v;
     }
+    if (!$isi) return false;                                          // baris kosong: urusan bh_xlsx_baris()
+    foreach ($isi as $v) if (bh_idpel($v) !== null) return false;     // ada IdPel angka -> baris data, tetap diperiksa
+
+    foreach ($isi as $v) {                                            // pola footer cetakan, berapa pun jumlah selnya
+        if (preg_match('/petugas\s*cetak|dicetak|printed\s*(by|on)|\bpage\s*\d+\s*(of|dari|\/)\s*\d+|\bhalaman\s*\d+/iu', $v)) return true;
+    }
     if (count($isi) !== 1) return false;
-    if (bh_idpel($isi[0]) !== null) return false;                   // IdPel angka 12 digit (atau 11 digit yang nolnya hilang)
-    if (preg_match('/^[A-Za-z0-9]{12}$/', $isi[0])) return false;   // IdPel alfanumerik 12 karakter: tetap diperiksa
-    return true;
+    return !preg_match('/^[A-Za-z0-9]{12}$/', $isi[0]);               // IdPel alfanumerik 12 karakter: tetap diperiksa
 }
 
 /**

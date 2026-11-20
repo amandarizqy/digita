@@ -3,7 +3,8 @@
 // Halaman berdiri sendiri; tampilan: templates/penggunaan/pemutusan_ami.php
 //
 // Alur:
-//   1. [Create]  -> buat SessionID baru (disimpan di session login, per halaman).
+//   1. Saat halaman dibuka -> SessionID dipakai/dibuat otomatis (session login, per halaman), walau belum ada tiket.
+//      Tombol [Create] tetap ada: memakai SessionID yang sama dan mencoba mengambil tiket.
 //   2. Ambil tiket AKTIF terlama yang belum punya Sesi (tiket pemutusan dibuat TRIGGER database saat tul_601 diisi):
 //        dipilih dari view vw_tiket_putus_ami_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
@@ -70,6 +71,20 @@ $ambil_berikutnya = function (string $sesi_id) use ($klaim): string {
     return $klaim($sesi_id) ? 'ambil' : '';
 };
 
+/** Ambil tiket berikutnya untuk SessionID yang sudah ada, dibungkus transaksi. Hasil: '' (tidak ada tiket) | 'ambil'. */
+$ambil_trx = function (string $sesi_id) use ($conn, $ambil_berikutnya): string {
+    $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    $conn->beginTransaction();
+    try {
+        $asal = $ambil_berikutnya($sesi_id);
+        $conn->commit();
+        return $asal;
+    } catch (Throwable $e) {
+        if ($conn->inTransaction()) $conn->rollBack();
+        throw $e;
+    }
+};
+
 /** Langkah 3: tiket milik SessionID yang masih terbuka, dibaca dari VIEW (null bila tidak ada). */
 $tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $view, $pk): ?array {
     if ($sesi_id === '') return null;
@@ -113,7 +128,9 @@ if (isset($_GET['hitung'])) {
     header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
     try {
         $t_saya = $unit_siap ? $tiket_sekarang($sesi) : null;
-        echo json_encode(['sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
+        // Sesi sudah ada tetapi belum memegang tiket (tadinya antrean kosong): ambil otomatis begitu tiket tersedia.
+        if ($unit_siap && !$t_saya && $sesi !== '' && $ambil_trx($sesi) !== '') $t_saya = $tiket_sekarang($sesi);
+        echo json_encode(['sesi' => $sesi, 'sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
     } catch (Throwable $e) {
         http_response_code(500); echo json_encode(['error' => 'gagal']);
     }
@@ -141,23 +158,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($tiket_sekarang($sesi)) {
                 $pesan_error = 'Masih ada tiket yang sedang diproses pada sesi ini. Selesaikan dengan salah satu tombol hasil dahulu.';
             } else {
-                $sesi_baru = $buat_sesi();                                          // langkah 1
-                $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
-                $conn->beginTransaction();
-                try {
-                    $asal = $ambil_berikutnya($sesi_baru);                          // langkah 2
-                    $conn->commit();
-                } catch (Throwable $e) {
-                    if ($conn->inTransaction()) $conn->rollBack();
-                    throw $e;
-                }
+                // Sesi boleh dibuat walau antrean kosong. Bila SessionID sudah ada, dipakai ulang (ID tidak berganti-ganti untuk bot).
+                $sesi_id = $sesi !== '' ? $sesi : $buat_sesi();                     // langkah 1
+                $asal = $ambil_trx($sesi_id);                                       // langkah 2
+                $_SESSION[$kunci_sesi] = $sesi_id;
                 if ($asal !== '') {
-                    $_SESSION[$kunci_sesi] = $sesi_baru;
-                    $t = $tiket_sekarang($sesi_baru);                               // langkah 3
-                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_baru) . '</strong> dimulai. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> '
-                                  . ($asal === 'baru' ? 'dibuat dan siap diproses.' : 'diambil dari antrean dan siap diproses.');
+                    $t = $tiket_sekarang($sesi_id);                                 // langkah 3
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> aktif. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> diambil dari antrean dan siap diproses.';
                 } else {
-                    unset($_SESSION[$kunci_sesi]);
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> aktif.';
                     $info_baru = $pesan_habis;
                 }
             }
@@ -220,6 +229,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------------------------------------------------------
 // TAMPIL: tiket yang sedang diproses pada SessionID aktif
 // ---------------------------------------------------------
+// ---------------------------------------------------------
+// OTOMATIS saat halaman dibuka (GET): pakai/buat SessionID, lalu ambil tiket bila ada. Tanpa klik Create.
+// SessionID dibuat walau antrean kosong; tiket diambil otomatis begitu tersedia (juga lewat pengecekan berkala ?hitung=1).
+// ---------------------------------------------------------
+if ($unit_siap && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    try {
+        if ($sesi === '') { $sesi = $buat_sesi(); $_SESSION[$kunci_sesi] = $sesi; }
+        if (!$tiket_sekarang($sesi) && $ambil_trx($sesi) !== '' && $pesan_sukses === '') {
+            $pesan_sukses = 'Sesi <strong>' . pg_e($sesi) . '</strong> aktif. Tiket diambil otomatis dan siap diproses.';
+        }
+    } catch (Throwable $e) {
+        $pesan_error = trim($pesan_error . ' Gagal membuat sesi otomatis: ' . pg_e($e->getMessage()));
+    }
+}
+
 $row = null; $sisa = null;
 if ($unit_siap) {
     try {

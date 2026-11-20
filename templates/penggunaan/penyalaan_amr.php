@@ -51,8 +51,8 @@ if ($ada) {
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <label for="f_sesi" class="form-label fw-semibold text-secondary">Sesi ID :</label>
             <div class="input-group">
-                <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat saat Create" readonly>
-                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap || $sisa === 0 ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
+                <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat otomatis saat halaman dibuka" readonly>
+                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
                 <button type="submit" name="aksi" value="hapus_sesi" class="btn btn-outline-danger px-3" formnovalidate <?= $sesi === '' || !$unit_siap ? 'disabled' : '' ?>
                         data-konfirmasi="<?= pg_e($ada ? 'Tiket yang sedang berjalan akan dilepas kembali ke antrean.' : 'Sesi ini akan dihapus.') ?>" data-judul="Hapus sesi?" data-detail="Sesi <?= pg_e($sesi) ?>" data-ya="Ya, hapus sesi"><i class="bi bi-trash3 me-1"></i> Hapus Sesi</button>
             </div>
@@ -165,11 +165,11 @@ if ($ada) {
             .then(function (j) {
                 if (j.sisa !== null && j.sisa !== undefined) {
                     jml.textContent = Number(j.sisa).toLocaleString('id-ID');
-                    if (btn && !ada) btn.disabled = Number(j.sisa) === 0;               // tidak ada tiket -> Create mati; muncul tiket -> menyala
                 }
                 waktu.textContent = '\u00b7 dicek ' + j.waktu;
                 denyut.className = 'd-inline-block rounded-circle bg-success'; denyut.style.opacity = '.35'; setTimeout(function () { denyut.style.opacity = '1'; }, 300);
-                if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
+                if (!ada && j.tiket) { location.reload(); }   // sesi baru mendapat tiket (diambil otomatis server) -> muat ulang, pop-up terbuka
+                else if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
                 jeda = INTERVAL;
             })
             .catch(function () { denyut.className = 'd-inline-block rounded-circle bg-danger'; jeda = Math.min(jeda * 2, MAKS); })   // gagal: perlambat
