@@ -8,7 +8,7 @@
 //        dipilih dari view vw_tiket_nyala_sdu_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_sdu) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_nyala_sdu:  Ready ON = NYALA, gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
+//   4. Tombol hasil menulis ke trx_tindakan_nyala_sdu:  Ready ON = NYALA, gagal ON = GAGAL  (nilai NYALA/GAGAL = asumsi, sesuaikan enum tabel)
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -25,7 +25,7 @@ $tindakan_tabel = 'trx_tindakan_nyala_sdu';           // hasil tindakan (kunci =
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
     'ready_on'  => 'NYALA',             // Ready ON : meter sudah ON  -> penyalaan berhasil
     'gagal_on' => 'GAGAL',             // gagal ON: meter masih OFF -> penyalaan gagal
-    'lunas'     => 'LUNAS',             // Lunas
+    'belum' => 'BELUM',               // Belum Lunas: hanya untuk tiket KOREKTIF
 ];
 $fk             = 'TiketPutusSdu';          // kolom rujukan ke tiket putus
 $putus_tabel    = 'trx_order_putus_sdu';   // tabel tiket putus (sumber tiket nyala; juga untuk menampilkan No TUL)
@@ -187,7 +187,7 @@ if (!empty($_SESSION['pg_flash'])) {
 }
 
 // ---------------------------------------------------------
-// POST: create | ready | gagal | lunas
+// POST: create | ready | gagal | belum (KOREKTIF saja)
 // ---------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = (string) ($_POST['aksi'] ?? '');
@@ -231,6 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $t = $tiket_sekarang($sesi);
             if (!$t || (string) $t[$pk] !== trim((string) ($_POST['tiket'] ?? ''))) {
                 $pesan_error = 'Tiket yang Anda tindak bukan tiket aktif pada sesi ini (mungkin sudah diproses atau halaman kedaluwarsa). Muat ulang halaman.';
+            } elseif ($aksi === 'belum' && strtoupper(trim((string) ($t['JenisTiket'] ?? ''))) !== 'KOREKTIF') {
+                $pesan_error = 'Belum Lunas hanya berlaku untuk tiket KOREKTIF.';
             } else {
                 $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
                 $conn->beginTransaction();

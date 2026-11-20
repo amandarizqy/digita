@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_amr.php  -  Penyalaan AMR
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap: 1. Amicon Mohon / Setuju / Eksekusi (atau Lunas) -> 2. Ready ON / Gagal ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap: 1. Amicon Mohon / Setuju / Eksekusi -> 2. Ready ON / Gagal ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_amr.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -216,7 +216,7 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                 <!-- LANGKAH TOMBOL: 1. Amicon Mohon / Setuju / Eksekusi (atau Lunas)  ->  2. Ready ON / Gagal ON -->
+                 <!-- LANGKAH TOMBOL: 1. Amicon Mohon / Setuju / Eksekusi  ->  2. Ready ON / Gagal ON -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
@@ -225,7 +225,9 @@ if ($ada) {
                         <a id="btnAmiconMohon" class="btn flex-fill fw-semibold btn-info" data-tautan="amicon_mohon" href="<?= pg_e($link['amicon_mohon']) ?>" <?= $link['amicon_mohon'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-send me-1"></i> Amicon Mohon <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
                         <a id="btnAmiconSetuju" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="amicon_setuju" href="<?= pg_e($link['amicon_setuju']) ?>" <?= $link['amicon_setuju'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-patch-check me-1"></i> Amicon Setuju <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
                         <a id="btnAmiconEksekusi" class="btn flex-fill fw-semibold btn-dark" data-tautan="amicon_eksekusi" href="<?= pg_e($link['amicon_eksekusi']) ?>" <?= $link['amicon_eksekusi'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-play-circle me-1"></i> Amicon Eksekusi <i class="bi bi-check2-circle ms-1 d-none" data-centang></i></a>
-                        <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
+                        <?php if (strtoupper(trim((string) $jenis)) === 'KOREKTIF'): ?>
+                        <button type="submit" name="aksi" value="belum" class="btn btn-secondary flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan belum lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['belum']) ?>." data-judul="Catat Belum Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Belum Lunas"><i class="bi bi-x-circle me-1"></i> Belum Lunas</button>
+                        <?php endif; ?>
                     </div>
 
                     <div class="d-flex gap-2 d-none" data-langkah="2">
@@ -255,7 +257,7 @@ if ($ada) {
     });
 
     // ---- langkah tombol ----
-    var judul = {1: 'Langkah 1 dari 2 \u00b7 Proses di Amicon (Mohon, Setuju, Eksekusi), atau tandai Lunas bila sudah dibayar',
+    var judul = {1: 'Langkah 1 dari 2 \u00b7 Proses di Amicon (Mohon, Setuju, Eksekusi)',
                  2: 'Langkah 2 dari 2 \u00b7 Catat kondisi meter setelah Eksekusi di Amicon'};
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });

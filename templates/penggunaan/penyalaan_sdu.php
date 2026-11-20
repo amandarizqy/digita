@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_sdu.php  -  Penyalaan SDU
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap langsung catat hasil (Ready / Gagal / Lunas). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap langsung catat hasil (Ready / Gagal). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_sdu.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -213,14 +213,16 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: Langsung 1 tahap (Ready / Gagal / Lunas) -->
+                <!-- LANGKAH TOMBOL: Langsung 1 tahap (Ready / Gagal) -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
                     <div class="d-flex flex-wrap gap-2" data-langkah="1">
                         <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
                         <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal ON</button>
-                        <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
+                        <?php if (strtoupper(trim((string) $jenis)) === 'KOREKTIF'): ?>
+                        <button type="submit" name="aksi" value="belum" class="btn btn-secondary flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan belum lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['belum']) ?>." data-judul="Catat Belum Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Belum Lunas"><i class="bi bi-x-circle me-1"></i> Belum Lunas</button>
+                        <?php endif; ?>
                     </div>
                     <div class="small text-muted mt-2" data-langkah="1">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> · Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
                 </div>
@@ -242,7 +244,7 @@ if ($ada) {
 
     // ---- langkah tombol (1 tahap saja) ----
     var judul = {
-        1: 'Pilih hasil tindakan: Ready ON, Gagal ON, atau Lunas'
+        1: 'Pilih hasil tindakan: Ready ON, Gagal ON, atau Belum Lunas (tiket korektif)'
     };
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });

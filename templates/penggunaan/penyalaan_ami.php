@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_ami.php  -  Penyalaan AMI
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap: 1. MDMS / Lunas -> 2. Gagal ON / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap: 1. MDMS -> 2. Gagal ON / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_ami.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -213,14 +213,16 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: 1. MDMS / Lunas  ->  2. Gagal ON / Ready ON -->
+                <!-- LANGKAH TOMBOL: 1. MDMS  ->  2. Gagal ON / Ready ON -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
                     <div class="d-flex gap-2" data-langkah="1">
                         <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
                         <a id="btnMdms" class="btn flex-fill fw-semibold text-white" style="background:#6f42c1;border-color:#6f42c1;" data-tautan="mdms" href="<?= pg_e($link['mdms']) ?>" <?= $link['mdms'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-hdd-network me-1"></i> MDMS</a>
-                        <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
+                        <?php if (strtoupper(trim((string) $jenis)) === 'KOREKTIF'): ?>
+                        <button type="submit" name="aksi" value="belum" class="btn btn-secondary flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan belum lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['belum']) ?>." data-judul="Catat Belum Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Belum Lunas"><i class="bi bi-x-circle me-1"></i> Belum Lunas</button>
+                        <?php endif; ?>
                     </div>
 
                     <div class="d-flex gap-2 d-none" data-langkah="2">
@@ -250,7 +252,7 @@ if ($ada) {
     });
 
     // ---- langkah tombol ----
-    var judul = {1: 'Langkah 1 dari 2 \u00b7 Proses di MDMS, atau tandai Lunas bila sudah dibayar',
+    var judul = {1: 'Langkah 1 dari 2 \u00b7 Proses di MDMS',
                  2: 'Langkah 2 dari 2 \u00b7 Catat kondisi meter setelah proses di MDMS'};
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
