@@ -105,8 +105,8 @@ if ($view === 'daftar') {
                                         </a>
                                     <?php endif; ?>
 
-                                    <?php if (!empty($row['NoFba'])): ?>
-                                        <a href="modules/pemasangan/cetak_ba.php?no_fba=<?= urlencode($row['NoFba']) ?>" target="_blank" class="btn btn-sm btn-outline-success px-2 py-1" title="Cetak Berita Acara PDF">
+                                    <?php if ($row['TotalSelesai'] > 0): ?>
+                                        <a href="modules/pemasangan/cetak_ba.php?no_order=<?= urlencode($row['NoFormOrder']) ?>" target="_blank" class="btn btn-sm btn-outline-success px-2 py-1" title="Cetak Berita Acara Pemasangan PDF">
                                             <i class="bi bi-printer-fill"></i>
                                         </a>
                                     <?php endif; ?>

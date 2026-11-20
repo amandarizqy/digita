@@ -28,7 +28,7 @@ function cek($cond) {
         @page { size: A4 portrait; margin: 15mm; }
         body {
             font-family: Arial, sans-serif;
-            font-size: 11px; /* Ukuran font disesuaikan agar muat dalam 1 halaman */
+            font-size: 11px;
             color: #000;
             margin: 0;
             padding: 0;
@@ -54,14 +54,12 @@ function cek($cond) {
             vertical-align: middle;
         }
         
-        /* Pengaturan khusus kolom tabel */
         .text-center { text-align: center; }
         .text-left { text-align: left; }
         .fw-bold { font-weight: bold; }
         
-        /* Baris judul KONDISI */
         .row-title td {
-            background-color: #fff; /* Sesuai gambar, putih tanpa abu-abu */
+            background-color: #fff;
             font-weight: bold;
             text-align: center;
         }
@@ -139,7 +137,7 @@ if ($action === 'full') {
                         <table style="width: 100%; border-collapse: collapse; text-align: center;">
                             <tr class="fw-bold">
                                 <td style="width: 4%; border-bottom: 1px solid #000; border-right: 1px solid #000;">No</td>
-                                <td style="width: 26%; border-bottom: 1px solid #000; border-right: 1px solid #000;">IMEI</td>
+                                <td style="width: 26%; border-bottom: 1px solid #000; border-right: 1px solid #000;">No Ref Alat</td>
                                 <td style="width: 14%; border-bottom: 1px solid #000; border-right: 1px solid #000;">Id Cocok</td>
                                 <td style="width: 14%; border-bottom: 1px solid #000; border-right: 1px solid #000;">Cacat Fisik</td>
                                 <td style="width: 14%; border-bottom: 1px solid #000; border-right: 1px solid #000;">Stiker QC</td>
@@ -151,11 +149,12 @@ if ($action === 'full') {
                             ?>
                             <tr>
                                 <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;"><?= $i + 1 ?></td>
-                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; text-align: left; padding-left: 5px;"><?= $it ? htmlspecialchars($it['ImeiModem']) : '' ?></td>
-                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;"><?= $it ? 'Ya | Tidak' : 'Ya | Tidak' ?></td>
-                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;"><?= $it ? 'Ya | Tidak' : 'Ya | Tidak' ?></td>
-                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;"><?= $it ? 'Ya | Tidak' : 'Ya | Tidak' ?></td>
-                                <td style="border-bottom: 1px solid #000;"><?= $it ? 'Lolos Uji | Tidak Lolos Uji' : 'Lolos Uji | Tidak Lolos Uji' ?></td>
+                                <!-- PERBAIKAN: Menampilkan NoRef alat pada kolom No Ref Alat -->
+                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; text-align: left; padding-left: 5px;"><?= $it ? htmlspecialchars($it['NoRef']) : '' ?></td>
+                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;">Ya | Tidak</td>
+                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;">Ya | Tidak</td>
+                                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000;">Ya | Tidak</td>
+                                <td style="border-bottom: 1px solid #000;">Lolos Uji | Tidak Lolos Uji</td>
                             </tr>
                             <?php endfor; ?>
                         </table>
@@ -221,7 +220,7 @@ elseif ($action === 'detail') {
 }
 
 // ==============================================================
-// FUNGSI RENDER TABEL DETAIL (MENGHINDARI KODE BERULANG)
+// FUNGSI RENDER TABEL DETAIL
 // ==============================================================
 function renderDetailTable($it, $head, $no_form, $kop_upi, $kop_ap, $kop_up) {
 ?>
@@ -252,9 +251,10 @@ function renderDetailTable($it, $head, $no_form, $kop_upi, $kop_ap, $kop_up) {
                         <td style="border-bottom: 1px solid #000; padding: 3px 5px;"><?= date('d-m-Y', strtotime($head['TglUji'])) ?></td>
                     </tr>
                     <tr>
-                        <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 3px 5px;">IMEI</td>
+                        <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 3px 5px;">No Ref Alat</td>
                         <td style="border-bottom: 1px solid #000; text-align: center;">:</td>
-                        <td style="border-bottom: 1px solid #000; padding: 3px 5px;"><?= htmlspecialchars($it['ImeiModem']) ?></td>
+                        <!-- PERBAIKAN: Menampilkan NoRef alat pada baris No Ref Alat -->
+                        <td style="border-bottom: 1px solid #000; padding: 3px 5px;"><?= htmlspecialchars($it['NoRef'] ?? '') ?></td>
                     </tr>
                     <tr>
                         <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 3px 5px;">Nomor SIM</td>
@@ -465,3 +465,5 @@ function renderDetailTable($it, $head, $no_form, $kop_upi, $kop_ap, $kop_up) {
 <?php
 }
 ?>
+</body>
+</html>
