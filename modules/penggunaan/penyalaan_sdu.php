@@ -3,8 +3,7 @@
 // Halaman berdiri sendiri; tampilan: templates/penggunaan/penyalaan_sdu.php
 //
 // Alur:
-//   1. Saat halaman dibuka -> SessionID dipakai/dibuat otomatis (session login, per halaman), walau belum ada tiket.
-//      Tombol [Create] tetap ada: memakai SessionID yang sama dan mencoba mengambil tiket.
+//   1. [Create]  -> buat SessionID baru (session login, per halaman), walau belum ada tiket. Selama sesi ada, Create nonaktif; hapus sesi dahulu untuk membuat yang baru.
 //   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
 //        dipilih dari view vw_tiket_nyala_sdu_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_sdu) yang belum punya tiket nyala
@@ -199,18 +198,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!$unit_siap) {
             $pesan_error = 'Unit akun Anda belum diatur, sehingga tidak bisa membuat tiket.';
         } elseif ($aksi === 'create') {
-            if ($tiket_sekarang($sesi)) {
-                $pesan_error = 'Masih ada tiket yang sedang diproses pada sesi ini. Selesaikan dengan salah satu tombol hasil dahulu.';
+            if ($sesi !== '') {
+                $pesan_error = 'Sesi <strong>' . pg_e($sesi) . '</strong> sudah ada. Hapus sesi dahulu bila ingin membuat sesi baru.';
             } else {
-                // Sesi boleh dibuat walau antrean kosong. Bila SessionID sudah ada, dipakai ulang (ID tidak berganti-ganti untuk bot).
-                $sesi_id = $sesi !== '' ? $sesi : $buat_sesi();                     // langkah 1
-                $asal = $ambil_trx($sesi_id);                                       // langkah 2
+                // Sesi boleh dibuat walau antrean kosong. Tiket diambil bila ada; bila belum, diambil otomatis nanti selama sesi ini aktif.
+                $sesi_id = $buat_sesi();                                            // langkah 1
                 $_SESSION[$kunci_sesi] = $sesi_id;
+                $asal = $ambil_trx($sesi_id);                                       // langkah 2
                 if ($asal !== '') {
                     $t = $tiket_sekarang($sesi_id);                                 // langkah 3
-                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> aktif. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> diambil dari antrean dan siap diproses.';
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> dibuat. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> diambil dari antrean dan siap diproses.';
                 } else {
-                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> aktif.';
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> dibuat.';
                     $info_baru = $pesan_habis;
                 }
             }
@@ -274,17 +273,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // TAMPIL: tiket yang sedang diproses pada SessionID aktif
 // ---------------------------------------------------------
 // ---------------------------------------------------------
-// OTOMATIS saat halaman dibuka (GET): pakai/buat SessionID, lalu ambil tiket bila ada. Tanpa klik Create.
-// SessionID dibuat walau antrean kosong; tiket diambil otomatis begitu tersedia (juga lewat pengecekan berkala ?hitung=1).
+// Sesi SUDAH ADA (dibuat lewat tombol Create) tetapi belum memegang tiket: ambil tiket otomatis saat halaman dibuka / dimuat ulang.
+// Halaman TIDAK membuat sesi sendiri. (Pengecekan berkala ?hitung=1 juga mengambil tiket begitu tersedia.)
 // ---------------------------------------------------------
-if ($unit_siap && $_SERVER['REQUEST_METHOD'] === 'GET') {
+if ($unit_siap && $sesi !== '' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        if ($sesi === '') { $sesi = $buat_sesi(); $_SESSION[$kunci_sesi] = $sesi; }
         if (!$tiket_sekarang($sesi) && $ambil_trx($sesi) !== '' && $pesan_sukses === '') {
-            $pesan_sukses = 'Sesi <strong>' . pg_e($sesi) . '</strong> aktif. Tiket diambil otomatis dan siap diproses.';
+            $pesan_sukses = 'Tiket diambil otomatis untuk sesi <strong>' . pg_e($sesi) . '</strong> dan siap diproses.';
         }
     } catch (Throwable $e) {
-        $pesan_error = trim($pesan_error . ' Gagal membuat sesi otomatis: ' . pg_e($e->getMessage()));
+        $pesan_error = trim($pesan_error . ' Gagal mengambil tiket: ' . pg_e($e->getMessage()));
     }
 }
 
