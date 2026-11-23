@@ -93,6 +93,7 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
             <a href="index.php?page=pemasangan&menu=monitoring&sub=riwayat_pengujian" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'riwayat_pengujian') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">Riwayat Pengujian</a>
             <a href="index.php?page=pemasangan&menu=monitoring&sub=monitoring_order" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'monitoring_order') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">Order Pasang</a>
             <a href="index.php?page=pemasangan&menu=monitoring&sub=monitoring_mutasi" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'monitoring_mutasi') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">Mutasi Pasang</a>
+            <a href="index.php?page=pemasangan&menu=monitoring&sub=monitoring_s41" class="btn btn-sm rounded-pill px-3 fw-semibold <?= ($sub === 'monitoring_s41') ? 'btn-primary shadow-sm' : 'btn-light border text-secondary' ?>">S41</a>
         <?php endif; ?>
     </div>
 
@@ -110,6 +111,7 @@ $unit_up = $_SESSION['UnitUp'] ?? '';
         elseif ($sub === 'riwayat_pengujian' && file_exists(__DIR__ . '/../../modules/pemasangan/monitoring_riwayat_pengujian.php')) include __DIR__ . '/../../modules/pemasangan/monitoring_riwayat_pengujian.php';
         elseif ($sub === 'monitoring_order' && file_exists(__DIR__ . '/../../modules/pemasangan/monitoring_order.php')) include __DIR__ . '/../../modules/pemasangan/monitoring_order.php';
         elseif ($sub === 'monitoring_mutasi' && file_exists(__DIR__ . '/../../modules/pemasangan/monitoring_mutasi.php')) include __DIR__ . '/../../modules/pemasangan/monitoring_mutasi.php';
+        elseif ($sub === 'monitoring_s41' && file_exists(__DIR__ . '/../../modules/pemasangan/monitoring_s41.php')) include __DIR__ . '/../../modules/pemasangan/monitoring_s41.php';
     }
     ?>
 </div>

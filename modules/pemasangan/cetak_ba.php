@@ -214,7 +214,8 @@ function cb($cond) { return $cond ? '&#9745;' : '&#9744;'; }
         $lampu       = trim((string) ($d['LampuIndikator'] ?? ''));
         $ada_foto_brg = !empty($d['FotoBarang']);
         $ada_foto_psg = !empty($d['FotoTerpasang']);
-        $tgl_dok     = !empty($d['TglFba']) ? date('d-m-Y', strtotime($d['TglFba'])) : date('d-m-Y', strtotime($d['TglFpk']));
+        $tgl_fpk_fmt  = !empty($d['TglFpk']) ? date('d-m-Y', strtotime($d['TglFpk'])) : '-';
+        $tgl_pasang_ba = !empty($d['TglFba']) ? date('d-m-Y', strtotime($d['TglFba'])) : '-';
         $long_pasang = trim((string) ($d['LongPasang'] ?? '')) !== '' ? $d['LongPasang'] : ($d['LongDil'] ?? '-');
         $lat_pasang  = trim((string) ($d['LatPasang'] ?? '')) !== '' ? $d['LatPasang'] : ($d['LatDil'] ?? '-');
         ?>
@@ -227,7 +228,7 @@ function cb($cond) { return $cond ? '&#9745;' : '&#9744;'; }
         </table>
         <table>
             <tr><td class="lbl-fpk">Unit</td><td colspan="2">: <?= v($unit) ?></td></tr>
-            <tr><td class="lbl-fpk">Tanggal Pasang</td><td colspan="2">: <?= $tgl_dok ?></td></tr>
+            <tr><td class="lbl-fpk">Tanggal</td><td colspan="2">: <?= $tgl_fpk_fmt ?></td></tr>
             <tr><td class="lbl-fpk">Jenis PK</td><td colspan="2">: <?= $cb_pasang ?> PASANG &nbsp;&nbsp;&nbsp;&nbsp; <?= $cb_bongkar ?> BONGKAR &nbsp;&nbsp;&nbsp;&nbsp; <?= $cb_pelihara ?> PEMELIHARAAN</td></tr>
             <tr><td class="lbl-fpk">Nomor Form FPK</td><td colspan="2">: <?= v($d['NoFpk']) ?></td></tr>
             <tr><td class="lbl-fpk">Id Pelanggan</td><td colspan="2">: <?= v($d['IdPel']) ?></td></tr>
@@ -245,7 +246,11 @@ function cb($cond) { return $cond ? '&#9745;' : '&#9744;'; }
             <tr><td class="lbl-fpk">NoRef IMEI</td><td>: </td><td>: <?= v($d['NoRef']) ?></td></tr>
             <tr><td class="lbl-fpk">Nomor SIM</td><td>: </td><td>: <?= v($d['SimId']) ?></td></tr>
             <tr><td class="lbl-fpk">Nomor Kontak</td><td>: </td><td>: <?= v($d['NomorBarang']) ?></td></tr>
-            <tr><td class="lbl-fpk">Tikor Pasang</td>
+            <tr><td class="lbl-fpk">Tanggal Pasang</td>
+                <td>: .......................</td>
+                <td>: <strong><?= $tgl_pasang_ba ?></strong></td>
+            </tr>
+            <tr><td class="lbl-fpk">Tikor</td>
                 <td>: Long: ....................... Lat: .......................</td>
                 <td>: Long: <strong><?= v($long_pasang) ?></strong> &nbsp; Lat: <strong><?= v($lat_pasang) ?></strong></td>
             </tr>
