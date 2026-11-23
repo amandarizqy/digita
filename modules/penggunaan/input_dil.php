@@ -52,7 +52,7 @@ const KOGOL = ['0', '1', '2', '3', '4'];
 const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
     'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
-    'MEREKMETER' => 'MerekMeter', 
+    'MEREKKWH' => 'MerekMeter', 'MEREKMETER' => 'MerekMeter',   // judul Excel: MEREKKWH (disimpan ke kolom MerekMeter)
     'AKTIFASI' => 'Aktifasi', 'KOGOL' => 'Kogol', 'JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar',
     'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];

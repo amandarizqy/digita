@@ -329,7 +329,7 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
 // Bot HANYA mengisi transit_dil. Pemindahan ke dil (StatusData = AKTIF) dikerjakan TRIGGER (upsert) di database.
 // Setelah semua baris masuk, bot menghitung jumlahnya lalu menghapus data transit_dil
 // berdasarkan NamaAkun + UnitUpi + pasangan UnitAp/UnitUp yang diproses (unit lain tidak ikut terhapus).
-// JenisShuntrip dan Kogol hanya ikut diisi bila Excel memuat kolomnya (selain itu memakai nilai bawaan database).
+// JenisShuntrip, Kogol, dan MerekMeter hanya ikut diisi bila Excel memuat kolomnya (selain itu memakai nilai bawaan database).
 // Kolom unit di file boleh kosong (diisi dari folder/bot), tetapi bila ada harus di dalam wilayah bot.
 // ============================================================
 function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): array
@@ -339,11 +339,12 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     $peta_unit = bh_peta_unit($conn, $upi, trim((string) ($bot['UnitAp'] ?? '')), trim((string) ($bot['UnitUp'] ?? '')));
 
     $kolom_transit = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                      'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'Kogol', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
-    $kolom_opsional = ['JenisShuntrip', 'Kogol'];                 // hanya diisi bila Excel memuat kolomnya
+                      'NomorMeter', 'MerekMeter', 'Aktifasi', 'ProdukPrabayar', 'Kogol', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
+    $kolom_opsional = ['JenisShuntrip', 'Kogol', 'MerekMeter'];                 // hanya diisi bila Excel memuat kolomnya
     $header  = [
         'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
         'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',
+        'MEREKKWH' => 'MerekMeter', 'MEREKMETER' => 'MerekMeter',   // judul Excel: MEREKKWH (disimpan ke kolom MerekMeter)
         'AKTIFASI' => 'Aktifasi', 'KOGOL' => 'Kogol', 'JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar',
         'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
     ];
@@ -396,7 +397,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                 }
                 if (isset($tmp['IdPel'], $tmp['Nama'])) {
                     $peta = $tmp;
-                    // JenisShuntrip & Kogol hanya disertakan bila Excel memuat kolomnya
+                    // JenisShuntrip, Kogol & MerekMeter hanya disertakan bila Excel memuat kolomnya
                     $cols = array_values(array_filter($kolom_transit, fn($k) => !in_array($k, $kolom_opsional, true) || isset($peta[$k])));
                 }
                 continue;
@@ -454,7 +455,7 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                 'NomorTlp' => $g('NomorTlp', 20), 'NomorHp' => $g('NomorHp', 20), 'GolTar' => $g('GolTar', 5),
                 'Daya' => (int) round((float) str_replace(',', '.', $g('Daya', 15))),
                 'TegUkur' => in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-                'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'Aktifasi' => $g('Aktifasi', 15),
+                'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'MerekMeter' => $g('MerekMeter', 50), 'Aktifasi' => $g('Aktifasi', 15),
                 'ProdukPrabayar' => $g('ProdukPrabayar', 50),
                 'Kogol' => in_array($kg, BH_KOGOL, true) ? $kg : null,
                 'JenisShuntrip' => in_array($sh, BH_JENIS_SHUNTRIP, true) ? $sh : null,
