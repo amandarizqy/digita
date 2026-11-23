@@ -2,7 +2,7 @@
 // templates/penggunaan/input_dil.php  -  Input DIL
 // Variabel dari modules/penggunaan/input_dil.php:
 //   $csrf, $unit_awal, $form_lama, $boleh_monitor, $pesan_sukses, $pesan_error, $pesan_info, $detail_import, $ud_meta, $form_update, $buka_modal,
-//   konstanta JENIS_SHUNTRIP, UPDATE_KOLOM
+//   konstanta JENIS_SHUNTRIP, KOGOL, UPDATE_KOLOM
 // Form tambah pelanggan tampil sebagai pop-up bertab (Identitas -> Layanan & Meter -> Unit), jadi tidak perlu scroll halaman.
 
 $lama = $form_lama ?? [];   // isian terakhir bila penyimpanan gagal -> pop-up dibuka lagi otomatis
@@ -128,6 +128,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                             <?= $opsi('produkprabayar', 'Produk Prabayar', ['Prabayar Satu Arah', 'Prabayar Dua Arah - NFC', 'Prabayar Dua Arah - Modem'], 'col-md-5') ?>
                             <?= $opsi('aktifasi', 'Aktifasi', ['NON AKTIF (N,O)', 'AKTIF'], 'col-md-3') ?>
                             <?= $opsi('jenisshuntrip', 'Jenis Shuntrip', JENIS_SHUNTRIP, 'col-md-4') ?>
+                            <?= $opsi('kogol', 'Kogol', KOGOL, 'col-md-4') ?>
                         </div>
                     </div>
 
@@ -167,13 +168,13 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 10 MB) hasil <strong>Monitoring DIL Detail</strong>, sheet pertama. Baris judul dicari otomatis, jadi kop laporan di atasnya boleh ada.</p>
+                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 64 MB) hasil <strong>Monitoring DIL Detail</strong>, sheet pertama. Baris judul dicari otomatis, jadi kop laporan di atasnya boleh ada.</p>
                 <p class="small text-muted mb-1">Kolom yang dibaca (berdasarkan judul kolom):</p>
-                <div class="small font-monospace text-secondary mb-3">IDPEL, NAMA, ALAMAT, NO TLP, NO HP, TARIF, DAYA, JENIS MK, TEGUKUR, KDPEMBMETER, NOMORKWH (disimpan ke Nomor Meter), AKTIFASI, PRODUK PRABAYAR, UNITUP, UNITAP, UNITUPI</div>
+                <div class="small font-monospace text-secondary mb-3">IDPEL, NAMA, ALAMAT, NO TLP, NO HP, TARIF, DAYA, JENIS MK, TEGUKUR, KDPEMBMETER, NOMORKWH (disimpan ke Nomor Meter), AKTIFASI, PRODUK PRABAYAR, KOGOL (opsional), JENIS SHUNTRIP (opsional), UNITUP, UNITAP, UNITUPI</div>
                 <ul class="small text-muted ps-3">
-                    <li>Data dimuat ke tabel penampung <code>transit_dil</code>, dipindahkan ke DIL, lalu penampung dikosongkan.</li>
+                    <li>Data dimuat ke tabel penampung <code>transit_dil</code>, diproses ke DIL oleh trigger database (upsert), lalu penampung dikosongkan per unit.</li>
                     <li>Semua pelanggan yang diimpor otomatis berstatus <strong>AKTIF</strong>.</li>
-                    <li>IdPel yang sudah ada dilewati, data lama tidak diubah.</li>
+                    <li>IdPel yang sudah ada <strong>diperbarui</strong> (data lama ditimpa). Status, Kuadran, Skala Prioritas, dan Peringkat tidak berubah.</li>
                     <li>IDPEL dan NAMA wajib ada di judul kolom.</li>
                 </ul>
                 <input type="file" name="file_xlsx" class="form-control" accept=".xlsx" required>
@@ -290,7 +291,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                     </div>
                     <?php endforeach; ?>
                 </div>
-                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 10 MB), sheet pertama. Baris judul dicari otomatis; urutan kolom bebas. Isi kolom <strong>IdPel</strong> dan kolom yang dicentang di atas:</p>
+                <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 64 MB), sheet pertama. Baris judul dicari otomatis; urutan kolom bebas. Isi kolom <strong>IdPel</strong> dan kolom yang dicentang di atas:</p>
                 <table class="table table-sm table-bordered small text-center mb-3">
                     <thead class="table-light"><tr><th>IdPel</th><th>NomorMeter</th><th>SkalaPrioritas</th><th>Peringkat</th></tr></thead>
                     <tbody><tr><td>546100000119</td><td>123456789012345</td><td>5</td><td>12</td></tr></tbody>

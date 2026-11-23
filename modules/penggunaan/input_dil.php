@@ -1,12 +1,13 @@
 <?php
 // modules/penggunaan/input_dil.php  -  Input DIL (tabel `dil`)
 // Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorMeter
-//            | ProdukPrabayar | Aktifasi | JenisShuntrip | Kuadran | SkalaPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
+//            | ProdukPrabayar | Kogol | Aktifasi | JenisShuntrip | Kuadran | SkalaPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
 //            (Kuadran & SkalaPrioritas diisi modul Perencanaan; NamaAkun, StatusData, WaktuData otomatis.)
 // Fitur: tambah manual lewat pop-up form bertab (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
 //        UPDATE DIL: memperbarui kolom NomorMeter / SkalaPrioritas / Peringkat pada IdPel yang SUDAH ADA di dil (wilayah akun saja),
 //        lewat pop-up satu IdPel (dengan saran IdPel otomatis saat mengetik) atau upload Excel. Tipe & batas nilai tiap kolom dibaca dari struktur tabel dil (SHOW COLUMNS).
-// Import: baris Excel dimasukkan ke tabel penampung `transit_dil`, dipindahkan ke `dil`, lalu transit_dil dikosongkan lagi.
+// Import: baris Excel dimasukkan ke tabel penampung `transit_dil`. Trigger database yang upsert ke `dil` (StatusData = AKTIF).
+//         Setelah itu aplikasi menghitung baris yang masuk, lalu menghapus transit_dil berdasarkan akun + unit yang diproses.
 // Daftar, pencarian, edit, dan aktif/nonaktif ada di Monitoring > DIL (monitor_dil.php).
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
 
@@ -31,9 +32,9 @@ if (!function_exists('pg_norm_idpel')) {
     }
 }
 
-/** Kolom transit_dil = kolom dil tanpa StatusData. StatusData (AKTIF) diberikan saat pindah ke dil. JenisShuntrip hanya dipakai bila Excel memuat kolomnya. */
+/** Kolom transit_dil = kolom dil tanpa StatusData. StatusData (AKTIF) diberikan trigger saat upsert ke dil. JenisShuntrip & Kogol hanya dipakai bila Excel memuat kolomnya. */
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
+                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'Kogol', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
 /** Kolom dil yang boleh diperbarui lewat menu Update DIL: kolom => label. */
 const UPDATE_KOLOM = ['NomorMeter' => 'Nomor Meter', 'SkalaPrioritas' => 'Skala Prioritas', 'Peringkat' => 'Peringkat', 'JenisShuntrip' => 'Jenis Shuntrip'];
@@ -44,12 +45,15 @@ const UPDATE_HEADER = ['NOMORMETER' => 'NomorMeter', 'NOMORKWH' => 'NomorMeter',
 /** Nilai ENUM dil.JenisShuntrip. */
 const JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU', '-'];
 
+/** Nilai ENUM dil.Kogol. */
+const KOGOL = ['0', '1', '2', '3', '4'];
+
 /** Judul kolom Excel (huruf besar, tanpa spasi/simbol) => kolom dil. */
 const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
     'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
-   
-    'AKTIFASI' => 'Aktifasi','JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar', 'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
+    'AKTIFASI' => 'Aktifasi', 'KOGOL' => 'Kogol', 'JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar',
+    'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
 
 /** Rapikan teks sel: buang spasi ganda/tepi (Excel PLN sering berisi ' ') lalu potong sesuai panjang kolom. */
@@ -215,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $teg   = strtoupper($t('tegukur', 2));
         $kdp   = strtoupper($t('kdpembmeter', 1));
         $shuntrip = strtoupper($t('jenisshuntrip', 10));
+        $kogol = $t('kogol', 5);
         $upi_akun = mb_substr(trim((string) ($_SESSION['UnitUpi'] ?? '')), 0, 2);   // Unit UPI terkunci = UPI akun yang login
         if (!preg_match('/^[A-Za-z0-9]{12}$/', $idpel)) {
             $pesan_error = 'IdPel harus 12 karakter (huruf/angka).';
@@ -228,9 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Akun Anda belum memiliki Unit UPI, sehingga pelanggan tidak dapat ditambahkan. Hubungi administrator.';
         } elseif ($shuntrip !== '' && !in_array($shuntrip, JENIS_SHUNTRIP, true)) {
             $pesan_error = 'Jenis shuntrip harus salah satu dari: ' . implode(', ', JENIS_SHUNTRIP) . '.';
+        } elseif ($kogol !== '' && !in_array($kogol, KOGOL, true)) {
+            $pesan_error = 'Kogol harus salah satu dari: ' . implode(', ', KOGOL) . '.';
         } else {
             try {
-                // JenisShuntrip hanya disertakan bila dipilih (kosong = nilai bawaan database)
+                // JenisShuntrip & Kogol hanya disertakan bila diisi (kosong = nilai bawaan database)
                 $kolom = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter', 'NomorMeter',
                           'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
                 $nilai = [
@@ -241,6 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $t('unitup', 5), $t('unitap', 5), $upi_akun,
                 ];
                 if ($shuntrip !== '') { $kolom[] = 'JenisShuntrip'; $nilai[] = $shuntrip; }
+                if ($kogol !== '')    { $kolom[] = 'Kogol';         $nilai[] = $kogol; }
                 $st = $conn->prepare("INSERT INTO dil (" . implode(', ', $kolom) . ", StatusData, WaktuData) VALUES ("
                                    . implode(', ', array_fill(0, count($kolom), '?')) . ", 'AKTIF', NOW())");
                 $st->execute($nilai);
@@ -253,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($pesan_error !== '') {   // simpan isian terakhir supaya pop-up terbuka lagi dengan data yang sama
             foreach (['idpel', 'nama', 'alamat', 'jenismk', 'nomortlp', 'nomorhp', 'goltar', 'daya', 'tegukur', 'kdpembmeter', 'nomormeter',
-                      'aktifasi', 'produkprabayar', 'jenisshuntrip', 'unitupi', 'unitap', 'unitup'] as $k) {
+                      'aktifasi', 'produkprabayar', 'kogol', 'jenisshuntrip', 'unitupi', 'unitap', 'unitup'] as $k) {
                 $form_lama[$k] = mb_substr(trim((string) ($_POST[$k] ?? '')), 0, 100);
             }
         }
@@ -261,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($aksi === 'import') {
         // ---- Import Excel "Monitoring DIL Detail" ----
         // Judul kolom dicari otomatis (baris yang memuat IDPEL), jadi baris kop surat di atas dan urutan kolom bebas.
-        // Alur: kosongkan sisa transit_dil milik akun ini -> isi transit_dil -> salin ke dil (StatusData = AKTIF) -> kosongkan transit_dil.
+        // Alur: kosongkan sisa transit_dil milik akun+UPI ini -> isi transit_dil (trigger upsert ke dil) -> hitung -> hapus transit_dil per unit.
         $f = $_FILES['file_xlsx'] ?? null;
         if (!$f || $f['error'] === UPLOAD_ERR_NO_FILE) {
             $pesan_error = 'Pilih file Excel (.xlsx) terlebih dahulu.';
@@ -271,26 +279,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Upload gagal (kode ' . (int) $f['error'] . '). Periksa folder temp dan batas ukuran upload server.';
         } elseif (strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
             $pesan_error = 'Format file harus .xlsx.';
-        } elseif ($f['size'] > 10 * 1024 * 1024) {
-            $pesan_error = 'Ukuran file maksimal 10 MB.';
+        } elseif ($f['size'] > 64 * 1024 * 1024) {
+            $pesan_error = 'Ukuran file maksimal 64 MB.';
         } else {
             @set_time_limit(600);
-            @ini_set('memory_limit', '256M');
-            $akun  = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
-            $total = $ok = $dobel = $salah = 0;
+            @ini_set('memory_limit', '512M');
+            $akun     = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
+            $upi_akun = mb_substr(trim((string) ($_SESSION['UnitUpi'] ?? '')), 0, 2);
+            $total = $dobel = $salah = 0;
+            $masuk = 0;             // baris yang berhasil masuk ke transit_dil (trigger yang upsert ke dil)
             $seen  = [];
             $peta  = [];            // kolom dil => huruf kolom Excel
             $batch = [];            // baris yang menunggu dikirim ke transit_dil
             $cols  = [];            // kolom yang diisi (tanpa WaktuData): ditentukan setelah baris judul ditemukan
-            $kirim = function (array $rows) use ($conn, &$cols) {
+            $units = [];            // kombinasi UnitUpi|UnitAp|UnitUp yang dipakai import ini
+
+            $kirim = function (array $rows) use ($conn, &$cols, &$masuk) {
                 if (!$rows) return;
                 $per_baris = '(' . implode(', ', array_fill(0, count($cols), '?')) . ', NOW())';   // WaktuData = NOW()
-                $conn->prepare('INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, count($rows), $per_baris)))
-                     ->execute(array_merge(...$rows));
+                $st = $conn->prepare('INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, count($rows), $per_baris)));
+                $st->execute(array_merge(...$rows));
+                $masuk += $st->rowCount();      // baris yang benar-benar tersimpan, tanpa membedakan baru/sudah ada
             };
+
+            // Kondisi WHERE: akun + kombinasi unit yang diproses. Dipakai untuk hitung dan hapus.
+            $filter_unit = function (array $kombinasi) use ($akun): array {
+                $sql = 'NamaAkun = ?'; $params = [$akun];
+                if ($kombinasi) {
+                    $sql .= ' AND (' . implode(' OR ', array_fill(0, count($kombinasi), '(UnitUpi = ? AND UnitAp = ? AND UnitUp = ?)')) . ')';
+                    foreach ($kombinasi as [$i, $a, $p]) { $params[] = $i; $params[] = $a; $params[] = $p; }
+                }
+                return [$sql, $params];
+            };
+
             try {
                 $conn->beginTransaction();
-                $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);   // sisa import yang gagal sebelumnya
+                // Sisa import gagal sebelumnya: hanya milik akun ini dan UnitUpi akun ini
+                if ($upi_akun !== '') $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ? AND UnitUpi = ?")->execute([$akun, $upi_akun]);
+                else                  $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);
 
                 foreach (xlsx_baris($f['tmp_name']) as $no => $sel) {
                     if (!$peta) {                                           // cari baris judul
@@ -302,8 +328,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         if (isset($tmp['IdPel'], $tmp['Nama'])) {
                             $peta = $tmp;
-                            // JenisShuntrip hanya disertakan bila Excel memuat kolomnya (selain itu memakai nilai bawaan database)
-                            $cols = array_values(array_filter(TRANSIT_KOLOM, fn($k) => $k !== 'WaktuData' && ($k !== 'JenisShuntrip' || isset($peta['JenisShuntrip']))));
+                            // JenisShuntrip & Kogol hanya disertakan bila Excel memuat kolomnya (selain itu memakai nilai bawaan database)
+                            $cols = array_values(array_filter(TRANSIT_KOLOM, fn($k) => $k !== 'WaktuData' && (!in_array($k, ['JenisShuntrip', 'Kogol'], true) || isset($peta[$k]))));
                         }
                         continue;
                     }
@@ -326,8 +352,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $seen[$idpel] = true;
 
+                    $r_upi = $g('UnitUpi', 2); $r_ap = $g('UnitAp', 5); $r_up = $g('UnitUp', 5);
+                    $units[$r_upi . '|' . $r_ap . '|' . $r_up] = [$r_upi, $r_ap, $r_up];   // catat unit untuk filter hapus
+
                     $teg = strtoupper($g('TegUkur', 2));
                     $sh  = strtoupper($g('JenisShuntrip', 10));
+                    $kg  = $g('Kogol', 5);
+                    if (preg_match('/^\d+\.0+$/', $kg)) $kg = preg_replace('/\.0+$/', '', $kg);   // "1.0" dari Excel -> "1"
                     $baris = [
                         'IdPel' => $idpel, 'Nama' => $nama, 'Alamat' => $g('Alamat', 100), 'JenisMk' => $g('JenisMk', 10),
                         'NomorTlp' => $g('NomorTlp', 20), 'NomorHp' => $g('NomorHp', 20), 'GolTar' => $g('GolTar', 5),
@@ -335,8 +366,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'TegUkur' => in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
                         'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'Aktifasi' => $g('Aktifasi', 15),
                         'ProdukPrabayar' => $g('ProdukPrabayar', 50),
+                        'Kogol' => in_array($kg, KOGOL, true) ? $kg : null,
                         'JenisShuntrip' => in_array($sh, JENIS_SHUNTRIP, true) ? $sh : null,
-                        'NamaAkun' => $akun, 'UnitUp' => $g('UnitUp', 5), 'UnitAp' => $g('UnitAp', 5), 'UnitUpi' => $g('UnitUpi', 2),
+                        'NamaAkun' => $akun, 'UnitUp' => $r_up, 'UnitAp' => $r_ap, 'UnitUpi' => $r_upi,
                     ];
                     $batch[] = array_map(fn($c) => $baris[$c], $cols);      // urutan nilai selalu sama dengan $cols
                     if (count($batch) >= 500) { $kirim($batch); $batch = []; }
@@ -344,28 +376,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$peta) throw new RuntimeException('Baris judul kolom (IDPEL, NAMA, ...) tidak ditemukan. Pastikan file adalah "Monitoring DIL Detail".');
                 $kirim($batch);
 
-                // transit_dil -> dil (IdPel yang sudah ada dilewati), lalu transit_dil dikosongkan
-                $kol_isi = implode(', ', $cols);
-                $in = $conn->prepare("INSERT IGNORE INTO dil ($kol_isi, StatusData, WaktuData) SELECT $kol_isi, 'AKTIF', WaktuData FROM transit_dil WHERE NamaAkun = ?");
-                $in->execute([$akun]);
-                $ok = $in->rowCount();
-                $conn->prepare("DELETE FROM transit_dil WHERE NamaAkun = ?")->execute([$akun]);
+                // Trigger di database sudah upsert ke dil pada tiap insert. Hapus HANYA milik akun + unit yang diproses.
+                [$where, $prm] = $filter_unit(array_values($units));
+                $conn->prepare("DELETE FROM transit_dil WHERE $where")->execute($prm);
                 $conn->commit();
 
-                $sudah_ada = max(0, count($seen) - $ok);
                 if ($total === 0) {
                     $pesan_error = 'File tidak berisi data pelanggan di bawah baris judul.';
+                } elseif ($masuk === 0) {
+                    $pesan_error = 'Tidak ada baris yang berhasil masuk'
+                                 . ($salah ? ': ' . pg_n($salah) . ' baris tidak valid' : '')
+                                 . ($dobel ? ($salah ? ', ' : ': ') . pg_n($dobel) . ' dobel di dalam file' : '') . '.';
                 } else {
-                    $pesan_sukses = "Import selesai: <strong>" . pg_n($ok) . "</strong> pelanggan baru ditambahkan"
-                                  . ($sudah_ada ? ', ' . pg_n($sudah_ada) . ' dilewati (IdPel sudah ada di DIL)' : '')
-                                  . ($dobel ? ', ' . pg_n($dobel) . ' dobel di dalam file' : '')
-                                  . ($salah ? ', ' . pg_n($salah) . ' baris tidak valid' : '') . '.';
+                    $pesan_sukses = 'Import selesai: <strong>' . pg_n($masuk) . '</strong> pelanggan berhasil masuk ke DIL'
+                                  . ($dobel ? ', ' . pg_n($dobel) . ' dobel di dalam file (tidak masuk)' : '')
+                                  . ($salah ? ', ' . pg_n($salah) . ' baris tidak valid (tidak masuk)' : '') . '.';
                 }
             } catch (Throwable $e) {
                 if ($conn->inTransaction()) $conn->rollBack();
                 $pesan_error = 'Import gagal, tidak ada data yang tersimpan: ' . pg_e($e->getMessage());
             }
         }
+
     } elseif ($aksi === 'update_satu') {
         // ---- UPDATE DIL: satu IdPel, satu atau beberapa kolom sekaligus (kolom yang dikosongkan = tidak diubah) ----
         $idpel  = pg_norm_idpel($_POST['idpel'] ?? '');
@@ -446,10 +478,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pesan_error = 'Upload gagal (kode ' . (int) $f['error'] . ').';
         } elseif (strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) !== 'xlsx') {
             $pesan_error = 'Format file harus .xlsx.';
-        } elseif ($f['size'] > 10 * 1024 * 1024) {
-            $pesan_error = 'Ukuran file maksimal 10 MB.';
+        } elseif ($f['size'] > 64 * 1024 * 1024) {
+            $pesan_error = 'Ukuran file maksimal 64 MB.';
         } else {
-            @set_time_limit(300);
+            @set_time_limit(600);
+            @ini_set('memory_limit', '512M');
             $kolom_id = null; $peta_ud = [];            // IdPel & kolom dil => huruf kolom Excel
             $baris = []; $terlihat = [];                // IdPel => [kolom => nilai]
             $total = $salah = $dobel = $tidak_ada = $sama = $tanpa_nilai = 0;
@@ -554,19 +587,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
-
-// // ---------------------------------------------------------
-// // RINGKASAN (daftar lengkap ada di Monitoring > DIL)
-// // ---------------------------------------------------------
-// $kpi = ['total' => 0, 'AKTIF' => 0, 'TIDAK' => 0];
-// try {
-//     foreach ($conn->query("SELECT StatusData, COUNT(*) c FROM dil GROUP BY StatusData")->fetchAll(PDO::FETCH_ASSOC) as $r) {
-//         if (isset($kpi[$r['StatusData']])) $kpi[$r['StatusData']] = (int) $r['c'];
-//         $kpi['total'] += (int) $r['c'];
-//     }
-// } catch (PDOException $e) {
-//     $pesan_error = trim($pesan_error . ' Gagal memuat ringkasan DIL: ' . pg_e($e->getMessage()));
-// }
 
 // nilai awal unit pada form tambah = unit akun yang login
 $unit_awal = ['UnitUpi' => (string) ($_SESSION['UnitUpi'] ?? ''), 'UnitAp' => (string) ($_SESSION['UnitAp'] ?? ''), 'UnitUp' => (string) ($_SESSION['UnitUp'] ?? '')];

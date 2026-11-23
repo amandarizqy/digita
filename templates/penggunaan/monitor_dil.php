@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/monitor_dil.php  -  Monitoring DIL
 // Variabel dari modules/penggunaan/monitor_dil.php:
-//   $data, $total_data, $kpi, $keyword, $status, $limit, $hal, $csrf, $boleh_edit, $pesan_sukses, $pesan_error
+//   $data (termasuk Kogol, JenisShuntrip, Kuadran, SkalaPrioritas, Peringkat), $total_data, $kpi, $keyword, $status, $limit, $hal, $csrf, $boleh_edit, $pesan_sukses, $pesan_error
 
 $url_dil = fn(array $ubah = []) => pg_url('monitor_dil', array_merge(
     ['keyword' => $keyword, 'status' => $status, 'limit' => $limit == 10 ? '' : $limit], $ubah));
@@ -83,7 +83,9 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                 <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
                     <th class="ps-4">IdPel</th><th>Nama</th><th>Alamat</th><th>Jenis MK</th><th>No. Telepon</th><th>No. HP</th>
                     <th>Gol. Tarif</th><th class="text-end">Daya (VA)</th><th class="text-center">Teg. Ukur</th><th class="text-center">Kd. Pemb. Meter</th>
-                    <th>No. kWh</th><th>Aktifasi</th><th>Produk Prabayar</th><th>Nama Akun</th>
+                    <th>No. kWh</th><th>Aktifasi</th><th>Produk Prabayar</th>
+                    <th class="text-center">Kogol</th><th>Jenis Shuntrip</th><th class="text-center">Kuadran</th><th class="text-center">Skala Prioritas</th><th class="text-center">Peringkat</th>
+                    <th>Nama Akun</th>
                     <th>Unit UPI</th><th>Unit AP</th><th>Unit UP</th>
                     <th class="text-center">Status</th><th>Waktu Data</th>
                     <?php if ($boleh_edit): ?><th class="text-end pe-4">Aksi</th><?php endif; ?>
@@ -91,7 +93,7 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
             </thead>
             <tbody>
             <?php if (!$data): ?>
-                <tr><td colspan="<?= $boleh_edit ? 21 : 20 ?>" class="text-center text-muted py-5">
+                <tr><td colspan="<?= $boleh_edit ? 25 : 24 ?>" class="text-center text-muted py-5">
                     <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
                     <?= ($keyword !== '' || $status !== '') ? 'Tidak ada data yang cocok dengan filter.' : 'Belum ada data DIL.' ?>
                 </td></tr>
@@ -117,6 +119,11 @@ $tetap = '<input type="hidden" name="csrf" value="' . pg_e($csrf) . '">'
                     <td class="font-monospace small text-nowrap"><?= $kosong($r['NomorMeter']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['Aktifasi']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['ProdukPrabayar']) ?></td>
+                    <td class="text-center"><?= $kosong($r['Kogol']) ?></td>
+                    <td class="text-nowrap"><?= $kosong($r['JenisShuntrip']) ?></td>
+                    <td class="text-center"><?= $kosong($r['Kuadran']) ?></td>
+                    <td class="text-center"><?= $kosong($r['SkalaPrioritas']) ?></td>
+                    <td class="text-center"><?= $kosong($r['Peringkat']) ?></td>
                     <td class="text-nowrap small"><?= $kosong($r['NamaAkun']) ?></td>
                     <td class="text-nowrap"><?= $kosong($r['UnitUpi']) ?></td>
                     <td class="text-nowrap"><?= $kosong($r['UnitAp']) ?></td>
