@@ -67,6 +67,55 @@ function bh_waktu($v)
     return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $y, $b, $t, $h, $i, $s);
 }
 
+/**
+ * Parser khusus kolom "Tgl Pencetakan".
+ * Menerima: 2026-10-21 08:13:40 | 10/21/2026 08:18:52AM | 21/10/2026 20:15 | 21.10.2026 8:05:00 PM | dst.
+ * Return 'Y-m-d H:i:s' atau null bila tidak dikenali / tidak valid.
+ */
+function bh_waktu_cetak($v): ?string
+{
+    $s = trim((string) $v);
+    if ($s === '') return null;
+
+    $re = '~^(\d{1,4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,4})'
+        . '(?:[\sT]+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\.\d+)?(?:\s*([AaPp])\.?\s*[Mm]\.?)?)?$~';
+    if (!preg_match($re, $s, $m)) return null;
+
+    [$a, $b, $c] = [$m[1], $m[2], $m[3]];
+    $jam   = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : 0;
+    $menit = isset($m[5]) && $m[5] !== '' ? (int) $m[5] : 0;
+    $detik = isset($m[6]) && $m[6] !== '' ? (int) $m[6] : 0;
+    $mer   = isset($m[7]) && $m[7] !== '' ? strtoupper($m[7]) : '';   // 'A' / 'P' / ''
+
+    // --- tanggal ---
+    if (strlen($a) === 4) {                    // yyyy-mm-dd
+        $y = (int) $a; $mo = (int) $b; $d = (int) $c;
+    } elseif (strlen($c) === 4 || strlen($c) === 2) {   // ??/??/yyyy (atau yy)
+        $y = (int) $c;
+        if ($y < 100) $y += 2000;
+        $x = (int) $a; $z = (int) $b;
+        if ($x > 12)      { $d = $x; $mo = $z; }        // pasti dd/mm
+        elseif ($z > 12)  { $mo = $x; $d = $z; }        // pasti mm/dd
+        elseif ($mer !== '') { $mo = $x; $d = $z; }     // ambigu + ada AM/PM -> anggap mm/dd (gaya US/Excel)
+        else              { $d = $x; $mo = $z; }        // ambigu tanpa AM/PM -> anggap dd/mm (gaya Indonesia)
+    } else {
+        return null;
+    }
+    if (!checkdate($mo, $d, $y)) return null;
+
+    // --- jam ---
+    if ($mer !== '') {
+        if ($jam < 1 || $jam > 12) return null;
+        if ($mer === 'A' && $jam === 12) $jam = 0;
+        elseif ($mer === 'P' && $jam < 12) $jam += 12;
+    } elseif ($jam > 23) {
+        return null;
+    }
+    if ($menit > 59 || $detik > 59) return null;
+
+    return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $y, $mo, $d, $jam, $menit, $detik);
+}
+
 /** Angka >= 0 (float). '' = 0. null = bukan angka. */
 function bh_angka($v): ?float
 {
@@ -587,7 +636,7 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 
         $notul = trim((string) $g('notul'));
         $id    = bh_idpel($g('idpel'));
-        $cetak = bh_waktu($g('cetak'));
+        $cetak = bh_waktu_cetak($g('cetak')) ?? bh_waktu($g('cetak'));
         $awal  = bh_bulan($g('awal'));
         $akhir = bh_bulan($g('akhir'));
         $lbr   = bh_int($g('lembar'));

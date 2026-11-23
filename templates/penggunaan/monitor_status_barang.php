@@ -112,7 +112,7 @@ if (!empty($pesan_sms)) echo pg_alert('warning', $pesan_sms);
                     <td>
                         <?php if ($terpasang): ?>
                             <div class="font-monospace small"><?= pg_e($r['IdPel']) ?></div>
-                            <div class="text-muted" style="font-size:.75rem"><?= $r['NamaPelanggan'] === null ? '-' : pg_e($r['NamaPelanggan']) ?></div>
+                            <div class="text-muted" style="font-size:.75rem"><?= $r['Nama'] === null ? '-' : pg_e($r['Nama']) ?></div>
                         <?php else: ?><span class="text-muted">-</span><?php endif; ?>
                     </td>
                     <td>

@@ -112,7 +112,7 @@ if (!$unit_siap) {
         if ($nomor) {
             $ph = implode(',', array_fill(0, count($nomor), '?'));
             $tk = ['putus' => [], 'nyala' => []];
-            foreach (['putus' => ['trx_order_putus_s41', 'TiketPutus'], 'nyala' => ['trx_order_nyala_s41', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
+            foreach (['putus' => ['trx_order_putus_s41', 'TiketPutusS41'], 'nyala' => ['trx_order_nyala_s41', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
                 $st = $conn->prepare("SELECT NomorBarang, $pkt AS Tiket, JenisTiket, WaktuData FROM $tb WHERE StatusData = 'AKTIF' AND NomorBarang IN ($ph) ORDER BY WaktuData DESC");
                 $st->execute($nomor);
                 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) if (!isset($tk[$jenis][$r['NomorBarang']])) $tk[$jenis][$r['NomorBarang']] = $r;   // terbaru per nomor
