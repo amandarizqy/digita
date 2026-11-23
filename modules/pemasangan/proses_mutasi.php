@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../functions/order_notif_helper.php';
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 if (!in_array($_SESSION['KodeHak'] ?? '', ['SF.UP', 'SA.KP'])) {
@@ -14,7 +15,7 @@ $unit_upi  = $_SESSION['UnitUpi'] ?? '';
 $nama_akun = $_SESSION['NamaAkun'] ?? 'System';
 
 try {
-    // 1. FINALISASI MUTASI PASANG (Ubah StatusData frm_order dari 'TIDAK' menjadi 'AKTIF')
+    // 1. FINALISASI MUTASI PASANG (Ubah StatusData frm_order dari 'TIDAK' menjadi 'AKTIF' + Kirim Email Laporan)
     if ($action === 'finalisasi_order' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_form_order = trim($_POST['no_form_order'] ?? '');
         if (empty($no_form_order)) {
@@ -24,18 +25,24 @@ try {
         $stmt_fin = $conn->prepare("UPDATE frm_order SET StatusData = 'AKTIF' WHERE NoFormOrder = ?");
         $stmt_fin->execute([$no_form_order]);
 
+        // Kirim notifikasi email & lampiran PDF BA Mutasi Pasang ke Pembuat Order & TL.UP
+        $notif       = kirimNotifFinalisasiMutasi($conn, $no_form_order);
+        $pesan_notif = $notif['message'] ?? '';
+        $swal_icon   = !empty($notif['status']) ? 'success' : 'warning';
+        $swal_title  = !empty($notif['status']) ? 'Finalisasi Berhasil!' : 'Finalisasi Berhasil (Email Tertunda)';
+        $swal_text   = addslashes("Seluruh Berita Acara pada Order {$no_form_order} telah dikunci. {$pesan_notif}");
+
         echo "<!DOCTYPE html>
         <html>
         <head><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head>
         <body>
             <script>
                 Swal.fire({
-                    icon: 'success',
-                    title: 'Finalisasi Berhasil!',
-                    text: 'Seluruh Berita Acara pada Order {$no_form_order} telah dikunci dan tidak dapat diubah lagi.',
+                    icon: '{$swal_icon}',
+                    title: '{$swal_title}',
+                    text: '{$swal_text}',
                     confirmButtonColor: '#0d6efd',
-                    timer: 1800,
-                    showConfirmButton: false
+                    confirmButtonText: 'OK'
                 }).then(() => {
                     window.location.href = '../../index.php?page=pemasangan&menu=eksekusi&sub=mutasi_pasang&view=daftar';
                 });
