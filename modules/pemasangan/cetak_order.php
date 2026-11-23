@@ -34,7 +34,7 @@ try {
                               JOIN frm_pk p ON p.NoFpk = od.NoFpk
                               LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk
                               LEFT JOIN dil d ON d.IdPel = p.IdPel
-                              LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMASANGAN'
+                              LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PASANG'
                               WHERE od.NoFormOrder = ?
                               ORDER BY p.NoFpk ASC");
         $st->execute([$no_order]);
@@ -161,6 +161,7 @@ function v($val) { return htmlspecialchars(trim((string)$val) === '' ? '' : $val
         $cb_pasang   = ($d['JenisPk'] === 'PASANG') ? '&#9745;' : '&#9744;';
         $cb_bongkar  = ($d['JenisPk'] === 'BONGKAR') ? '&#9745;' : '&#9744;';
         $cb_pelihara = ($d['JenisPk'] === 'PEMELIHARAAN') ? '&#9745;' : '&#9744;';
+        $tgl_pasang_fpk = !empty($d['TglFba']) ? date('d-m-Y', strtotime($d['TglFba'])) : '.......................';
         ?>
         <div class="page-break"></div>
         <table>
@@ -190,6 +191,7 @@ function v($val) { return htmlspecialchars(trim((string)$val) === '' ? '' : $val
             <tr><td class="lbl-fpk">NoRef IMEI</td><td>: </td><td>: <?= v($d['NoRef']) ?></td></tr>
             <tr><td class="lbl-fpk">Nomor SIM</td><td>: </td><td>: <?= v($d['SimId']) ?></td></tr>
             <tr><td class="lbl-fpk">Nomor Kontak</td><td>: </td><td>: <?= v($d['NomorBarang']) ?></td></tr>
+            <tr><td class="lbl-fpk">Tanggal Pasang</td><td>: .......................</td><td>: <?= $tgl_pasang_fpk ?></td></tr>
             <tr><td class="lbl-fpk">Tikor</td><td>: Long: ....................... Lat: .......................</td><td>: Long: ....................... Lat: .......................</td></tr>
             <tr><td class="lbl-fpk">Posisi</td>
                 <td>&#9744; Pangkal &nbsp; &#9744; Tengah &nbsp; &#9744; Ujung</td>
