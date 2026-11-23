@@ -2,7 +2,7 @@
 // modules/penggunaan/upload_tul.php
 // Unggah XLSX "Daftar TUL VI-01 yang belum lunas" (laporan AP2T) -> tabel tul_601.
 // Pola sama dengan perencanaan/upload_riwayat.php: file dibaca streaming, disimpan per 500 baris
-// dalam 1 transaksi, dan kunci unik (NoTul) yang sudah ada otomatis DIPERBARUI, bukan dobel.
+// dalam 1 transaksi; bila NoTul sudah ada, hanya ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui (bukan dobel).
 //
 // Struktur tul_601:
 //   NoTul VARCHAR(30) PK | WaktuCetak DATETIME | IdPel CHAR(12) | ThBlRekAwal CHAR(6) | ThBlRekAkhir CHAR(6)
@@ -71,6 +71,55 @@ if (!function_exists('tul_header')) {
         } else return false;
         if (!checkdate((int) $b, (int) $t, (int) $y) || (int) $h > 23 || (int) $i > 59 || (int) $s > 59) return false;
         return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $y, $b, $t, $h, $i, $s);
+    }
+
+    /**
+     * Parser khusus kolom "Tgl Pencetakan".
+     * Menerima: 2026-10-21 08:13:40 | 10/21/2026 08:18:52AM | 21/10/2026 20:15 | 21.10.2026 8:05:00 PM | dst.
+     * Return 'Y-m-d H:i:s' atau null bila tidak dikenali / tidak valid.
+     */
+    function tul_waktu_cetak($v): ?string
+    {
+        $s = trim((string) $v);
+        if ($s === '') return null;
+
+        $re = '~^(\d{1,4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,4})'
+            . '(?:[\sT]+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\.\d+)?(?:\s*([AaPp])\.?\s*[Mm]\.?)?)?$~';
+        if (!preg_match($re, $s, $m)) return null;
+
+        [$a, $b, $c] = [$m[1], $m[2], $m[3]];
+        $jam   = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : 0;
+        $menit = isset($m[5]) && $m[5] !== '' ? (int) $m[5] : 0;
+        $detik = isset($m[6]) && $m[6] !== '' ? (int) $m[6] : 0;
+        $mer   = isset($m[7]) && $m[7] !== '' ? strtoupper($m[7]) : '';   // 'A' / 'P' / ''
+
+        // --- tanggal ---
+        if (strlen($a) === 4) {                    // yyyy-mm-dd
+            $y = (int) $a; $mo = (int) $b; $d = (int) $c;
+        } elseif (strlen($c) === 4 || strlen($c) === 2) {   // ??/??/yyyy (atau yy)
+            $y = (int) $c;
+            if ($y < 100) $y += 2000;
+            $x = (int) $a; $z = (int) $b;
+            if ($x > 12)      { $d = $x; $mo = $z; }        // pasti dd/mm
+            elseif ($z > 12)  { $mo = $x; $d = $z; }        // pasti mm/dd
+            elseif ($mer !== '') { $mo = $x; $d = $z; }     // ambigu + ada AM/PM -> anggap mm/dd (gaya US/Excel)
+            else              { $d = $x; $mo = $z; }        // ambigu tanpa AM/PM -> anggap dd/mm (gaya Indonesia)
+        } else {
+            return null;
+        }
+        if (!checkdate($mo, $d, $y)) return null;
+
+        // --- jam ---
+        if ($mer !== '') {
+            if ($jam < 1 || $jam > 12) return null;
+            if ($mer === 'A' && $jam === 12) $jam = 0;
+            elseif ($mer === 'P' && $jam < 12) $jam += 12;
+        } elseif ($jam > 23) {
+            return null;
+        }
+        if ($menit > 59 || $detik > 59) return null;
+
+        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $y, $mo, $d, $jam, $menit, $detik);
     }
 
     /** Bilangan bulat >= 0. null = kosong / bukan angka. */
@@ -167,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $notul = trim((string) $g('notul'));
                 $id    = tul_idpel($g('idpel'));
-                $cetak = tul_waktu($g('cetak'));
+                $cetak = tul_waktu_cetak($g('cetak')) ?? tul_waktu($g('cetak'));
                 $awal  = tul_bulan($g('awal'));
                 $akhir = tul_bulan($g('akhir'));
                 $lbr   = tul_int($g('lembar'));
@@ -226,13 +275,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          ->execute($param);
                 }
 
-                // c2. tul_601. StatusData baris lama TIDAK diubah; StandBaca/TglBaca lama dipertahankan bila file baru kosong;
-                //     NomorPengirim tidak disentuh (diisi proses lain).
+                // c2. tul_601. NoTul baru -> INSERT penuh (StatusData 'AKTIF').
+                //     NoTul yang sudah ada -> HANYA ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag yang diperbarui.
+                //     Kolom lain (WaktuCetak, IdPel, StandBaca, TglBaca, NamaAkun, unit, StatusData, WaktuData, NomorPengirim) tidak disentuh.
                 $namaAkunInput = mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20);
                 $head = "INSERT INTO tul_601 (NoTul, WaktuCetak, IdPel, ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag, StandBaca, TglBaca, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES ";
-                $tail = " ON DUPLICATE KEY UPDATE WaktuCetak = VALUES(WaktuCetak), IdPel = VALUES(IdPel), ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir),
-                          Lembar = VALUES(Lembar), RpTag = VALUES(RpTag), StandBaca = COALESCE(VALUES(StandBaca), StandBaca), TglBaca = COALESCE(VALUES(TglBaca), TglBaca),
-                          NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi), WaktuData = VALUES(WaktuData)";
+                $tail = " ON DUPLICATE KEY UPDATE ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir), Lembar = VALUES(Lembar), RpTag = VALUES(RpTag)";
                 foreach (array_chunk(array_values($baris), $tul_chunk) as $paket) {
                     $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), "(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")) . $tail);
                     $param = [];

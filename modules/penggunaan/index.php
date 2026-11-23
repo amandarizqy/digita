@@ -34,7 +34,7 @@ switch ($action) {
     case 'input_saldo':        include __DIR__ . '/input_saldo.php'; break;
     case 'input_pelunasan':    include __DIR__ . '/input_pelunasan.php'; break;
     case 'upload_tul':         include __DIR__ . '/upload_tul.php'; break;
-    case 'shuntrip':           include __DIR__ . '/shuntrip.php'; break;
+    // case 'shuntrip':           include __DIR__ . '/shuntrip.php'; break;
     // KARTU
     case 'isi_pulsa':          include __DIR__ . '/isi_pulsa.php'; break;
     case 'input_perintah_s41':     include __DIR__ . '/input_perintah_s41.php'; break;

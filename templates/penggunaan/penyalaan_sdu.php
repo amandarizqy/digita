@@ -1,7 +1,7 @@
 <?php
 // templates/penggunaan/penyalaan_sdu.php  -  Penyalaan SDU
 // Halaman: kartu Sesi ID + Create. Tiket yang diambil/dibuat tampil sebagai kartu POP-UP (modal) berisi keterangan pelanggan
-// yang ringkas dan tombol bertahap: 1. PPOB -> 2. MDMS / Lunas -> 3. Gagal ON / Ready ON (Ulangi = kembali ke langkah 1). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
+// yang ringkas dan tombol bertahap langsung catat hasil (Ready / Gagal). Memerlukan Bootstrap 5 JS (sudah dimuat layout).
 // Variabel dari modules/penggunaan/penyalaan_sdu.php:
 //   $halaman, $judul, $pk, $fk (penyalaan), $putus, $csrf, $unit_siap, $sesi, $row (tiket berjalan | null), $sisa, $link,
 //   $pesan_sukses, $pesan_error, $pesan_info
@@ -11,8 +11,8 @@ $sufiks = $putus ? 'OFF' : 'ON';
 
 echo pg_header([
     'title'    => $judul,
-    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu cek di PPOB, lalu catat hasilnya.'
-                         : 'Create mengambil tiket penyalaan berikutnya, lalu cek di PPOB, lalu catat hasilnya.',
+    'subtitle' => $putus ? 'Create mengambil tiket pemutusan berikutnya, lalu catat hasilnya.'
+                         : 'Create mengambil tiket penyalaan berikutnya, lalu catat hasilnya.',
     'action'   => $halaman,
 ]);
 
@@ -33,9 +33,11 @@ if ($ada) {
     $rincian = [];
     if (!$putus) $rincian[] = ['Tiket Putus', (string) $row[$fk]];
     $rincian[] = ['No. TUL', (string) ($row['NoTulTampil'] ?? '')];
-    $rincian[] = ['Periode', trim((string) $row['ThblRek'])];
+    $rincian[] = ['Periode', trim((string) $row['ThBlRek'])];
     $rincian[] = ['No. Meter', $meter];
     $rincian[] = ['No. HP', $hp];
+    $rincian[] = ['Skala Prioritas', trim((string) ($row['SkalaPrioritas'] ?? ''))];
+    $rincian[] = ['Peringkat', trim((string) ($row['Peringkat'] ?? ''))];
     $rincian[] = ['Dibuat', (string) $row['WaktuData']];
 }
 ?>
@@ -47,7 +49,7 @@ if ($ada) {
             <label for="f_sesi" class="form-label fw-semibold text-secondary">Sesi ID :</label>
             <div class="input-group">
                 <input type="text" class="form-control font-monospace" id="f_sesi" value="<?= pg_e($sesi) ?>" placeholder="Dibuat saat Create" readonly>
-                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $ada || !$unit_siap || $sisa === 0 ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
+                <button type="submit" name="aksi" value="create" class="btn btn-primary px-4" <?= $sesi !== '' || !$unit_siap ? 'disabled' : '' ?>><i class="bi bi-plus-circle me-1"></i> Create</button>
                 <button type="submit" name="aksi" value="hapus_sesi" class="btn btn-outline-danger px-3" formnovalidate <?= $sesi === '' || !$unit_siap ? 'disabled' : '' ?>
                         data-konfirmasi="<?= pg_e($ada ? 'Tiket yang sedang berjalan akan dilepas kembali ke antrean.' : 'Sesi ini akan dihapus.') ?>" data-judul="Hapus sesi?" data-detail="Sesi <?= pg_e($sesi) ?>" data-ya="Ya, hapus sesi"><i class="bi bi-trash3 me-1"></i> Hapus Sesi</button>
             </div>
@@ -63,7 +65,7 @@ if ($ada) {
             <div class="small" style="min-width:0;">
                 <div class="text-muted">Tiket berjalan</div>
                 <div class="fw-bold font-monospace text-break"><?= pg_e($tiket) ?></div>
-                <div class="text-truncate"><?= pg_e($nama) ?> &middot; <span class="font-monospace"><?= pg_e($idpel) ?></span></div>
+                <div class="text-truncate"><?= pg_e($nama) ?> · <span class="font-monospace"><?= pg_e($idpel) ?></span></div>
             </div>
             <button type="button" class="btn btn-primary btn-sm px-3 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalTiket"><i class="bi bi-box-arrow-up-right me-1"></i> Buka tiket</button>
         </div>
@@ -160,11 +162,11 @@ if ($ada) {
             .then(function (j) {
                 if (j.sisa !== null && j.sisa !== undefined) {
                     jml.textContent = Number(j.sisa).toLocaleString('id-ID');
-                    if (btn && !ada) btn.disabled = Number(j.sisa) === 0;               // tidak ada tiket -> Create mati; muncul tiket -> menyala
                 }
                 waktu.textContent = '\u00b7 dicek ' + j.waktu;
                 denyut.className = 'd-inline-block rounded-circle bg-success'; denyut.style.opacity = '.35'; setTimeout(function () { denyut.style.opacity = '1'; }, 300);
-                if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
+                if (!ada && j.tiket) { location.reload(); }   // sesi baru mendapat tiket (diambil otomatis server) -> muat ulang, pop-up terbuka
+                else if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
                 jeda = INTERVAL;
             })
             .catch(function () { denyut.className = 'd-inline-block rounded-circle bg-danger'; jeda = Math.min(jeda * 2, MAKS); })   // gagal: perlambat
@@ -185,7 +187,7 @@ if ($ada) {
 
             <div class="modal-header border-0 pb-0 px-4 pt-4">
                 <div style="min-width:0;">
-                    <div class="small text-muted text-uppercase fw-bold" style="letter-spacing:.5px;"><?= pg_e($judul) ?> &middot; Sesi <span class="font-monospace"><?= pg_e($sesi) ?></span></div>
+                    <div class="small text-muted text-uppercase fw-bold" style="letter-spacing:.5px;"><?= pg_e($judul) ?> · Sesi <span class="font-monospace"><?= pg_e($sesi) ?></span></div>
                     <h5 class="modal-title font-monospace fw-bold text-break mt-1" id="judulTiket"><?= pg_e($tiket) ?></h5>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
@@ -211,22 +213,18 @@ if ($ada) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- LANGKAH TOMBOL: 1. PPOB  ->  2. Ready / Gagal / Lunas -->
+                <!-- LANGKAH TOMBOL: Langsung 1 tahap (Ready / Gagal) -->
                 <div class="rounded-3 border bg-white p-3">
                     <div id="penandaLangkah" class="small fw-semibold text-secondary mb-2"></div>
 
-                    <div class="d-flex gap-2" data-langkah="1">
-                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
-                        <a id="btnPpob" class="btn btn-primary flex-fill fw-semibold" data-tautan="ppob" href="<?= pg_e($link['ppob']) ?>" <?= $link['ppob'] !== '#' ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><i class="bi bi-wallet2 me-1"></i> PPOB</a>
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2 d-none" data-langkah="2">
-                        <button type="button" class="btn btn-outline-dark" data-ulangi><i class="bi bi-arrow-counterclockwise me-1"></i> Ulangi</button>
+                    <div class="d-flex flex-wrap gap-2" data-langkah="1">
                         <button type="submit" name="aksi" value="ready_on" class="btn btn-success flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus ON. Hasil yang dicatat: <?= pg_e($jenis_tindakan['ready_on']) ?>." data-judul="Konfirmasi Ready ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['ready_on']) ?>"><i class="bi bi-power me-1"></i> Ready ON</button>
                         <button type="submit" name="aksi" value="gagal_on" class="btn btn-danger flex-fill fw-semibold" formnovalidate data-konfirmasi="Meter berstatus OFF. Hasil yang dicatat: <?= pg_e($jenis_tindakan['gagal_on']) ?>." data-judul="Konfirmasi Gagal ON" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat <?= pg_e($jenis_tindakan['gagal_on']) ?>"><i class="bi bi-power me-1"></i> Gagal ON</button>
-                        <button type="submit" name="aksi" value="lunas" class="btn btn-warning flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan sudah lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['lunas']) ?>." data-judul="Catat Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Lunas"><i class="bi bi-cash-coin me-1"></i> Lunas</button>
+                        <?php if (strtoupper(trim((string) $jenis)) === 'KOREKTIF'): ?>
+                        <button type="submit" name="aksi" value="belum" class="btn btn-secondary flex-fill fw-semibold" formnovalidate data-konfirmasi="Pelanggan belum lunas. Hasil yang dicatat: <?= pg_e($jenis_tindakan['belum']) ?>." data-judul="Catat Belum Lunas?" data-detail="<?= pg_e($detail_tiket) ?>" data-ya="Ya, catat Belum Lunas"><i class="bi bi-x-circle me-1"></i> Belum Lunas</button>
+                        <?php endif; ?>
                     </div>
-                    <div class="small text-muted mt-2 d-none" data-langkah="2">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> &middot; Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
+                    <div class="small text-muted mt-2" data-langkah="1">Gagal ON = <strong><?= pg_e($jenis_tindakan['gagal_on']) ?></strong> · Ready ON = <strong><?= pg_e($jenis_tindakan['ready_on']) ?></strong></div>
                 </div>
                 <div id="infoTombol" class="small text-muted mt-2" style="min-height:1.2em;"></div>
             </div>
@@ -237,60 +235,22 @@ if ($ada) {
 <script>
 (function () {
     var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah');
-    // Cara PPOB menyalin: 'terpisah' = 3 salinan berurutan (HP, No Meter, IDPEL; isi clipboard saat ini = IDPEL, sisanya di riwayat clipboard),
-    //                    'gabung'   = 1 salinan berisi 3 baris (IDPEL, No Meter, No HP).
-    var MODE_SALIN = 'terpisah';
-    var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
-    function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
-
+    
     // ---- kartu pop-up terbuka otomatis saat halaman dimuat ----
     window.addEventListener('load', function () {
         if (window.bootstrap && bootstrap.Modal) { bootstrap.Modal.getOrCreateInstance(modal).show(); }
-        else { modal.classList.add('show'); modal.style.display = 'block'; modal.removeAttribute('aria-hidden'); }   // cadangan bila Bootstrap JS tidak termuat
+        else { modal.classList.add('show'); modal.style.display = 'block'; modal.removeAttribute('aria-hidden'); }
     });
 
-    // ---- langkah tombol ----
-    var judul = {1: 'Langkah 1 dari 2 \u00b7 Cek tagihan di PPOB',
-                 2: 'Langkah 2 dari 2 \u00b7 Catat hasil: Ready, Gagal, atau Lunas'};
+    // ---- langkah tombol (1 tahap saja) ----
+    var judul = {
+        1: 'Pilih hasil tindakan: Ready ON, Gagal ON, atau Belum Lunas (tiket korektif)'
+    };
     function tampil(n) {
         document.querySelectorAll('[data-langkah]').forEach(function (el) { el.classList.toggle('d-none', Number(el.getAttribute('data-langkah')) !== n); });
-        penanda.textContent = judul[n];
+        penanda.textContent = judul[n] || '';
     }
     tampil(1);
-    document.querySelectorAll('[data-ulangi]').forEach(function (b) { b.addEventListener('click', function () { tampil(1); kabar('Kembali ke langkah 1.'); }); });
-
-    // ---- salin ke clipboard ----
-    function salin(teks) {
-        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(teks);
-        return new Promise(function (ok, gagal) {
-            var t = document.createElement('textarea'); t.value = teks; t.style.position = 'fixed'; t.style.opacity = '0';
-            modal.appendChild(t); t.select();                                  // di dalam modal agar fokus tidak ditahan modal
-            try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
-        });
-    }
-    function salinData() {
-        var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
-        if (!item.length) { kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.'); return; }
-        var kosong = [['IDPEL', data.idpel], ['No Meter', data.meter], ['No HP', data.hp]].filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
-        var catatan = kosong.length ? ' (' + kosong.join(', ') + ' kosong, dilewati)' : '';
-        var nama = item.slice().reverse().map(function (x) { return x[0]; }).join(', ');
-        var proses = MODE_SALIN === 'gabung'
-            ? salin(item.slice().reverse().map(function (x) { return x[1]; }).join('\n'))
-            : item.reduce(function (p, x) { return p.then(function () { return salin(String(x[1]).trim()); }); }, Promise.resolve());
-        proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
-                    function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
-    }
-
-    // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
-    function pasang(id, tautan, sesudah, nama) {
-        var a = document.getElementById(id);
-        a.addEventListener('click', function (e) {
-            if (a.getAttribute('href') === '#') { e.preventDefault(); kabar('Tautan ' + nama + ' belum diatur (isi $link di modules/penggunaan/penyalaan_sdu.php).'); }
-            sesudah();
-        });
-    }
-    pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
-
 })();
 </script>
 <?php endif; ?>

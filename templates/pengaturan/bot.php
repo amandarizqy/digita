@@ -30,52 +30,11 @@ foreach ($bots as $b) {
         'baris' => $riwayat[$id] ?? [],
     ];
 }
+
+// ---------- Baris tabel dirender ke buffer (dipakai halaman penuh & polling JSON) ----------
+$is_poll = $is_poll ?? false;
+ob_start();
 ?>
-<div class="container-fluid" style="max-width: 1280px;">
-
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-        <div>
-            <h4 class="fw-bold mb-1"><i class="bi bi-robot me-2"></i>Daftar Akses Bot</h4>
-            <p class="text-muted mb-0">Kelola direktori utama, arsip, serta cakupan unit wilayah untuk bot otomatisasi.
-                <?php if (!$hak_sa): ?>Menampilkan bot milik UPI <strong><?= $e($upi_ses ?: '-') ?></strong>.<?php endif; ?></p>
-        </div>
-        <button type="button" class="btn btn-primary" id="btnTambahBot">
-            <i class="bi bi-plus-lg me-1"></i> Tambah Konfigurasi Bot
-        </button>
-    </div>
-
-    <?php if (!empty($pesan)): ?>
-        <div class="alert alert-<?= $e($pesan['tipe']) ?> alert-dismissible fade show border-0 shadow-sm">
-            <?= $pesan['teks'] ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
-        </div>
-    <?php endif; ?>
-
-    <div class="alert alert-<?= $root_bot !== '' ? 'info' : 'warning' ?> border-0 shadow-sm small">
-        <i class="bi bi-folder2-open me-1"></i>
-        Folder Utama Bot: <code><?= $e($root_tampil) ?></code>
-        <?php if ($root_bot === ''): ?>
-            — <strong>folder ini belum ada.</strong> Buat folder tersebut (atau atur <code>BOT_ROOT</code> di <code>config/bot.php</code>) agar jalur folder bisa dibuat otomatis.
-        <?php else: ?>
-            — semua direktori di bawah ditulis secara <strong>relatif</strong> terhadap folder ini.
-        <?php endif; ?>
-    </div>
-
-    <div class="card shadow-sm border-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 70px;">ID</th>
-                        <th>Jenis Bot</th>
-                        <th>Direktori Utama & Arsip (Relatif)</th>
-                        <th>Wilayah Unit</th>
-                        <th class="text-center">Status</th>
-                        <th>Waktu Data</th>
-                        <th class="text-end">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
                 <?php if (!$bots): ?>
                     <tr><td colspan="7" class="text-center text-muted py-5">Belum ada konfigurasi bot. Klik <strong>Tambah Konfigurasi Bot</strong> untuk menambahkan data baru.</td></tr>
                 <?php endif; ?>
@@ -96,7 +55,7 @@ foreach ($bots as $b) {
                         $rw       = $riwayat[(int) $b['IdBot']] ?? [];
                         $akhir    = $rw[0] ?? null;                        // proses terakhir (baris riwayat terbaru)
                     ?>
-                    <tr class="<?= $aktif ? '' : 'text-muted' ?>">
+                    <tr class="<?= $aktif ? '' : 'text-muted' ?>" data-id="<?= (int) $b['IdBot'] ?>" data-h="<?= md5(json_encode([$b, $rw])) ?>">
                         <td class="fw-bold">#<?= (int) $b['IdBot'] ?></td>
                         <td>
                             <span class="badge bg-primary-subtle text-primary-emphasis fs-6 fw-semibold">
@@ -162,6 +121,79 @@ foreach ($bots as $b) {
                         </td>
                     </tr>
                 <?php endforeach; ?>
+<?php
+$html_baris = ob_get_clean();
+$hash_data  = md5(json_encode([$bots, $riwayat]));
+
+if ($is_poll) {
+    while (ob_get_level() > 0) ob_end_clean();   // buang output layout agar murni JSON
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(['hash' => $hash_data, 'html' => $html_baris, 'riwayat' => $riwayat_js],
+                     JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+$interval_poll = defined('BOT_POLL_DETIK') ? max(3, (int) BOT_POLL_DETIK) : 5;
+?>
+<div class="container-fluid" style="max-width: 1280px;">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-robot me-2"></i>Daftar Akses Bot</h4>
+            <p class="text-muted mb-0">Kelola direktori utama, arsip, serta cakupan unit wilayah untuk bot otomatisasi.
+                <?php if (!$hak_sa): ?>Menampilkan bot milik UPI <strong><?= $e($upi_ses ?: '-') ?></strong>.<?php endif; ?></p>
+        </div>
+        <button type="button" class="btn btn-primary" id="btnTambahBot">
+            <i class="bi bi-plus-lg me-1"></i> Tambah Konfigurasi Bot
+        </button>
+    </div>
+
+    <?php if (!empty($pesan)): ?>
+        <div class="alert alert-<?= $e($pesan['tipe']) ?> alert-dismissible fade show border-0 shadow-sm">
+            <?= $pesan['teks'] ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></button>
+        </div>
+    <?php endif; ?>
+
+    <div class="alert alert-<?= $root_bot !== '' ? 'info' : 'warning' ?> border-0 shadow-sm small">
+        <i class="bi bi-folder2-open me-1"></i>
+        Folder Utama Bot: <code><?= $e($root_tampil) ?></code>
+        <?php if ($root_bot === ''): ?>
+            — <strong>folder ini belum ada.</strong> Buat folder tersebut (atau atur <code>BOT_ROOT</code> di <code>config/bot.php</code>) agar jalur folder bisa dibuat otomatis.
+        <?php else: ?>
+            — semua direktori di bawah ditulis secara <strong>relatif</strong> terhadap folder ini.
+        <?php endif; ?>
+    </div>
+
+    <style>
+        @keyframes botFlash { from { box-shadow: inset 0 0 0 9999px rgba(255,193,7,.28); } to { box-shadow: inset 0 0 0 9999px rgba(255,193,7,0); } }
+        #botTabel tr.bot-flash > td { animation: botFlash 1.8s ease-out; }
+        #botLiveDot { font-size: .55rem; transition: color .3s; }
+    </style>
+    <div class="d-flex justify-content-end align-items-center gap-3 small text-muted mb-2">
+        <span id="botLive"><i class="bi bi-circle-fill text-success me-1" id="botLiveDot"></i><span id="botLiveTeks">Memuat...</span></span>
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="botAuto" checked>
+            <label class="form-check-label" for="botAuto">Perbarui otomatis</label>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 70px;">ID</th>
+                        <th>Jenis Bot</th>
+                        <th>Direktori Utama & Arsip (Relatif)</th>
+                        <th>Wilayah Unit</th>
+                        <th class="text-center">Status</th>
+                        <th>Waktu Data</th>
+                        <th class="text-end">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="botTabel" data-hash="<?= $e($hash_data) ?>">
+                <?= $html_baris ?>
                 </tbody>
             </table>
         </div>
@@ -422,12 +454,6 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.show();
     });
 
-    document.querySelectorAll('.btn-ubah-bot').forEach(function (b) {
-        b.addEventListener('click', function () {
-            isi(JSON.parse(b.getAttribute('data-bot')));
-            modal.show();
-        });
-    });
 
     // ---------- Pop out Riwayat ----------
     var modalRw = new bootstrap.Modal(document.getElementById('modalRiwayat'));
@@ -470,20 +496,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     rwCari.addEventListener('input', gambarRiwayat);
-    document.querySelectorAll('.btn-riwayat-bot').forEach(function (b) {
-        b.addEventListener('click', function () {
-            rwAktif = dataRiwayat[b.getAttribute('data-id')] || { judul: '', unit: '', baris: [] };
+    var tabel = document.getElementById('botTabel');
+    var rwId = null;
+
+    // Delegasi event: tetap berfungsi setelah isi tabel diganti oleh pembaruan otomatis
+    tabel.addEventListener('click', function (ev) {
+        var u = ev.target.closest('.btn-ubah-bot');
+        if (u) { isi(JSON.parse(u.getAttribute('data-bot'))); modal.show(); return; }
+        var r = ev.target.closest('.btn-riwayat-bot');
+        if (r) {
+            rwId = r.getAttribute('data-id');
+            rwAktif = dataRiwayat[rwId] || { judul: '', unit: '', baris: [] };
             document.getElementById('riwayatJudul').textContent = rwAktif.judul;
             document.getElementById('riwayatUnit').textContent = rwAktif.unit;
             rwCari.value = '';
             gambarRiwayat();
             modalRw.show();
-        });
+        }
     });
 
     // Konfirmasi hapus
-    document.querySelectorAll('.form-hapus-bot').forEach(function (form) {
-        form.addEventListener('submit', function (ev) {
+    tabel.addEventListener('submit', function (ev) {
+        var form = ev.target.closest('.form-hapus-bot');
+        if (!form) return;
+        {
             if (form.dataset.ok) return;
             ev.preventDefault();
             var nama = form.getAttribute('data-nama');
@@ -499,8 +535,106 @@ document.addEventListener('DOMContentLoaded', function () {
                     confirmButtonColor: '#dc3545'
                 }).then(function (r) { if (r.isConfirmed) lanjut(); });
             } else if (confirm('Hapus konfigurasi bot ' + nama + ' beserta riwayatnya?')) { lanjut(); }
-        });
+        }
     });
+
+    // ---------- Pembaruan otomatis (polling) ----------
+    var DETIK = <?= (int) $interval_poll ?> * 1000;
+    var urlPoll = location.href.split('#')[0] + (location.href.indexOf('?') === -1 ? '?' : '&') + 'poll=1';
+    var cb = document.getElementById('botAuto');
+    var lblTeks = document.getElementById('botLiveTeks');
+    var lblDot = document.getElementById('botLiveDot');
+    var hashNow = tabel.getAttribute('data-hash');
+    var timer = null, sibuk = false, gagal = 0, berhenti = false;
+
+    try { if (localStorage.getItem('botAuto') === '0') cb.checked = false; } catch (e) {}
+
+    function status(teks, kelas) {
+        lblTeks.textContent = teks;
+        lblDot.className = 'bi bi-circle-fill me-1 text-' + kelas;
+    }
+    function jam() { return new Date().toLocaleTimeString('id-ID', { hour12: false }); }
+
+    // Jangan ganggu pengguna: form terbuka, dialog konfirmasi, atau sedang menyeleksi teks di tabel
+    function sedangDipakai() {
+        if (document.getElementById('modalBot').classList.contains('show')) return true;
+        if (document.querySelector('.swal2-container')) return true;
+        var sel = window.getSelection && window.getSelection();
+        if (sel && !sel.isCollapsed && sel.anchorNode && tabel.contains(sel.anchorNode)) return true;
+        return false;
+    }
+
+    function terapkan(d) {
+        // Data riwayat selalu disegarkan; jendela riwayat yang terbuka ikut diperbarui tanpa reset pencarian
+        dataRiwayat = d.riwayat || {};
+        if (rwId !== null && document.getElementById('modalRiwayat').classList.contains('show') && dataRiwayat[rwId]) {
+            rwAktif = dataRiwayat[rwId];
+            gambarRiwayat();
+        }
+        if (d.hash === hashNow) return;
+        if (sedangDipakai()) return;     // ditunda ke siklus berikutnya
+
+        // Ingat posisi fokus & hash lama tiap baris
+        var lama = {};
+        tabel.querySelectorAll('tr[data-id]').forEach(function (tr) { lama[tr.dataset.id] = tr.dataset.h; });
+        var fokus = null, ae = document.activeElement;
+        if (ae && tabel.contains(ae)) {
+            var tr0 = ae.closest('tr[data-id]');
+            if (tr0) fokus = { id: tr0.dataset.id, i: Array.prototype.indexOf.call(tr0.querySelectorAll('button'), ae) };
+        }
+
+        tabel.innerHTML = d.html;
+        tabel.setAttribute('data-hash', d.hash);
+        hashNow = d.hash;
+
+        tabel.querySelectorAll('tr[data-id]').forEach(function (tr) {
+            if (lama[tr.dataset.id] !== undefined && lama[tr.dataset.id] !== tr.dataset.h) tr.classList.add('bot-flash');
+        });
+        if (fokus) {
+            var tr1 = tabel.querySelector('tr[data-id="' + fokus.id + '"]');
+            var bt = tr1 && tr1.querySelectorAll('button')[fokus.i];
+            if (bt) bt.focus({ preventScroll: true });
+        }
+    }
+
+    function jadwal(ms) {
+        clearTimeout(timer);
+        if (berhenti || !cb.checked) return;
+        timer = setTimeout(ambil, ms);
+    }
+
+    function ambil() {
+        if (berhenti || sibuk || !cb.checked) return;
+        if (document.hidden) { status('Dijeda (tab tidak aktif)', 'secondary'); return; }   // dilanjutkan saat tab aktif lagi
+        sibuk = true;
+        var ctrl = window.AbortController ? new AbortController() : null;
+        var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 10000);
+        fetch(urlPoll, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' }, signal: ctrl ? ctrl.signal : undefined })
+            .then(function (r) {
+                var ct = r.headers.get('content-type') || '';
+                if (!r.ok || ct.indexOf('application/json') === -1) { var er = new Error('sesi'); er.sesi = (r.redirected || ct.indexOf('json') === -1); throw er; }
+                return r.json();
+            })
+            .then(function (d) { gagal = 0; terapkan(d); status('Diperbarui ' + jam(), 'success'); })
+            .catch(function (er) {
+                gagal++;
+                if (er && er.sesi && gagal >= 2) { berhenti = true; status('Sesi berakhir - muat ulang halaman', 'danger'); return; }
+                status('Koneksi bermasalah, mencoba lagi...', 'warning');
+            })
+            .finally(function () {
+                clearTimeout(to); sibuk = false;
+                jadwal(DETIK * Math.min(1 + gagal, 6));   // jeda bertambah bila gagal beruntun
+            });
+    }
+
+    cb.addEventListener('change', function () {
+        try { localStorage.setItem('botAuto', cb.checked ? '1' : '0'); } catch (e) {}
+        if (cb.checked) { status('Memuat...', 'success'); ambil(); } else { clearTimeout(timer); status('Pembaruan otomatis mati', 'secondary'); }
+    });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && cb.checked) { clearTimeout(timer); ambil(); } });
+
+    if (cb.checked) { status('Aktif tiap ' + (DETIK / 1000) + ' dtk', 'success'); jadwal(DETIK); }
+    else status('Pembaruan otomatis mati', 'secondary');
 
 <?php if ($form_isi !== null && $buka_form): ?>
     isi(<?= json_encode($form_isi, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);

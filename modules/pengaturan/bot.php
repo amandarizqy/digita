@@ -8,6 +8,9 @@ require_once __DIR__ . '/../../config/database.php';   // $conn (PDO)
 require_once __DIR__ . '/../../functions/csrf.php';
 require_once __DIR__ . '/../../modules/pengaturan/bot_helper.php';
 
+// Mode polling: dipanggil berkala oleh JS (?poll=1) -> hanya mengembalikan JSON berisi baris tabel + riwayat.
+$is_poll = (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') && isset($_GET['poll']);
+
 $base_url = defined('BASE_URL') ? BASE_URL : '';
 $url_bot  = $base_url . '/index.php?page=pengaturan&sub=bot';
 
@@ -56,8 +59,14 @@ if (!bot_super($hak)) {
 }
 
 // Pesan flash dari proses sebelumnya
-$pesan = $_SESSION['bot_flash'] ?? null;
-unset($_SESSION['bot_flash']);
+// (Polling tidak boleh "memakan" pesan flash milik halaman utama.)
+$pesan = null;
+if (!$is_poll) {
+    $pesan = $_SESSION['bot_flash'] ?? null;
+    unset($_SESSION['bot_flash']);
+} else {
+    session_write_close();   // lepas kunci session agar polling tidak memperlambat request lain
+}
 
 $errors    = [];
 $form_isi  = null;
@@ -213,7 +222,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 // ---------- Ambil Data Master AP & UP ----------
 $daftar_ap = [];
 $daftar_up = [];
-try {
+if (!$is_poll) try {   // data master hanya dibutuhkan untuk form, tidak perlu saat polling
     $upi_ses = trim((string) ($_SESSION['UnitUpi'] ?? ''));
     $ap_ses  = trim((string) ($_SESSION['UnitAp'] ?? ''));
 

@@ -3,12 +3,12 @@
 // Halaman berdiri sendiri; tampilan: templates/penggunaan/penyalaan_amr.php
 //
 // Alur:
-//   1. [Create]  -> buat SessionID baru (disimpan di session login, per halaman).
+//   1. [Create]  -> buat SessionID baru (session login, per halaman), walau belum ada tiket. Selama sesi ada, Create nonaktif; hapus sesi dahulu untuk membuat yang baru.
 //   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
-//        UPDATE trx_order_nyala_amr SET Sesi = SessionID ... ORDER BY TiketNyalaAmr ASC LIMIT 1
+//        dipilih dari view vw_tiket_nyala_amr_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_amr) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
-//   4. Tombol hasil menulis ke trx_tindakan_nyala_amr:  Ready ON = NYALA, Gagal ON = GAGAL, Lunas = LUNAS  (nilai NYALA/GAGAL/LUNAS = asumsi, sesuaikan enum tabel)
+//   4. Tombol hasil menulis ke trx_tindakan_nyala_amr:  Ready ON = NYALA, Gagal ON = GAGAL  (nilai NYALA/GAGAL = asumsi, sesuaikan enum tabel)
 //   5. Kembali ke langkah 2 (tiket berikutnya diambil/dibuat otomatis dengan SessionID yang sama).
 // ID tiket dibuat oleh TRIGGER database (BEFORE INSERT pada tabel tiket). PHP tidak membuat ID: INSERT memakai nilai kosong, lalu ID dibaca kembali.
 // Semua dibatasi wilayah akun (pg_scope). NamaAkun tiket & tindakan = akun login.
@@ -17,13 +17,15 @@
 $halaman        = 'penyalaan_amr';
 $judul          = 'Penyalaan AMR';
 $tabel          = 'trx_order_nyala_amr';          // tabel tiket
+$view           = 'vw_tiket_nyala_amr_open';   // view tiket terbuka (dibaca untuk antrean, hitungan & tiket sesi); UPDATE Sesi tetap ke $tabel
+$urut_view      = 'v.NomorUrut ASC';            // urutan antrean dari kolom view (NomorUrut / Peringkat / SkalaPrioritas / TglBayar)
 $pk             = 'TiketNyalaAmr';             // kunci tiket
 $thbl_len       = 6;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_nyala_amr';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
 $jenis_tindakan = [                     // tombol => nilai JenisTindakan
     'ready' => 'NYALA',                 // Ready ON : meter sudah ON -> penyalaan berhasil
     'gagal' => 'GAGAL',                 // Gagal ON : penyalaan gagal
-    'lunas' => 'LUNAS',                 // Lunas
+    'belum' => 'BELUM',               // Belum Lunas: hanya untuk tiket KOREKTIF
 ];
 $fk             = 'TiketPutusAmr';          // kolom rujukan ke tiket putus
 $putus_tabel    = 'trx_order_putus_amr';   // tabel tiket putus (sumber tiket nyala; juga untuk menampilkan No TUL)
@@ -49,15 +51,25 @@ $sesi       = (string) ($_SESSION[$kunci_sesi] ?? '');
 /** SessionID: S + yymmddHHMMSS + '-' + 6 hex acak. Contoh: S261106153012-A1B2C3 */
 $buat_sesi = fn() => 'S' . date('ymdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
 
-/** Langkah 2a: tandai tiket AKTIF yang belum diambil & belum ditindak dengan SessionID (yang terlama). true bila ada yang terambil. */
-$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel): bool {
-    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = :sesi
-                          WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                            AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)
-                          ORDER BY t.`$pk` ASC LIMIT 1");
-    $st->execute([':sesi' => $sesi_id] + $p);
-    return $st->rowCount() === 1;
+/** Langkah 2a: pilih tiket terdepan dari VIEW (belum punya Sesi, di wilayah akun), lalu tandai tabel tiket dengan SessionID.
+ *  View tidak punya kolom Unit & tidak bisa di-UPDATE, jadi: SELECT dari view (di-JOIN ke tabel hanya untuk pg_scope), UPDATE ke tabel.
+ *  UPDATE dijaga (Sesi masih kosong, AKTIF, belum ditindak); bila keduluan pengguna lain, ulangi memilih (maks 5 kali). true bila ada yang terambil. */
+$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $view, $urut_view, $pk, $tindakan_tabel): bool {
+    for ($coba = 0; $coba < 5; $coba++) {
+        $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+        $st = $conn->prepare("SELECT v.`$pk` FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk`
+                              WHERE (v.Sesi IS NULL OR v.Sesi = '') AND $sc
+                              ORDER BY $urut_view, v.`$pk` ASC LIMIT 1");
+        $st->execute($p);
+        $id = $st->fetchColumn();
+        if ($id === false) return false;
+        $up = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = :sesi
+                              WHERE t.`$pk` = :id AND t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '')
+                                AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+        $up->execute([':sesi' => $sesi_id, ':id' => $id]);
+        if ($up->rowCount() === 1) return true;
+    }
+    return false;
 };
 
 /** Langkah 2b: BUAT tiket baru atas nama SessionID. ID tiket diisi TRIGGER database, lalu dibaca kembali. '' bila tidak ada sumber. Panggil di dalam transaksi. */
@@ -98,11 +110,26 @@ $ambil_berikutnya = function (string $sesi_id) use ($klaim, $buat_tiket): string
     return $buat_tiket($sesi_id) !== '' ? 'baru' : '';
 };
 
-/** Langkah 3: tiket milik SessionID yang belum ditindak (null bila tidak ada). */
-$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel, $fk, $putus_tabel): ?array {
+/** Ambil tiket berikutnya untuk SessionID yang sudah ada, dibungkus transaksi. Hasil: '' (tidak ada tiket) | 'ambil'. */
+$ambil_trx = function (string $sesi_id) use ($conn, $ambil_berikutnya): string {
+    $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    $conn->beginTransaction();
+    try {
+        $asal = $ambil_berikutnya($sesi_id);
+        $conn->commit();
+        return $asal;
+    } catch (Throwable $e) {
+        if ($conn->inTransaction()) $conn->rollBack();
+        throw $e;
+    }
+};
+
+/** Langkah 3: tiket milik SessionID yang masih terbuka, dibaca dari VIEW (null bila tidak ada).
+ *  Tabel tiket di-JOIN untuk wilayah akun (Unit) dan kolom rujukan $fk; tabel putus di-JOIN untuk No TUL. */
+$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $view, $pk, $fk, $putus_tabel): ?array {
     if ($sesi_id === '') return null;
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT t.*, p.NoTul AS NoTulTampil FROM `$tabel` t LEFT JOIN `$putus_tabel` p ON p.`$fk` = t.`$fk` WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF' AND $sc AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`) ORDER BY t.`$pk` ASC LIMIT 1");
+    $st = $conn->prepare("SELECT v.*, t.`$fk`, p.NoTul AS NoTulTampil FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk` LEFT JOIN `$putus_tabel` p ON p.`$fk` = t.`$fk` WHERE v.Sesi = :sesi AND $sc ORDER BY v.`$pk` ASC LIMIT 1");
     $st->execute([':sesi' => $sesi_id] + $p);
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 };
@@ -125,10 +152,9 @@ $pesan_habis = 'Tidak ada tiket putus yang bisa dibuatkan tiket nyala. Syaratnya
 
 /** Jumlah tiket yang bisa diambil/dibuat sekarang: tiket nyala yang belum punya Sesi, ditambah tiket putus yang sudah ditindak
  *  dan belum punya tiket nyala (akan dibuatkan tiket saat Create). Dipakai tampilan halaman dan pengecekan berkala (?hitung=1). */
-$hitung_sisa = function () use ($conn, $u, $tabel, $pk, $tindakan_tabel, $fk, $putus_tabel, $syarat_putus): int {
+$hitung_sisa = function () use ($conn, $u, $tabel, $view, $pk, $tindakan_tabel, $fk, $putus_tabel, $syarat_putus): int {
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
-    $st = $conn->prepare("SELECT COUNT(*) FROM `$tabel` t WHERE t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '') AND $sc
-                          AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+    $st = $conn->prepare("SELECT COUNT(*) FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk` WHERE (v.Sesi IS NULL OR v.Sesi = '') AND $sc");
     $st->execute($p);
     $jumlah = (int) $st->fetchColumn();
     $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
@@ -145,7 +171,9 @@ if (isset($_GET['hitung'])) {
     header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
     try {
         $t_saya = $unit_siap ? $tiket_sekarang($sesi) : null;
-        echo json_encode(['sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
+        // Sesi sudah ada tetapi belum memegang tiket (tadinya antrean kosong): ambil otomatis begitu tiket tersedia.
+        if ($unit_siap && !$t_saya && $sesi !== '' && $ambil_trx($sesi) !== '') $t_saya = $tiket_sekarang($sesi);
+        echo json_encode(['sesi' => $sesi, 'sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
     } catch (Throwable $e) {
         http_response_code(500); echo json_encode(['error' => 'gagal']);
     }
@@ -159,7 +187,7 @@ if (!empty($_SESSION['pg_flash'])) {
 }
 
 // ---------------------------------------------------------
-// POST: create | ready | gagal | lunas
+// POST: create | ready | gagal | belum (KOREKTIF saja)
 // ---------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = (string) ($_POST['aksi'] ?? '');
@@ -170,26 +198,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!$unit_siap) {
             $pesan_error = 'Unit akun Anda belum diatur, sehingga tidak bisa membuat tiket.';
         } elseif ($aksi === 'create') {
-            if ($tiket_sekarang($sesi)) {
-                $pesan_error = 'Masih ada tiket yang sedang diproses pada sesi ini. Selesaikan dengan salah satu tombol hasil dahulu.';
+            if ($sesi !== '') {
+                $pesan_error = 'Sesi <strong>' . pg_e($sesi) . '</strong> sudah ada. Hapus sesi dahulu bila ingin membuat sesi baru.';
             } else {
-                $sesi_baru = $buat_sesi();                                          // langkah 1
-                $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
-                $conn->beginTransaction();
-                try {
-                    $asal = $ambil_berikutnya($sesi_baru);                          // langkah 2
-                    $conn->commit();
-                } catch (Throwable $e) {
-                    if ($conn->inTransaction()) $conn->rollBack();
-                    throw $e;
-                }
+                // Sesi boleh dibuat walau antrean kosong. Tiket diambil bila ada; bila belum, diambil otomatis nanti selama sesi ini aktif.
+                $sesi_id = $buat_sesi();                                            // langkah 1
+                $_SESSION[$kunci_sesi] = $sesi_id;
+                $asal = $ambil_trx($sesi_id);                                       // langkah 2
                 if ($asal !== '') {
-                    $_SESSION[$kunci_sesi] = $sesi_baru;
-                    $t = $tiket_sekarang($sesi_baru);                               // langkah 3
-                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_baru) . '</strong> dimulai. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> '
-                                  . ($asal === 'baru' ? 'dibuat dan siap diproses.' : 'diambil dari antrean dan siap diproses.');
+                    $t = $tiket_sekarang($sesi_id);                                 // langkah 3
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> dibuat. Tiket <strong>' . pg_e($t[$pk] ?? '') . '</strong> diambil dari antrean dan siap diproses.';
                 } else {
-                    unset($_SESSION[$kunci_sesi]);
+                    $pesan_sukses = 'Sesi <strong>' . pg_e($sesi_id) . '</strong> dibuat.';
                     $info_baru = $pesan_habis;
                 }
             }
@@ -199,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($sesi === '') {
                 $pesan_error = 'Tidak ada sesi aktif untuk dihapus.';
             } else {
-                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = '' WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = NULL WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
                                       AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
                 $st->execute([':sesi' => $sesi]);
                 $dilepas = $st->rowCount();
@@ -211,6 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $t = $tiket_sekarang($sesi);
             if (!$t || (string) $t[$pk] !== trim((string) ($_POST['tiket'] ?? ''))) {
                 $pesan_error = 'Tiket yang Anda tindak bukan tiket aktif pada sesi ini (mungkin sudah diproses atau halaman kedaluwarsa). Muat ulang halaman.';
+            } elseif ($aksi === 'belum' && strtoupper(trim((string) ($t['JenisTiket'] ?? ''))) !== 'KOREKTIF') {
+                $pesan_error = 'Belum Lunas hanya berlaku untuk tiket KOREKTIF.';
             } else {
                 $conn->exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
                 $conn->beginTransaction();
@@ -252,6 +274,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------------------------------------------------------
 // TAMPIL: tiket yang sedang diproses pada SessionID aktif
 // ---------------------------------------------------------
+// ---------------------------------------------------------
+// Sesi SUDAH ADA (dibuat lewat tombol Create) tetapi belum memegang tiket: ambil tiket otomatis saat halaman dibuka / dimuat ulang.
+// Halaman TIDAK membuat sesi sendiri. (Pengecekan berkala ?hitung=1 juga mengambil tiket begitu tersedia.)
+// ---------------------------------------------------------
+if ($unit_siap && $sesi !== '' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    try {
+        if (!$tiket_sekarang($sesi) && $ambil_trx($sesi) !== '' && $pesan_sukses === '') {
+            $pesan_sukses = 'Tiket diambil otomatis untuk sesi <strong>' . pg_e($sesi) . '</strong> dan siap diproses.';
+        }
+    } catch (Throwable $e) {
+        $pesan_error = trim($pesan_error . ' Gagal mengambil tiket: ' . pg_e($e->getMessage()));
+    }
+}
+
 $row = null; $sisa = null;
 if ($unit_siap) {
     try {

@@ -152,7 +152,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $baris = [];            // dedup per IdPel|ThBlRek
         $kat   = [];            // unik per IdPel|Periode (tahun) -> kategorisasi_risiko
         $katBaru = 0;
-        $dilBaru = 0;           // pelanggan baru yang otomatis masuk DIL
         $dibaca = $tolak = $duplikat = 0;
         $peta = null;
 
@@ -215,23 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi),
                           WaktuData = VALUES(WaktuData)";
                 $conn->beginTransaction();
-                // d0. DIL DULU: daftarkan setiap IdPel di file (StatusData otomatis 'AKTIF'). Wajib dilakukan SEBELUM
-                //     insert ke pelunasan_ap2t dan kategorisasi_risiko, karena kedua tabel itu punya foreign key
-                //     IdPel -> dil.IdPel. INSERT IGNORE: pelanggan yang sudah ada di DIL tidak diubah
-                //     (status AKTIF/TIDAK dan nama yang sudah ada dipertahankan).
-                //     Nama tidak ada di file riwayat -> kosong; lengkapi lewat Penggunaan > Input DIL / import Excel DIL.
-                //     Unit memakai wilayah tujuan upload, NamaAkun akun yang mengunggah.
-                $idpel_unik = array_values(array_unique(array_column($baris, 0)));
-                foreach (array_chunk($idpel_unik, $riwayat_chunk) as $paket) {
-                    $stmt = $conn->prepare("INSERT IGNORE INTO dil (IdPel, Nama, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES "
-                          . implode(',', array_fill(0, count($paket), "(?, '', ?, ?, ?, ?, 'AKTIF', NOW())")));
-                    $param_dil = [];
-                    foreach ($paket as $id_dil) array_push($param_dil, $id_dil, mb_substr((string) $namaAkunInput, 0, 20), $tujuanUp, $tujuanAp, $tujuanUpi);
-                    $stmt->execute($param_dil);
-                    $dilBaru += $stmt->rowCount();
-                }
-
-                // c1. pelunasan_ap2t (IdPel sudah pasti ada di DIL)
+                // c1. pelunasan_ap2t
                 foreach (array_chunk(array_values($baris), $riwayat_chunk) as $paket) {
                     $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
                     $param = [];
@@ -255,12 +238,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $hasil = ['dibaca' => $dibaca, 'tersimpan' => count($baris), 'duplikat' => $duplikat, 'ditolak' => $tolak,
-                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'dil_baru' => $dilBaru, 'kat_total' => count($kat),
+                      'durasi' => round(microtime(true) - $t0, 2), 'nama' => $f['name'], 'kat_baru' => $katBaru, 'kat_total' => count($kat),
                       'wilayah' => $label_tujuan];
             $pesan_sukses = count($baris) > 0
                 ? 'Berhasil memproses ' . number_format(count($baris), 0, ',', '.') . ' baris riwayat pelunasan untuk wilayah ' . $label_tujuan . '; '
-                  . number_format($katBaru, 0, ',', '.') . ' pelanggan-periode baru ditambahkan ke kategorisasi_risiko, '
-                  . number_format($dilBaru, 0, ',', '.') . ' pelanggan baru ditambahkan ke DIL (status AKTIF).'
+                  . number_format($katBaru, 0, ',', '.') . ' pelanggan-periode baru ditambahkan ke kategorisasi_risiko.'
                 : '';
             if (!$baris) $pesan_error = 'Tidak ada baris valid yang bisa disimpan.';
         } catch (Throwable $e) {

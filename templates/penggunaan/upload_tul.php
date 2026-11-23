@@ -17,7 +17,7 @@ if (!$unit_siap)   echo pg_alert('warning', 'Unit UPI akun Anda belum tersedia, 
 if ($hasil):
     $kpi_unggah = [
         ['Baris Dibaca', pg_n($hasil['dibaca']), pg_e($hasil['nama']) . ' · ' . $hasil['durasi'] . ' detik', 'bi-file-earmark-spreadsheet', 'primary'],
-        ['Tersimpan', pg_n($hasil['tersimpan']), 'Baru atau diperbarui', 'bi-check2-circle', 'success'],
+        ['Tersimpan', pg_n($hasil['tersimpan']), 'Baru atau diperbarui sebagian', 'bi-check2-circle', 'success'],
         ['Duplikat di File', pg_n($hasil['duplikat']), 'Nomer Tul sama, dipakai baris terakhir', 'bi-files', $hasil['duplikat'] > 0 ? 'warning' : 'secondary'],
         ['Ditolak', pg_n($hasil['ditolak']), $hasil['bentrok'] > 0 ? pg_n($hasil['bentrok']) . ' bentrok dengan wilayah lain' : 'Format data tidak valid', 'bi-x-octagon', $hasil['ditolak'] > 0 ? 'danger' : 'secondary'],
     ]; ?>
@@ -75,7 +75,7 @@ if ($hasil):
                 <div class="form-text">Sheet pertama dibaca. Batas server: <?= pg_e(ini_get('upload_max_filesize')) ?> per file.</div>
             </div>
             <div class="card-footer bg-white border-top py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i> Nomer Tul yang sudah ada akan diperbarui, bukan digandakan.</span>
+                <span class="text-muted small"><i class="bi bi-arrow-repeat me-1"></i> Nomer Tul yang sudah ada tidak digandakan; hanya Bulan Rekening Awal/Akhir, Jumlah Lembar, dan Rp. Tagihan yang diperbarui.</span>
                 <button type="submit" class="btn btn-primary btn-sm px-4 shadow-sm rounded-2" id="btnUnggah" <?= $unit_siap ? '' : 'disabled' ?>>
                     <i class="bi bi-cloud-arrow-up me-1"></i> Unggah &amp; Proses
                 </button>
@@ -164,7 +164,7 @@ $contoh_baris = [
                 <div class="fw-bold text-info-emphasis mb-1">Kolom opsional &amp; catatan</div>
                 <ul class="mb-0 ps-3 text-muted">
                     <li><strong>Nama Pelanggan</strong> melengkapi DIL hanya bila nama di DIL masih kosong.</li>
-                    <li><strong>Stand Pemutusan</strong> &rarr; Stand Baca dan <strong>Tgl Pelaksanaan Putus</strong> &rarr; Tgl Baca; bila kosong, nilai lama tidak ditimpa.</li>
+                    <li><strong>Stand Pemutusan</strong> &rarr; Stand Baca dan <strong>Tgl Pelaksanaan Putus</strong> &rarr; Tgl Baca; hanya disimpan untuk Nomer Tul baru, Nomer Tul yang sudah ada tidak diubah.</li>
                     <li>Baris <em>TOTAL</em> di akhir laporan dilewati otomatis; kolom lain diabaikan; huruf besar/kecil judul tidak berpengaruh.</li>
                     <li>Id Pelanggan tidak dicek ke master barang; seluruh baris valid langsung disimpan ke data TUL. Status TUL lama tidak berubah saat diunggah ulang.</li>
                     <li>UnitUpi dari akun yang login; UnitAp dan UnitUp sesuai pilihan Wilayah Tujuan.</li>
