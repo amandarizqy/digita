@@ -8,7 +8,7 @@
 // kolom opsional (waktu, Status, Processed) dideteksi otomatis.
 
 $pesan_error = '';
-$sumber_barang = 'vw_terpasang';
+$sumber_barang = 'vw_terpasang_S41';
 $tabel_outbox  = 'sms_outbox';
 $tabel_inbox   = 'sms_inbox';
 $batas_sms     = 1000;
