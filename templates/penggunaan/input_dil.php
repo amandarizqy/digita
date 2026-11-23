@@ -122,9 +122,10 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                             <?= $fld('goltar', 'Gol. Tarif', 5, 'col-md-4', 'placeholder="mis. R1M"') ?>
                             <?= $fld('daya', 'Daya (VA)', 9, 'col-md-4', 'inputmode="numeric" pattern="[0-9]*" placeholder="mis. 900"') ?>
                             <?= $opsi('tegukur', 'Tegangan Ukur', ['TR', 'TM', 'TT'], 'col-md-4') ?>
-                            <?= $fld('jenismk', 'Jenis MK', 10, 'col-md-4', 'placeholder="mis. N"') ?>
-                            <?= $fld('kdpembmeter', 'Kd. Pemb. Meter', 1, 'col-md-4', 'placeholder="A/M/P/L/E"') ?>
-                            <?= $fld('nomormeter', 'Nomor Meter', 15, 'col-md-4', 'inputmode="numeric"') ?>
+                            <?= $fld('jenismk', 'Jenis MK', 10, 'col-md-3', 'placeholder="mis. N"') ?>
+                            <?= $fld('kdpembmeter', 'Kd. Pemb. Meter', 1, 'col-md-3', 'placeholder="A/M/P/L/E"') ?>
+                            <?= $fld('nomormeter', 'Nomor Meter', 15, 'col-md-3', 'inputmode="numeric"') ?>
+                            <?= $fld('merekmeter', 'Merek Meter', 50, 'col-md-3', 'placeholder="Maks. 50 karakter"') ?>
                             <?= $opsi('produkprabayar', 'Produk Prabayar', ['Prabayar Satu Arah', 'Prabayar Dua Arah - NFC', 'Prabayar Dua Arah - Modem'], 'col-md-5') ?>
                             <?= $opsi('aktifasi', 'Aktifasi', ['NON AKTIF (N,O)', 'AKTIF'], 'col-md-3') ?>
                             <?= $opsi('jenisshuntrip', 'Jenis Shuntrip', JENIS_SHUNTRIP, 'col-md-4') ?>
@@ -159,7 +160,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
 
 <!-- POP-UP: IMPORT EXCEL -->
 <div class="modal fade" id="modalImportDil" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" enctype="multipart/form-data" class="modal-content border-0 shadow rounded-4">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="import">
@@ -170,12 +171,12 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
             <div class="modal-body">
                 <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 64 MB) hasil <strong>Monitoring DIL Detail</strong>, sheet pertama. Baris judul dicari otomatis, jadi kop laporan di atasnya boleh ada.</p>
                 <p class="small text-muted mb-1">Kolom yang dibaca (berdasarkan judul kolom):</p>
-                <div class="small font-monospace text-secondary mb-3">IDPEL, NAMA, ALAMAT, NO TLP, NO HP, TARIF, DAYA, JENIS MK, TEGUKUR, KDPEMBMETER, NOMORKWH (disimpan ke Nomor Meter), AKTIFASI, PRODUK PRABAYAR, KOGOL (opsional), JENIS SHUNTRIP (opsional), UNITUP, UNITAP, UNITUPI</div>
+                <div class="small font-monospace text-secondary mb-3">IDPEL, NAMA, ALAMAT, NO TLP, NO HP, TARIF, DAYA, JENIS MK, TEGUKUR, KDPEMBMETER, NOMORKWH (disimpan ke Nomor Meter), MEREK METER (opsional), AKTIFASI, PRODUK PRABAYAR, KOGOL (opsional), JENIS SHUNTRIP (opsional), UNITUP, UNITAP, UNITUPI</div>
                 <ul class="small text-muted ps-3">
                     <li>Data dimuat ke tabel penampung <code>transit_dil</code>, diproses ke DIL oleh trigger database (upsert), lalu penampung dikosongkan per unit.</li>
                     <li>Semua pelanggan yang diimpor otomatis berstatus <strong>AKTIF</strong>.</li>
                     <li>IdPel yang sudah ada <strong>diperbarui</strong> (data lama ditimpa). Status, Kuadran, Skala Prioritas, dan Peringkat tidak berubah.</li>
-                    <li>IDPEL dan NAMA wajib ada di judul kolom.</li>
+                    <li>IDPEL dan NAMA wajib ada di judul kolom. KOGOL, JENIS SHUNTRIP, dan MEREK METER opsional (hanya diproses bila kolomnya ada di Excel).</li>
                 </ul>
                 <input type="file" name="file_xlsx" class="form-control" accept=".xlsx" required>
             </div>
@@ -190,7 +191,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
 <!-- POP-UP: UPDATE DIL (SATU IDPEL) -->
 <?php $fu = $form_update ?? []; ?>
 <div class="modal fade" id="modalUpdateDil" tabindex="-1" aria-labelledby="judulUpdateDil" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" class="modal-content border-0 shadow rounded-4">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="update_satu">
@@ -220,38 +221,38 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                 <hr class="text-muted opacity-25 my-3">
                 <p class="small text-muted mb-3">Isi kolom di bawah ini sesuai data yang ingin diperbarui. Kosongkan jika tidak ingin mengubah kolom tersebut.</p>
 
-                <!-- Jenis Shuntrip -->
-                <div class="mb-3">
-                    <label for="ud_jenisshuntrip" class="form-label small fw-bold text-secondary text-uppercase">Jenis Shuntrip</label>
-                    <select class="form-select" id="ud_jenisshuntrip" name="jenisshuntrip">
-                        <option value="">- tidak diubah / kosong -</option>
-                        <?php foreach (JENIS_SHUNTRIP as $js): ?>
-                        <option value="<?= pg_e($js) ?>" <?= (($fu['jenisshuntrip'] ?? '') === $js) ? 'selected' : '' ?>><?= pg_e($js) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                <div class="row g-3 mb-3">
+                    <!-- Jenis Shuntrip -->
+                    <div class="col-md-6">
+                        <label for="ud_jenisshuntrip" class="form-label small fw-bold text-secondary text-uppercase">Jenis Shuntrip</label>
+                        <select class="form-select" id="ud_jenisshuntrip" name="jenisshuntrip">
+                            <option value="">- tidak diubah / kosong -</option>
+                            <?php foreach (JENIS_SHUNTRIP as $js): ?>
+                            <option value="<?= pg_e($js) ?>" <?= (($fu['jenisshuntrip'] ?? '') === $js) ? 'selected' : '' ?>><?= pg_e($js) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
 
-                <!-- Nomor Meter -->
-                <div class="mb-3">
-                    <label for="ud_nomormeter" class="form-label small fw-bold text-secondary text-uppercase">Nomor Meter</label>
-                    <input type="text" class="form-control" id="ud_nomormeter" name="nomormeter" maxlength="15" 
-                           placeholder="Opsional" value="<?= pg_e($fu['nomormeter'] ?? '') ?>">
-                </div>
+                    <!-- Nomor Meter -->
+                    <div class="col-md-6">
+                        <label for="ud_nomormeter" class="form-label small fw-bold text-secondary text-uppercase">Nomor Meter</label>
+                        <input type="text" class="form-control" id="ud_nomormeter" name="nomormeter" maxlength="15"
+                               placeholder="Opsional" value="<?= pg_e($fu['nomormeter'] ?? '') ?>">
+                    </div>
 
-                <!-- Skala Prioritas & Peringkat -->
-                <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <!-- Skala Prioritas -->
+                    <div class="col-md-6">
                         <label for="ud_skalaprioritas" class="form-label small fw-bold text-secondary text-uppercase">Skala Prioritas</label>
-                        <input type="number" class="form-control" id="ud_skalaprioritas" name="skalaprioritas" min="1" max="9" step="1" 
+                        <input type="number" class="form-control" id="ud_skalaprioritas" name="skalaprioritas" min="1" max="9" step="1"
                                placeholder="1 - 9 (Opsional)" value="<?= pg_e($fu['skalaprioritas'] ?? '') ?>"
                                oninput="if(this.value !== ''){ let v = parseInt(this.value, 10); if(v < 1) this.value = 1; if(v > 9) this.value = 9; }">
                         <div class="form-text" style="font-size: 0.75rem;">Angka bulat 1 – 9.</div>
                     </div>
 
                     <!-- Peringkat -->
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-6">
                         <label for="ud_peringkat" class="form-label small fw-bold text-secondary text-uppercase">Peringkat</label>
-                        <input type="number" class="form-control" id="ud_peringkat" name="peringkat" min="1" step="1" 
+                        <input type="number" class="form-control" id="ud_peringkat" name="peringkat" min="1" step="1"
                                placeholder="Min. 1 (Opsional)" value="<?= pg_e($fu['peringkat'] ?? '') ?>"
                                oninput="if(this.value !== '' && parseInt(this.value, 10) < 1) this.value = 1;">
                         <div class="form-text" style="font-size: 0.75rem;">Angka bulat ≥ 1.</div>
@@ -273,7 +274,7 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
 
 <!-- POP-UP: UPDATE DIL VIA EXCEL -->
 <div class="modal fade" id="modalUpdateExcel" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form method="POST" action="<?= pg_e(pg_url('input_dil')) ?>" enctype="multipart/form-data" class="modal-content border-0 shadow rounded-4">
             <input type="hidden" name="csrf" value="<?= pg_e($csrf) ?>">
             <input type="hidden" name="aksi" value="update_excel">
@@ -292,12 +293,15 @@ $opsi = function (string $name, string $label, array $pilihan, string $col = 'co
                     <?php endforeach; ?>
                 </div>
                 <p class="small text-muted mb-2">File <strong>.xlsx</strong> (maks. 64 MB), sheet pertama. Baris judul dicari otomatis; urutan kolom bebas. Isi kolom <strong>IdPel</strong> dan kolom yang dicentang di atas:</p>
-                <table class="table table-sm table-bordered small text-center mb-3">
-                    <thead class="table-light"><tr><th>IdPel</th><th>NomorMeter</th><th>SkalaPrioritas</th><th>Peringkat</th></tr></thead>
-                    <tbody><tr><td>546100000119</td><td>123456789012345</td><td>5</td><td>12</td></tr></tbody>
+                <div class="table-responsive mb-3">
+                <table class="table table-sm table-bordered small text-center text-nowrap mb-0">
+                    <thead class="table-light"><tr><th>IdPel</th><th>NomorMeter</th><th>SkalaPrioritas</th><th>Peringkat</th><th>JenisShuntrip</th></tr></thead>
+                    <tbody><tr><td>546100000119</td><td>123456789012345</td><td>5</td><td>12</td><td>MCCB</td></tr></tbody>
                 </table>
+                </div>
                 <ul class="small text-muted ps-3">
                     <li>Judul kolom Nomor Meter juga dikenali sebagai <code>NOMORKWH</code>.</li>
+                    <li>Jenis Shuntrip (judul <code>JENISSHUNTRIP</code>) harus salah satu dari: <?= pg_e(implode(', ', JENIS_SHUNTRIP)) ?>.</li>
                     <li>Hanya IdPel yang sudah ada di DIL pada wilayah Anda yang diperbarui; tidak ada pelanggan baru yang dibuat.</li>
                     <li>Sel yang kosong = kolom itu tidak diubah. Nilai yang sama dengan data sekarang dilewati. Bila IdPel muncul dua kali, baris terakhir dipakai.</li>
                     <li>Semua perubahan disimpan dalam satu transaksi; bila terjadi error, tidak ada data yang berubah.</li>

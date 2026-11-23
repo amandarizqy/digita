@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/input_dil.php  -  Input DIL (tabel `dil`)
-// Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorMeter
+// Kolom dil: IdPel (PK) | Nama | Alamat | JenisMk | NomorTlp | NomorHp | GolTar | Daya | TegUkur | KdPembMeter | NomorMeter | MerekMeter
 //            | ProdukPrabayar | Kogol | Aktifasi | JenisShuntrip | Kuadran | SkalaPrioritas | NamaAkun | UnitUp | UnitAp | UnitUpi | StatusData | WaktuData
 //            (Kuadran & SkalaPrioritas diisi modul Perencanaan; NamaAkun, StatusData, WaktuData otomatis.)
 // Fitur: tambah manual lewat pop-up form bertab (status otomatis AKTIF) dan import Excel "Monitoring DIL Detail" (.xlsx).
@@ -32,9 +32,9 @@ if (!function_exists('pg_norm_idpel')) {
     }
 }
 
-/** Kolom transit_dil = kolom dil tanpa StatusData. StatusData (AKTIF) diberikan trigger saat upsert ke dil. JenisShuntrip & Kogol hanya dipakai bila Excel memuat kolomnya. */
+/** Kolom transit_dil = kolom dil tanpa StatusData. StatusData (AKTIF) diberikan trigger saat upsert ke dil. JenisShuntrip, Kogol & MerekMeter hanya dipakai bila Excel memuat kolomnya. */
 const TRANSIT_KOLOM = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter',
-                       'NomorMeter', 'Aktifasi', 'ProdukPrabayar', 'Kogol', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
+                       'NomorMeter', 'MerekMeter', 'Aktifasi', 'ProdukPrabayar', 'Kogol', 'JenisShuntrip', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi', 'WaktuData'];
 
 /** Kolom dil yang boleh diperbarui lewat menu Update DIL: kolom => label. */
 const UPDATE_KOLOM = ['NomorMeter' => 'Nomor Meter', 'SkalaPrioritas' => 'Skala Prioritas', 'Peringkat' => 'Peringkat', 'JenisShuntrip' => 'Jenis Shuntrip'];
@@ -52,6 +52,7 @@ const KOGOL = ['0', '1', '2', '3', '4'];
 const DIL_HEADER = [
     'IDPEL' => 'IdPel', 'NAMA' => 'Nama', 'ALAMAT' => 'Alamat', 'JENISMK' => 'JenisMk', 'NOTLP' => 'NomorTlp', 'NOHP' => 'NomorHp',
     'TARIF' => 'GolTar', 'DAYA' => 'Daya', 'TEGUKUR' => 'TegUkur', 'KDPEMBMETER' => 'KdPembMeter', 'NOMORKWH' => 'NomorMeter', 'NOMORMETER' => 'NomorMeter',   // judul Excel tetap NOMORKWH
+    'MEREKMETER' => 'MerekMeter', 
     'AKTIFASI' => 'Aktifasi', 'KOGOL' => 'Kogol', 'JENISSHUNTRIP' => 'JenisShuntrip', 'PRODUKPRABAYAR' => 'ProdukPrabayar',
     'UNITUP' => 'UnitUp', 'UNITAP' => 'UnitAp', 'UNITUPI' => 'UnitUpi',
 ];
@@ -238,12 +239,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 // JenisShuntrip & Kogol hanya disertakan bila diisi (kosong = nilai bawaan database)
-                $kolom = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter', 'NomorMeter',
+                $kolom = ['IdPel', 'Nama', 'Alamat', 'JenisMk', 'NomorTlp', 'NomorHp', 'GolTar', 'Daya', 'TegUkur', 'KdPembMeter', 'NomorMeter', 'MerekMeter',
                           'Aktifasi', 'ProdukPrabayar', 'NamaAkun', 'UnitUp', 'UnitAp', 'UnitUpi'];
                 $nilai = [
                     $idpel, $nama, $t('alamat', 100), $t('jenismk', 10), $t('nomortlp', 20), $t('nomorhp', 20),
                     strtoupper($t('goltar', 5)), $daya_mentah === '' ? 0 : (int) $daya_mentah, $teg === '' ? null : $teg, $kdp,
-                    $t('nomormeter', 15), $t('aktifasi', 15), $t('produkprabayar', 50),
+                    $t('nomormeter', 15), $t('merekmeter', 50), $t('aktifasi', 15), $t('produkprabayar', 50),
                     mb_substr((string) ($_SESSION['NamaAkun'] ?? ''), 0, 20),
                     $t('unitup', 5), $t('unitap', 5), $upi_akun,
                 ];
@@ -260,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if ($pesan_error !== '') {   // simpan isian terakhir supaya pop-up terbuka lagi dengan data yang sama
-            foreach (['idpel', 'nama', 'alamat', 'jenismk', 'nomortlp', 'nomorhp', 'goltar', 'daya', 'tegukur', 'kdpembmeter', 'nomormeter',
+            foreach (['idpel', 'nama', 'alamat', 'jenismk', 'nomortlp', 'nomorhp', 'goltar', 'daya', 'tegukur', 'kdpembmeter', 'nomormeter', 'merekmeter',
                       'aktifasi', 'produkprabayar', 'kogol', 'jenisshuntrip', 'unitupi', 'unitap', 'unitup'] as $k) {
                 $form_lama[$k] = mb_substr(trim((string) ($_POST[$k] ?? '')), 0, 100);
             }
@@ -328,8 +329,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         if (isset($tmp['IdPel'], $tmp['Nama'])) {
                             $peta = $tmp;
-                            // JenisShuntrip & Kogol hanya disertakan bila Excel memuat kolomnya (selain itu memakai nilai bawaan database)
-                            $cols = array_values(array_filter(TRANSIT_KOLOM, fn($k) => $k !== 'WaktuData' && (!in_array($k, ['JenisShuntrip', 'Kogol'], true) || isset($peta[$k]))));
+                            // JenisShuntrip, Kogol & MerekMeter hanya disertakan bila Excel memuat kolomnya (selain itu memakai nilai bawaan database)
+                            $cols = array_values(array_filter(TRANSIT_KOLOM, fn($k) => $k !== 'WaktuData' && (!in_array($k, ['JenisShuntrip', 'Kogol', 'MerekMeter'], true) || isset($peta[$k]))));
                         }
                         continue;
                     }
@@ -364,7 +365,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'NomorTlp' => $g('NomorTlp', 20), 'NomorHp' => $g('NomorHp', 20), 'GolTar' => $g('GolTar', 5),
                         'Daya' => (int) round((float) str_replace(',', '.', $g('Daya', 15))),
                         'TegUkur' => in_array($teg, ['TR', 'TM', 'TT'], true) ? $teg : null,
-                        'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'Aktifasi' => $g('Aktifasi', 15),
+                        'KdPembMeter' => $g('KdPembMeter', 1), 'NomorMeter' => $g('NomorMeter', 15), 'MerekMeter' => $g('MerekMeter', 50), 'Aktifasi' => $g('Aktifasi', 15),
                         'ProdukPrabayar' => $g('ProdukPrabayar', 50),
                         'Kogol' => in_array($kg, KOGOL, true) ? $kg : null,
                         'JenisShuntrip' => in_array($sh, JENIS_SHUNTRIP, true) ? $sh : null,
