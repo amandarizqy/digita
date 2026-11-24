@@ -17,6 +17,7 @@ if (!pgh_akses_order()) {
 
 $sub_ini         = 'order_penghapusan';
 $url_cetak_order = BASE_URL . '/modules/penghapusan/cetak_order.php';
+$url_cetak_pk    = BASE_URL . '/modules/penghapusan/cetak_pk.php';
 $nama_akun       = substr(trim((string) ($_SESSION['NamaAkun'] ?? '')), 0, 20);
 
 /* ======================================================================
@@ -115,6 +116,7 @@ $data_pk = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 $list_pelanggan = [];
 $list_pk_bebas  = [];
+$list_orders    = [];
 
 try {
     $nama_sql   = pgh_sql_nama_modem($conn);
@@ -166,6 +168,14 @@ try {
                           ORDER BY p.TglFpk DESC, p.NoFpk DESC LIMIT 200");
     $st->execute($sp);
     $list_pk_bebas = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    // Daftar order untuk pilihan "Cetak Order" (100 order terbaru di unit pengguna)
+    [$sc, $sp] = pgh_scope('o');
+    $st = $conn->prepare("SELECT o.NoFormOrder, o.TglOrder FROM frm_order o
+                          WHERE o.StatusData = 'AKTIF'" . $sc . "
+                          ORDER BY o.WaktuData DESC, o.NoFormOrder DESC LIMIT 100");
+    $st->execute($sp);
+    $list_orders = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log('penghapusan frm_penghapusan: ' . $e->getMessage());
     $pesan_error = 'Gagal memuat data penghapusan dari database.' . (pgh_role() === 'SA.KP' ? ' Detail: ' . $e->getMessage() : '');
@@ -201,12 +211,13 @@ try {
                     <th>ALASAN</th>
                     <th>SIM ID / MODEM</th>
                     <th>NO ORDER / PETUGAS</th>
-                    <th class="text-end pe-4">TAHAP / STATUS</th>
+                    <th>TAHAP / STATUS</th>
+                    <th class="text-end pe-4">AKSI</th>
                 </tr>
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_pk)): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK penghapusan. Klik tombol "Buat FPK" di kanan atas untuk mulai.' ?></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK penghapusan. Klik tombol "Buat FPK" di kanan atas untuk mulai.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_pk as $idx => $row): ?>
                         <tr class="border-bottom">
@@ -229,7 +240,7 @@ try {
                                     <span class="text-muted fst-italic small">Belum diorderkan</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end pe-4">
+                            <td>
                                 <?php if (!empty($row['NoFba'])): ?>
                                     <?= (($row['StatusBa'] ?? '') === 'AKTIF') ? '<span class="badge bg-success-subtle text-success">BA SELESAI</span>' : '<span class="badge bg-warning-subtle text-warning-emphasis">BA PENDING</span>' ?>
                                 <?php elseif (!empty($row['NoFormOrder'])): ?>
@@ -237,6 +248,11 @@ try {
                                 <?php else: ?>
                                     <span class="badge bg-secondary-subtle text-secondary">FPK BARU (TIDAK)</span>
                                 <?php endif; ?>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex justify-content-end align-items-center gap-1">
+                                    <a href="<?= pgh_e($url_cetak_pk . '?no_fpk=' . urlencode($row['NoFpk'])) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary px-2 py-1" title="Cetak FPK"><i class="bi bi-printer-fill"></i></a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -246,6 +262,39 @@ try {
     </div>
     </div>
     <?= pgh_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
+</div>
+
+<!-- MODAL CETAK ORDER -->
+<div class="modal fade" id="modalCetakOrder" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="<?= pgh_e($url_cetak_order) ?>" method="GET" target="_blank" class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="bi bi-printer me-2"></i>Cetak Order &amp; FPK</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Pilih Order Perintah Kerja</label>
+                    <select name="no_order" class="form-select" required>
+                        <option value="">-- Pilih Nomor Order --</option>
+                        <?php foreach ($list_orders as $ord): ?>
+                            <option value="<?= pgh_e($ord['NoFormOrder']) ?>">
+                                <?= pgh_e($ord['NoFormOrder']) ?> (Tgl: <?= !empty($ord['TglOrder']) ? pgh_e(date('d/m/Y', strtotime($ord['TglOrder']))) : '-' ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (empty($list_orders)): ?>
+                        <div class="form-text text-danger">Belum ada order. Buat order terlebih dahulu.</div>
+                    <?php endif; ?>
+                </div>
+                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Sistem akan mencetak 1 halaman Formulir Order ditambah dengan semua halaman FPK yang tergabung di dalamnya.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-info text-white fw-bold px-4"><i class="bi bi-printer me-1"></i> Cetak Sekarang</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- MODAL 1: BUAT FPK PENGHAPUSAN -->

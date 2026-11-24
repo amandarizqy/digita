@@ -1,6 +1,9 @@
 <?php
 // modules/penghapusan/eksekusi_mutasi.php
-// Langkah 3: petugas membongkar alat di lapangan -> Berita Acara (BA) -> alat dilepas dari pelanggan.
+// Langkah 3 Penghapusan (hanya SF.UP / SA.KP): FPK yang sudah masuk Order dibongkar di lapangan -> Berita Acara (BA).
+// Saat BA SELESAI, alat dilepas dari pelanggan & dikosongkan (IdPel, SIM, IMEI, StatusRelay) dan StatusData = TIDAK.
+// Untuk dipakai lagi, alat harus lolos Pengujian (Pemasangan > Pra Eksekusi > Pengujian).
+// FPK & Order dibuat di sub-menu Order Pembongkaran (frm_penghapusan.php), bukan di halaman ini.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -15,6 +18,8 @@ if (!pgh_akses_mutasi()) {
 }
 
 $sub_ini   = 'mutasi_penghapusan';
+$url_cetak_pk = BASE_URL . '/modules/penghapusan/cetak_pk.php';
+$url_cetak_ba = BASE_URL . '/modules/penghapusan/cetak_ba.php';
 $nama_akun = substr(trim((string) ($_SESSION['NamaAkun'] ?? '')), 0, 20);
 
 /** Membaca isian formulir sisi BONGKAR (satu-satunya sisi pada penghapusan). */
@@ -62,9 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
         $no_fpk = trim((string) ($_POST['no_fpk'] ?? ''));
         $status = in_array($_POST['status_data'] ?? '', PGH_STATUS, true) ? $_POST['status_data'] : '';
         $bk     = ek_baca_sisi('bongkar');
+        $kd_petugas = in_array($_POST['kd_petugas'] ?? '', PGH_PETUGAS, true) ? $_POST['kd_petugas'] : '';
 
         if ($no_fpk === '' || $status === '') {
             throw new RuntimeException('Data eksekusi tidak lengkap.');
+        }
+        if ($kd_petugas === '') {
+            throw new RuntimeException('Pilih petugas pelaksana.');
         }
         if ($bk['lampu'] === '' || $bk['posisi'] === '') {
             throw new RuntimeException('Lampu indikator dan posisi wajib diisi.');
@@ -72,22 +81,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
         if ($bk['err']) throw new RuntimeException($bk['err'][0]);
 
         [$sc, $sp] = pgh_scope('p');
-        $st = $conn->prepare("SELECT p.NoFpk, p.IdPel, p.UnitUp, p.UnitAp, p.UnitUpi, o.KdPetugas, pd.NoRef AS B_NoRef
+        $st = $conn->prepare("SELECT p.NoFpk, p.IdPel, p.UnitUp, p.UnitAp, p.UnitUpi, pd.NoRef AS B_NoRef
                               FROM frm_pk p
-                              JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
-                              JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
                               LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
-                              WHERE p.NoFpk = ? AND p.JenisPk = 'BERHENTI'" . $sc . ' LIMIT 1');
+                              WHERE p.NoFpk = ? AND p.JenisPk = 'BERHENTI'
+                                AND EXISTS (SELECT 1 FROM frm_order_detil od WHERE od.NoFpk = p.NoFpk)" . $sc . ' LIMIT 1');
         $st->execute(array_merge([$no_fpk], $sp));
         $pk = $st->fetch(PDO::FETCH_ASSOC);
-        if (!$pk) throw new RuntimeException('FPK tidak ditemukan, belum diorderkan, atau di luar unit Anda.');
+        if (!$pk) throw new RuntimeException('FPK tidak ditemukan, belum masuk Order, atau di luar unit Anda.');
         if (empty($pk['B_NoRef'])) throw new RuntimeException('FPK ini belum memiliki data perangkat yang akan dibongkar.');
 
-        // BA yang sudah SELESAI berarti perangkat sudah dihapus permanen dari database, jadi tidak bisa diubah lagi.
+        // BA yang sudah SELESAI berarti perangkat sudah dilepas & dikosongkan, jadi tidak bisa diubah lagi.
         $st = $conn->prepare("SELECT StatusData FROM frm_ba WHERE NoFpk = ? AND JenisPekerjaan = 'BONGKAR' LIMIT 1");
         $st->execute([$no_fpk]);
         if ((string) $st->fetchColumn() === 'AKTIF') {
-            throw new RuntimeException('BA ini sudah SELESAI dan perangkat sudah dihapus dari database, sehingga tidak dapat diubah lagi.');
+            throw new RuntimeException('BA ini sudah SELESAI dan perangkat sudah dilepas dari pelanggan, sehingga tidak dapat diubah lagi.');
         }
 
         $st = $conn->prepare('SELECT NoRef, SimId, ImeiModem, IdPel, StatusData FROM master_barang WHERE NoRef = ?');
@@ -112,25 +120,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eksek
             $no_fba = pgh_no_form($conn, 'frm_ba', 'NoFba', $pk['UnitUp'], date('Y-m-d'), '-F.G');
             $conn->prepare("INSERT INTO frm_ba (NoFba, TglFba, JenisPekerjaan, KdPetugas, NoFpk, IdPel, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData)
                             VALUES (?, ?, 'BONGKAR', ?, ?, ?, ?, ?, ?, ?, 'TIDAK', NOW())")
-                 ->execute([$no_fba, date('Y-m-d'), $pk['KdPetugas'], $no_fpk, $pk['IdPel'], $nama_akun, $pk['UnitUp'], $pk['UnitAp'], $pk['UnitUpi']]);
+                 ->execute([$no_fba, date('Y-m-d'), $kd_petugas, $no_fpk, $pk['IdPel'], $nama_akun, $pk['UnitUp'], $pk['UnitAp'], $pk['UnitUpi']]);
         }
 
         // Detil BA: hanya sisi BONGKAR
         ek_simpan_bongkar($conn, $no_fba, $dev, $kontak, $bk);
 
-        // BA SELESAI: perangkat lama dihapus permanen dari master_barang (SIM ID / IMEI / No Ref lama hilang dari master).
+        // BA SELESAI: perangkat dilepas dari pelanggan; IdPel, SIM ID, IMEI Modem & StatusRelay dikosongkan (baris master_barang tetap ada).
         // BA PENDING tidak menyentuh master_barang, karena StatusData juga diubah trigger tiket (putus/nyala).
         if ($status === 'AKTIF') {
             pgh_hapus_barang($conn, (string) $dev['NoRef'], (string) $pk['IdPel']);
         }
 
-        $conn->prepare('UPDATE frm_ba SET StatusData = ?, NamaAkun = ?, WaktuData = NOW() WHERE NoFba = ?')
-             ->execute([$status, $nama_akun, $no_fba]);
+        $conn->prepare('UPDATE frm_ba SET StatusData = ?, KdPetugas = ?, NamaAkun = ?, WaktuData = NOW() WHERE NoFba = ?')
+             ->execute([$status, $kd_petugas, $nama_akun, $no_fba]);
         $conn->prepare('UPDATE frm_pk SET StatusData = ?, WaktuData = NOW() WHERE NoFpk = ?')
              ->execute([$status, $no_fpk]);
 
         $conn->commit();
-        pgh_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan" . ($status === 'AKTIF' ? ' dan perangkat ' . $dev['NoRef'] . ' telah dihapus dari database.' : ' (status pending).'));
+        pgh_redirect($sub_ini, 'sukses', "Berita Acara $no_fba berhasil disimpan" . ($status === 'AKTIF' ? ' dan perangkat ' . $dev['NoRef'] . ' telah dilepas (SIM, modem & relay dikosongkan). Wajib lolos Pengujian sebelum dipakai lagi.' : ' (status pending).'));
     } catch (Throwable $e) {
         if ($conn->inTransaction()) $conn->rollBack();
         error_log('penghapusan eksekusi: ' . $e->getMessage());
@@ -148,25 +156,27 @@ $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 
 try {
     $alasan_sql = pgh_sql_alasan($conn, 'p');
+    $nama_sql   = pgh_sql_nama_modem($conn);
     [$data_eks, $total_hasil, $hal, $total_hal, $q] = pgh_daftar(
         $conn,
-        "o.NoFormOrder, o.KdPetugas AS PetugasOrder, p.NoFpk, p.TglFpk, p.IdPel, p.LongDil, p.LatDil, $alasan_sql AS Alasan,
+        "p.NoFpk, p.TglFpk, p.IdPel, o.NoFormOrder, p.LongDil, p.LatDil, $alasan_sql AS Alasan,
          pd.NoRef AS BNoRef, pd.SimId AS BSim, pd.ImeiModem AS BImei, pd.NomorBarang AS BKontak,
-         b.NoFba, b.StatusData AS StatusBa,
+         b.NoFba, b.StatusData AS StatusBa, b.KdPetugas AS PetugasBa,
          bd.LampuIndikator AS BLampu, bd.PosisiPasang AS BPosisi, bd.`Long` AS BLong, bd.Lat AS BLat,
          (bd.FotoTerpasang IS NOT NULL) AS BFotoP, (bd.FotoBarang IS NOT NULL) AS BFotoB",
-        "frm_order o
-         JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder
-         JOIN frm_pk p ON p.NoFpk = od.NoFpk
+        "frm_pk p
+         JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
+         JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
          LEFT JOIN frm_pk_detil pd ON pd.NoFpk = p.NoFpk AND pd.StatusBarang = 'DIL'
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'BONGKAR'
          LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'BONGKAR'
          LEFT JOIN master_modem mm ON mm.ImeiModem = pd.ImeiModem",
         "AND p.JenisPk = 'BERHENTI'",
         [],
-        ['alias' => 'p', 'urut' => 'o.TglOrder DESC, o.NoFormOrder DESC, p.NoFpk DESC',
+        ['alias' => 'p', 'urut' => 'p.TglFpk DESC, p.NoFpk DESC',
          'cari'  => pgh_kolom_cari($conn, true, true, ['pd.NoRef', 'pd.SimId', 'pd.ImeiModem'])]
     );
+
 } catch (PDOException $e) {
     error_log('penghapusan eksekusi_mutasi: ' . $e->getMessage());
     $pesan_error = 'Gagal memuat data eksekusi.' . (pgh_role() === 'SA.KP' ? ' Detail: ' . $e->getMessage() : '');
@@ -188,6 +198,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
 ?>
 
 <style>
+    .pln-header-title { font-weight: 700; letter-spacing: 0.5px; }
     .pln-form-box { border: 1.5px solid #212529; font-size: 0.85rem; }
     .pln-form-box th, .pln-form-box td { border: 1px solid #212529 !important; padding: 6px 10px; vertical-align: middle; }
 </style>
@@ -198,14 +209,14 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
 <?php endif; ?>
 
 <div class="card border-0 shadow-sm rounded-4 bg-white">
-    <?= pgh_card_header('Daftar Order Penghapusan untuk Dieksekusi', $sub_ini, $q) ?>
+    <?= pgh_card_header('Daftar Pembongkaran', $sub_ini, $q) ?>
     <div class="card-body p-0">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 ph-table">
             <thead class="table-light text-secondary text-uppercase ph-thead">
                 <tr>
                     <th class="ps-4" style="width:40px;">#</th>
-                    <th>NO ORDER / PETUGAS</th>
+                    <th>TGL FPK / PETUGAS</th>
                     <th>NO FPK / NO BA</th>
                     <th>IDPEL / NO REF</th>
                     <th>SIM ID</th>
@@ -217,13 +228,13 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
             </thead>
             <tbody class="fw-medium text-dark">
                 <?php if (empty($data_eks)): ?>
-                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK penghapusan yang diorderkan.' ?></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada FPK yang siap dibongkar. Buat FPK dan Order dulu di sub-menu Order Pembongkaran.' ?></td></tr>
                 <?php else: ?>
                     <?php foreach ($data_eks as $idx => $row): ?>
                         <?php
                         $ada_ba = !empty($row['NoFba']);
                         $js = [
-                            'nofpk' => $row['NoFpk'], 'nofba' => $row['NoFba'] ?? '', 'order' => $row['NoFormOrder'], 'idpel' => $row['IdPel'],
+                            'nofpk' => $row['NoFpk'], 'nofba' => $row['NoFba'] ?? '', 'petugas' => $row['PetugasBa'] ?? '', 'idpel' => $row['IdPel'],
                             'alasan' => $row['Alasan'] ?? '',
                             'bk' => [
                                 'noref' => $row['BNoRef'] ?? '', 'sim' => $row['BSim'] ?? '', 'imei' => $row['BImei'] ?? '', 'kontak' => $row['BKontak'] ?? '',
@@ -235,19 +246,28 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                         ?>
                         <tr class="border-bottom">
                             <td class="ps-4 text-muted small"><?= ($hal - 1) * PGH_PER_HALAMAN + $idx + 1 ?></td>
-                            <td class="font-monospace"><?= pgh_e($row['NoFormOrder']) ?><br><small class="text-muted"><?= pgh_e($row['PetugasOrder'] ?? '-') ?></small></td>
+                            <td class="font-monospace"><?= pgh_e($row['TglFpk']) ?><br><small class="text-muted"><?= pgh_e($row['PetugasBa'] ?? '-') ?></small></td>
                             <td>
                                 <div class="fw-bold text-dark font-monospace"><?= pgh_e($row['NoFpk']) ?></div>
                                 <div class="small text-primary font-monospace">BA: <?= pgh_e($row['NoFba'] ?? '-') ?></div>
+                                <div class="small text-muted font-monospace">ORDER: <?= pgh_e($row['NoFormOrder'] ?? '-') ?></div>
                             </td>
                             <td>IDPEL: <?= pgh_e($row['IdPel']) ?><br><small class="text-muted">BONGKAR: <?= pgh_e($row['BNoRef'] ?? '-') ?></small></td>
                             <td class="font-monospace"><span class="badge bg-info bg-opacity-10 text-info"><?= pgh_e($row['BSim'] ?? '-') ?></span></td>
                             <td class="font-monospace"><?= pgh_e($row['BImei'] ?? '-') ?></td>
                             <td><?= pgh_badge_relay($row['BLampu'] ?? '') ?></td>
                             <td><?= $ada_ba ? pgh_badge_status($row['StatusBa']) : '<span class="badge bg-primary-subtle text-primary">BELUM</span>' ?></td>
-                            <td class="text-end pe-4">
+                            <td class="text-end pe-4 text-nowrap">
+                                <div class="btn-group btn-group-sm me-1">
+                                    <a href="<?= pgh_e($url_cetak_pk . '?no_fpk=' . urlencode($row['NoFpk'])) ?>" target="_blank" rel="noopener"
+                                       class="btn btn-outline-secondary py-1 px-2" title="Cetak Perintah Kerja (PK)"><i class="bi bi-printer-fill"></i></a>
+                                    <?php if ($ada_ba): ?>
+                                    <a href="<?= pgh_e($url_cetak_ba . '?no_fba=' . urlencode($row['NoFba'])) ?>" target="_blank" rel="noopener"
+                                       class="btn btn-outline-secondary py-1 px-2" title="Cetak Berita Acara (BA)"><i class="bi bi-file-earmark-text"></i></a>
+                                    <?php endif; ?>
+                                </div>
                                 <?php if ($ada_ba && ($row['StatusBa'] ?? '') === 'AKTIF'): ?>
-                                    <span class="badge bg-success-subtle text-success" title="Perangkat sudah dihapus dari database; BA dikunci."><i class="bi bi-lock-fill me-1"></i>SELESAI</span>
+                                    <span class="badge bg-success-subtle text-success" title="Perangkat sudah dilepas dari pelanggan; BA dikunci."><i class="bi bi-lock-fill me-1"></i>SELESAI</span>
                                 <?php else: ?>
                                 <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-3 py-1 fw-bold btn-eksekusi"
                                         data-row="<?= pgh_e(json_encode($js, JSON_UNESCAPED_UNICODE)) ?>"
@@ -295,12 +315,23 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                         <tr>
                             <td class="bg-light fw-bold">Id Pelanggan</td>
                             <td class="fw-bold"><span id="eks_t_idpel"></span></td>
-                            <td class="bg-light fw-bold">No Order / No BA</td>
-                            <td class="font-monospace small"><span id="eks_t_order"></span> / <span id="eks_t_nofba"></span></td>
+                            <td class="bg-light fw-bold">No BA</td>
+                            <td class="font-monospace small"><span id="eks_t_nofba"></span></td>
                         </tr>
                         <tr>
                             <td class="bg-light fw-bold">Alasan</td>
                             <td colspan="3"><span id="eks_t_alasan" class="small">-</span></td>
+                        </tr>
+                        <tr>
+                            <td class="bg-light fw-bold">Petugas *</td>
+                            <td colspan="3">
+                                <select name="kd_petugas" id="eks_petugas" class="form-select form-select-sm" required>
+                                    <option value="">-- Pilih petugas pelaksana --</option>
+                                    <?php foreach (PGH_PETUGAS as $p): ?>
+                                        <option value="<?= pgh_e($p) ?>"><?= pgh_e($p) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </td>
                         </tr>
                     </table>
 
@@ -343,7 +374,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
 
                     <div class="alert alert-light border small py-2 mb-3">
                         <i class="bi bi-info-circle me-1 text-primary"></i>
-                        Status <b>AKTIF (SELESAI)</b>: alat dilepas dari pelanggan dan dinonaktifkan di master barang. Status <b>TIDAK / PENDING</b>: alat tetap terpasang di pelanggan.
+                        Status <b>AKTIF (SELESAI)</b>: alat <b>dilepas dari pelanggan</b>: IdPel, SIM, IMEI Modem &amp; Status Relay dikosongkan, status alat menjadi TIDAK, dan BA dikunci. Alat baru bisa dipakai lagi setelah lolos Pengujian (Pemasangan). Status <b>TIDAK / PENDING</b>: alat belum dihapus dan tetap tercatat di pelanggan.
                     </div>
 
                     <label class="form-label text-uppercase text-muted fw-bold small mb-1">STATUS PENGHAPUSAN *</label>
@@ -353,6 +384,7 @@ $opsi_lampu  = ['MENYALA' => 'Menyala', 'TIDAK' => 'Tidak Menyala'];
                     </select>
                 </div>
                 <div class="modal-footer border-top p-3 justify-content-end gap-2 bg-light">
+                    <a href="#" target="_blank" rel="noopener" id="eks_cetak_pk" class="btn btn-outline-secondary rounded-3 px-4 me-auto"><i class="bi bi-printer-fill me-1"></i>Cetak PK</a>
                     <button type="button" class="btn btn-outline-secondary rounded-3 px-4" data-bs-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary fw-bold rounded-3 px-4">Simpan Berita Acara</button>
                 </div>
@@ -375,7 +407,9 @@ document.addEventListener("DOMContentLoaded", function () {
         btn.addEventListener("click", function () {
             var d = JSON.parse(this.dataset.row);
             el("eks_nofpk").value = d.nofpk;
-            teks("eks_t_order", d.order); teks("eks_t_nofpk", d.nofpk); teks("eks_t_idpel", d.idpel);
+            el("eks_petugas").value = d.petugas || "";
+            el("eks_cetak_pk").href = <?= json_encode($url_cetak_pk) ?> + "?no_fpk=" + encodeURIComponent(d.nofpk);
+            teks("eks_t_nofpk", d.nofpk); teks("eks_t_idpel", d.idpel);
             teks("eks_t_nofba", d.nofba || "(otomatis)"); teks("eks_t_alasan", d.alasan);
             teks("bgNoRef", d.bk.noref); teks("bgSim", d.bk.sim); teks("bgImei", d.bk.imei); teks("bgKontak", d.bk.kontak);
 
@@ -390,5 +424,25 @@ document.addEventListener("DOMContentLoaded", function () {
             if (modal) modal.show();
         });
     });
+
+    // Konfirmasi sebelum alat dilepas (status AKTIF / SELESAI)
+    var formEks = modalEl ? modalEl.querySelector("form") : null;
+    if (formEks) {
+        formEks.addEventListener("submit", function (e) {
+            if (el("eks_status").value !== "AKTIF" || formEks.dataset.konfirmasi === "1") return;
+            e.preventDefault();
+            var noref = el("bgNoRef").textContent;
+            var kirim = function () { formEks.dataset.konfirmasi = "1"; formEks.submit(); };
+            var pesan = "Perangkat " + noref + " akan dilepas dari pelanggan (SIM, modem & relay dikosongkan) dan BA akan dikunci. Alat harus lolos Pengujian sebelum dipakai lagi.";
+            if (window.Swal) {
+                Swal.fire({
+                    title: "Lepas perangkat?", text: pesan, icon: "warning", showCancelButton: true,
+                    confirmButtonText: "Ya, lepas perangkat", cancelButtonText: "Batal", confirmButtonColor: "#dc3545"
+                }).then(function (r) { if (r.isConfirmed) kirim(); });
+            } else if (window.confirm(pesan)) {
+                kirim();
+            }
+        });
+    }
 });
 </script>

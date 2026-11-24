@@ -18,6 +18,8 @@ $sub_ini = 'monitoring_mutasi';
 $data_mon_mutasi = [];
 $total_hasil = 0; $hal = 1; $total_hal = 1; $q = '';
 $pesan_error = '';
+$url_cetak_pk = BASE_URL . '/modules/penghapusan/cetak_pk.php';
+$url_cetak_ba = BASE_URL . '/modules/penghapusan/cetak_ba.php';
 
 try {
     $nama_sql = pgh_sql_nama_modem($conn);
@@ -57,12 +59,13 @@ try {
                         <th>MODEM</th>
                         <th>INDIKATOR</th>
                         <th>STATUS</th>
-                        <th class="text-end pe-4">WAKTU DATA</th>
+                        <th>WAKTU DATA</th>
+                        <th class="text-end pe-4">AKSI</th>
                     </tr>
                 </thead>
                 <tbody class="fw-medium text-dark">
                     <?php if (empty($data_mon_mutasi)): ?>
-                        <tr><td colspan="9" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada data penghapusan.' ?></td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-5"><?= $q !== '' ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada data penghapusan.' ?></td></tr>
                     <?php else: ?>
                         <?php foreach ($data_mon_mutasi as $idx => $row): ?>
                             <tr class="border-bottom">
@@ -80,7 +83,17 @@ try {
                                 </td>
                                 <td><?= pgh_badge_relay($row['Lampu'] ?? '') ?></td>
                                 <td><?= pgh_badge_status($row['StatusBa'] ?? '') ?></td>
-                                <td class="text-end pe-4 font-monospace text-secondary small"><?= pgh_e($row['WaktuData'] ?? '-') ?></td>
+                                <td class="font-monospace text-secondary small"><?= pgh_e($row['WaktuData'] ?? '-') ?></td>
+                                <td class="text-end pe-4 text-nowrap">
+                                    <div class="btn-group btn-group-sm">
+                                        <?php if (!empty($row['NoFpk'])): ?>
+                                        <a href="<?= pgh_e($url_cetak_pk . '?no_fpk=' . urlencode($row['NoFpk'])) ?>" target="_blank" rel="noopener"
+                                           class="btn btn-outline-secondary py-1 px-2" title="Cetak Perintah Kerja (PK)"><i class="bi bi-printer-fill"></i></a>
+                                        <?php endif; ?>
+                                        <a href="<?= pgh_e($url_cetak_ba . '?no_fba=' . urlencode($row['NoFba'])) ?>" target="_blank" rel="noopener"
+                                           class="btn btn-outline-primary py-1 px-2" title="Cetak Berita Acara + foto lepas/pasang"><i class="bi bi-file-earmark-image"></i></a>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>

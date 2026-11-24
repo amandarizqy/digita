@@ -8,7 +8,7 @@ if (!isset($_SESSION['NamaAkun']) || !pgh_akses_monitoring()) {
     exit('Akses ditolak.');
 }
 
-$type = (($_GET['type'] ?? 'order') === 'mutasi') ? 'mutasi' : 'order';
+$type = 'mutasi';
 
 try {
     $nama_sql = pgh_sql_nama_modem($conn);
