@@ -5,7 +5,7 @@
 // Alur:
 //   1. [Create]  -> buat SessionID baru (session login, per halaman), walau belum ada tiket. Selama sesi ada, Create nonaktif; hapus sesi dahulu untuk membuat yang baru.
 //   2. Ambil tiket: pertama coba tiket AKTIF terlama yang belum diambil
-//        dipilih dari view vw_tiket_nyala_sdu_open (urut: $urut_view), lalu UPDATE tabel tiket SET Sesi = SessionID
+//        dipilih dari view vw_tiket_nyala_sdu_open (urut: SkalaPrioritas 9->1, lalu Peringkat 1->n), lalu UPDATE tabel tiket SET Sesi = SessionID
 //      bila tidak ada, BUAT tiket baru atas nama SessionID: tiket PREVENTIF dari tiket putus AKTIF (trx_order_putus_sdu) yang belum punya tiket nyala
 //   3. Tampilkan tiket milik SessionID yang belum ditindak.
 //   4. Tombol hasil menulis ke trx_tindakan_nyala_sdu:  Ready ON = NYALA, gagal ON = GAGAL  (nilai NYALA/GAGAL = asumsi, sesuaikan enum tabel)
@@ -18,7 +18,7 @@ $halaman        = 'penyalaan_sdu';
 $judul          = 'Penyalaan SDU';
 $tabel          = 'trx_order_nyala_sdu';          // tabel tiket
 $view           = 'vw_tiket_nyala_sdu_open';   // view tiket terbuka (dibaca untuk antrean, hitungan & tiket sesi); UPDATE Sesi tetap ke $tabel
-$urut_view      = 'v.NomorUrut ASC';            // urutan antrean dari kolom view (NomorUrut / Peringkat / SkalaPrioritas / TglBayar)
+$urut_view      = 'v.SkalaPrioritas DESC, v.Peringkat ASC';   // antrean: SkalaPrioritas tertinggi (9 -> 1) dahulu, lalu Peringkat terkecil (1, 2, 3, ...)
 $pk             = 'TiketNyalaSdu';             // kunci tiket
 $thbl_len       = 6;             // panjang kolom ThblRek pada tabel tiket
 $tindakan_tabel = 'trx_tindakan_nyala_sdu';           // hasil tindakan (kunci = $pk, + JenisTindakan, NamaAkun, WaktuData)
@@ -54,7 +54,8 @@ $buat_sesi = fn() => 'S' . date('ymdHis') . '-' . strtoupper(bin2hex(random_byte
 /** Langkah 2a: pilih tiket terdepan dari VIEW (belum punya Sesi, di wilayah akun), lalu tandai tabel tiket dengan SessionID.
  *  View tidak punya kolom Unit & tidak bisa di-UPDATE, jadi: SELECT dari view (di-JOIN ke tabel hanya untuk pg_scope), UPDATE ke tabel.
  *  UPDATE dijaga (Sesi masih kosong, AKTIF, belum ditindak); bila keduluan pengguna lain, ulangi memilih (maks 5 kali). true bila ada yang terambil. */
-$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $view, $urut_view, $pk, $tindakan_tabel): bool {
+$cache_tiket = [];   // cache per-request hasil $tiket_sekarang (view berat, jangan dibaca berulang)
+$klaim = function (string $sesi_id) use ($conn, $u, $tabel, $view, $urut_view, $pk, $tindakan_tabel, &$cache_tiket): bool {
     for ($coba = 0; $coba < 5; $coba++) {
         $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
         $st = $conn->prepare("SELECT v.`$pk` FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk`
@@ -67,13 +68,13 @@ $klaim = function (string $sesi_id) use ($conn, $u, $tabel, $view, $urut_view, $
                               WHERE t.`$pk` = :id AND t.StatusData = 'AKTIF' AND (t.Sesi IS NULL OR t.Sesi = '')
                                 AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
         $up->execute([':sesi' => $sesi_id, ':id' => $id]);
-        if ($up->rowCount() === 1) return true;
+        if ($up->rowCount() === 1) { $cache_tiket = []; return true; }
     }
     return false;
 };
 
 /** Langkah 2b: BUAT tiket baru atas nama SessionID. ID tiket diisi TRIGGER database, lalu dibaca kembali. '' bila tidak ada sumber. Panggil di dalam transaksi. */
-$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $thbl_len, $fk, $putus_tabel, $syarat_putus): string {
+$buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $thbl_len, $fk, $putus_tabel, $syarat_putus, &$cache_tiket): string {
     // Sumber: tiket putus AKTIF di wilayah akun, sudah ditindak PADAM, dan belum punya tiket nyala AKTIF.
     $p  = []; $sc = pg_scope($u, 'p', 'Unit', $p);
     $st = $conn->prepare("SELECT p.`$fk` AS rujukan, p.IdPel, p.ThblRek, p.NomorMeter, p.NomorHp, p.UnitUp, p.UnitAp, p.UnitUpi
@@ -96,6 +97,7 @@ $buat_tiket = function (string $sesi_id) use ($conn, $u, $akun, $tabel, $pk, $th
             $q->execute([$r['rujukan'], $sesi_id]);
             $id = (string) $q->fetchColumn();
             if ($id === '') throw new RuntimeException('Tiket tersimpan tetapi ID dari trigger tidak terbaca.');
+            $cache_tiket = [];
             return $id;
         } catch (PDOException $e) {
             if (($e->errorInfo[1] ?? 0) !== 1062) throw $e;          // nomor urut trigger bentrok dengan sesi lain -> coba lagi (trigger hitung ulang)
@@ -126,10 +128,21 @@ $ambil_trx = function (string $sesi_id) use ($conn, $ambil_berikutnya): string {
 
 /** Langkah 3: tiket milik SessionID yang masih terbuka, dibaca dari VIEW (null bila tidak ada).
  *  Tabel tiket di-JOIN untuk wilayah akun (Unit) dan kolom rujukan $fk; tabel putus di-JOIN untuk No TUL. */
-$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $view, $pk, $fk, $putus_tabel): ?array {
+$tiket_sekarang = function (string $sesi_id) use ($conn, $u, $tabel, $view, $pk, $fk, $putus_tabel, &$cache_tiket): ?array {
     if ($sesi_id === '') return null;
+    if (array_key_exists($sesi_id, $cache_tiket)) return $cache_tiket[$sesi_id];
     $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
     $st = $conn->prepare("SELECT v.*, t.`$fk`, p.NoTul AS NoTulTampil FROM `$view` v JOIN `$tabel` t ON t.`$pk` = v.`$pk` LEFT JOIN `$putus_tabel` p ON p.`$fk` = t.`$fk` WHERE v.Sesi = :sesi AND $sc ORDER BY v.`$pk` ASC LIMIT 1");
+    $st->execute([':sesi' => $sesi_id] + $p);
+    return $cache_tiket[$sesi_id] = ($st->fetch(PDO::FETCH_ASSOC) ?: null);
+};
+
+/** Cek ringan (tanpa VIEW, hanya tabel ber-indeks): tiket aktif milik sesi yang belum ditindak. Dipakai validasi saat tombol tindakan ditekan. */
+$tiket_aktif = function (string $sesi_id) use ($conn, $u, $tabel, $pk, $tindakan_tabel): ?array {
+    if ($sesi_id === '') return null;
+    $p  = []; $sc = pg_scope($u, 't', 'Unit', $p);
+    $st = $conn->prepare("SELECT t.`$pk`, t.JenisTiket FROM `$tabel` t WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+                          AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`) AND $sc ORDER BY t.`$pk` ASC LIMIT 1");
     $st->execute([':sesi' => $sesi_id] + $p);
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 };
@@ -228,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               . ($dilepas > 0 ? ' ' . pg_n($dilepas) . ' tiket yang belum selesai dilepas kembali ke antrean.' : '');
             }
         } elseif (isset($jenis_tindakan[$aksi])) {
-            $t = $tiket_sekarang($sesi);
+            $t = $tiket_aktif($sesi);
             if (!$t || (string) $t[$pk] !== trim((string) ($_POST['tiket'] ?? ''))) {
                 $pesan_error = 'Tiket yang Anda tindak bukan tiket aktif pada sesi ini (mungkin sudah diproses atau halaman kedaluwarsa). Muat ulang halaman.';
             } elseif ($aksi === 'belum' && strtoupper(trim((string) ($t['JenisTiket'] ?? ''))) !== 'KOREKTIF') {

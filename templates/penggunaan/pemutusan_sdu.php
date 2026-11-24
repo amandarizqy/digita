@@ -239,9 +239,7 @@ if ($ada) {
 <script>
 (function () {
     var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah');
-    // Cara PPOB menyalin: 'terpisah' = 3 salinan berurutan (HP, No Meter, IDPEL; isi clipboard saat ini = IDPEL, sisanya di riwayat clipboard),
-    //                    'gabung'   = 1 salinan berisi 3 baris (IDPEL, No Meter, No HP).
-    var MODE_SALIN = 'terpisah';
+    // Yang disalin: PPOB = IDPEL, Amicon = IDPEL, MDMS = No Meter (masing-masing 1 salinan).
     var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
     function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
 
@@ -270,20 +268,16 @@ if ($ada) {
             try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
         });
     }
-    function salinData() {
-        var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
-        if (!item.length) { kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.'); return; }
-        var kosong = [['IDPEL', data.idpel], ['No Meter', data.meter], ['No HP', data.hp]].filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
-        var catatan = kosong.length ? ' (' + kosong.join(', ') + ' kosong, dilewati)' : '';
-        var nama = item.slice().reverse().map(function (x) { return x[0]; }).join(', ');
-        var proses = MODE_SALIN === 'gabung'
-            ? salin(item.slice().reverse().map(function (x) { return x[1]; }).join('\n'))
-            : item.reduce(function (p, x) { return p.then(function () { return salin(String(x[1]).trim()); }); }, Promise.resolve());
-        proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
-                    function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
+    function salinNilai(label, nilai) {
+        var v = String(nilai).trim();
+        if (v === '') { kabar(label + ' kosong, tidak ada yang disalin.'); return; }
+        salin(v).then(function () { kabar('Tersalin ke clipboard: ' + label); },
+                      function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
     }
+    function salinIdpel() { salinNilai('IDPEL', data.idpel); }       // PPOB dan Amicon: IDPEL
+    function salinMeter() { salinNilai('No Meter', data.meter); }    // MDMS: No Meter
 
-    // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
+    // ---- PPOB: salin IDPEL, buka tautan, lanjut langkah 2 ----
     function pasang(id, tautan, sesudah, nama) {
         var a = document.getElementById(id);
         a.addEventListener('click', function (e) {
@@ -291,7 +285,7 @@ if ($ada) {
             sesudah();
         });
     }
-    pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
+    pasang('btnPpob', 'ppob', function () { salinIdpel(); tampil(2); }, 'PPOB');
 
 })();
 </script>

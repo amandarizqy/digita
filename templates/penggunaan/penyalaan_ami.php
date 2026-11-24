@@ -241,7 +241,7 @@ if ($ada) {
 <script>
 (function () {
     var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah');
-    var MODE_SALIN = 'terpisah';
+    // Yang disalin: MDMS = No Meter (1 salinan).
     var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
     function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
 
@@ -261,40 +261,37 @@ if ($ada) {
     tampil(1);
     document.querySelectorAll('[data-ulangi]').forEach(function (b) { b.addEventListener('click', function () { tampil(1); kabar('Kembali ke langkah 1.'); }); });
 
-    // ---- salin ke clipboard secara langsung saat tombol MDMS diklik ----
-    function salinDataDanLanjut(e) {
+    // ---- salin ke clipboard ----
+    function salin(teks) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(teks);
+        return new Promise(function (ok, gagal) {
+            var t = document.createElement('textarea'); t.value = teks; t.style.position = 'fixed'; t.style.opacity = '0';
+            modal.appendChild(t); t.select();                                  // di dalam modal agar fokus tidak ditahan modal
+            try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
+        });
+    }
+
+    // ---- MDMS: salin No Meter, buka tautan, lanjut langkah 2 ----
+    function salinMeterDanLanjut(e) {
         var a = document.getElementById('btnMdms');
         if (a.getAttribute('href') === '#') {
             e.preventDefault();
             kabar('Tautan MDMS belum diatur (isi $link di modules/penggunaan/penyalaan_ami.php).');
             return;
         }
-
-        var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
-        if (!item.length) {
-            kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.');
-            tampil(2);
-            return;
+        var meter = String(data.meter).trim();
+        if (meter === '') {
+            kabar('No Meter kosong, tidak ada yang disalin.');
+        } else {
+            salin(meter).then(function () { kabar('Tersalin ke clipboard: No Meter'); },
+                              function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
         }
-
-        var teksSalin = MODE_SALIN === 'gabung'
-            ? item.slice().reverse().map(function (x) { return x[1]; }).join('\n')
-            : String(item[item.length - 1][1]).trim(); // Menyalin IDPEL
-
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(teksSalin).then(function () {
-                kabar('Berhasil menyalin data ke clipboard!');
-            }).catch(function () {
-                kabar('Gagal menyalin otomatis ke clipboard.');
-            });
-        }
-
         tampil(2);
     }
 
     var btnMdms = document.getElementById('btnMdms');
     if (btnMdms) {
-        btnMdms.addEventListener('click', salinDataDanLanjut);
+        btnMdms.addEventListener('click', salinMeterDanLanjut);
     }
 
 })();
