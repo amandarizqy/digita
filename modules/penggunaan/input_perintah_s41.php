@@ -1,7 +1,7 @@
 <?php
 // modules/penggunaan/input_perintah.php  -  Input Perintah (kirim manual ke perangkat lewat SMS Gateway)
 // Sumber (tab) : 'putus' = tabel trx_order_putus_s41, 'nyala' = tabel trx_order_nyala_s41 (tiket otomatis dari trigger saldo / pelunasan),
-//                'barang' = VIEW `vw_terpasang` (perangkat manual, tanpa tiket). Semua dibatasi wilayah akun (kode unit session, pg_scope()).
+//                'barang' = VIEW `vw_terpasang_s41` (perangkat manual, tanpa tiket). Semua dibatasi wilayah akun (kode unit session, pg_scope()).
 //                Nomor tujuan = NomorBarang (pada tiket / view). Tabel tiket HANYA DIBACA; status tiket diubah oleh trigger.
 // Perintah  : pilihan tetap di bawah (PLNOFF, PLNON, PLNSTATUS); TIDAK lagi dari tabel baku_outbox.
 // Pengiriman: INSERT ke tabel `outbox` database gateway ($db_gateway) dengan Status = 'Reserved';
@@ -13,7 +13,7 @@ $pesan_sukses = '';
 $pesan_error  = '';
 $maks_kirim   = 50;      // batas perangkat per sekali kirim
 
-$sumber_barang = 'vw_terpasang';
+$sumber_barang = 'vw_terpasang_s41';
 $db_gateway    = 'smsd';
 $tiket_cfg = [   // sumber tiket: tabel, kolom kunci, label, perintah yang disarankan
     'putus' => ['tabel' => 'trx_order_putus_s41', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF', 'ta' => 'trx_tindakan_putus_s41'],

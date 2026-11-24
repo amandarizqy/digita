@@ -13,12 +13,19 @@
  *
  * Pemakaian (command line):
  *   php bot_cron.php                  -> sama dengan "jalan"
- *   php bot_cron.php jalan            -> siapkan folder, lalu unggah file yang ada
+ *   php bot_cron.php jalan            -> TERUS-MENERUS: siapkan folder, unggah file yang ada, tidur, ulangi (tidak pernah selesai sendiri)
+ *   php bot_cron.php jalan --tiap=30  -> idem, jeda antar putaran 30 detik (bawaan 30)
+ *   php bot_cron.php sekali           -> satu putaran saja lalu selesai (perilaku "jalan" yang lama)
+ *   php bot_cron.php berhenti         -> minta loop "jalan" berhenti (membuat file STOP), lalu menunggu sampai benar-benar berhenti
+ *   php bot_cron.php berhenti --tunggu=300  -> idem, menunggu maksimal 300 detik (bawaan 120; 0 = tidak menunggu)
  *   php bot_cron.php kering           -> hanya tampilkan file yang akan diunggah (tanpa membuat folder / mengunggah)
  *   php bot_cron.php siapkan          -> hanya membuat folder untuk semua bot (aktif maupun tidak)
  *   php bot_cron.php jalan --bot=3    -> batasi pada satu bot (IdBot)
  *
- * Kode keluar: 0 = semua baik, 1 = ada bot yang GAGAL (supaya penjadwal / monitoring bisa mendeteksi).
+ * Menghentikan mode terus-menerus dengan rapi: buat file kosong <BOT_ROOT>/log/STOP (dihapus otomatis setelah terbaca).
+ *
+ * Kode keluar: 0 = semua baik / dihentikan lewat STOP, 1 = ada bot yang GAGAL (mode sekali),
+ *              2 = koneksi database putus, 3 = memori terlalu besar (keduanya: biarkan Task Scheduler menjalankan ulang).
  */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -33,6 +40,9 @@ require_once __DIR__ . '/bot_helper.php';
 require_once __DIR__ . '/bot_handlers.php';
 
 const BC_STABIL_DETIK = 60;   // file harus tidak berubah selama ini sebelum diproses (menghindari file yang masih disalin)
+const BC_JEDA_BAWAAN  = 30;   // detik antar putaran pada mode terus-menerus
+const BC_MAKS_MEMORI  = 400 * 1048576;   // keluar (dan dijalankan ulang penjadwal) bila pemakaian memori melewati ini
+const BC_TUNGGU_BERHENTI = 120;   // detik: lama perintah "berhenti" menunggu loop benar-benar selesai
 const BC_MAKS_TUNDA   = 3;    // berhenti memproses satu bot setelah sekian gangguan sementara beruntun
 
 // ============================================================ log
@@ -160,6 +170,8 @@ function bc_cari_tugas(string $root, array $k, int $stabil): array
             $tugas[] = ['file' => $f, 'ap' => $u['ap'], 'up' => $u['up']];
         }
     }
+    // Proses dari file terlama ke terbaru: untuk pelunasan (ON DUPLICATE KEY UPDATE) data terbaru harus menang.
+    usort($tugas, fn($a, $b) => ((int) @filemtime($a['file'])) <=> ((int) @filemtime($b['file'])) ?: strcmp($a['file'], $b['file']));
     return [$tugas, $salah, $tunggu];
 }
 
@@ -285,13 +297,89 @@ function bc_siapkan_semua(PDO $conn, string $root, ?int $id_bot): int
     return $kembali;
 }
 
+const BC_BERKAS_KUNCI = 'digita_bot_cron.lock';
+
+/** Perintah "berhenti": minta loop yang sedang berjalan berhenti dengan membuat file STOP, lalu tunggu sampai kunci dilepas. */
+function bc_berhenti(string $root, int $tunggu): int
+{
+    $stop  = "$root/log/STOP";
+    $kunci = @fopen(sys_get_temp_dir() . '/' . BC_BERKAS_KUNCI, 'c');
+
+    // Bila kunci bisa langsung diambil, berarti tidak ada loop yang berjalan.
+    if ($kunci && flock($kunci, LOCK_EX | LOCK_NB)) {
+        flock($kunci, LOCK_UN);
+        bc_log('INFO', 'Tidak ada bot_cron yang sedang berjalan, tidak ada yang perlu dihentikan.');
+        return 0;
+    }
+
+    if (@file_put_contents($stop, date('Y-m-d H:i:s')) === false) {
+        bc_log('ERROR', "Tidak bisa membuat file STOP: $stop");
+        return 1;
+    }
+    bc_log('INFO', 'Permintaan berhenti dikirim (file STOP dibuat).');
+    if ($tunggu <= 0) return 0;
+
+    $batas = time() + $tunggu;
+    while (time() < $batas) {
+        sleep(1);
+        if ($kunci && flock($kunci, LOCK_EX | LOCK_NB)) {
+            flock($kunci, LOCK_UN);
+            @unlink($stop);   // jaga-jaga bila belum terhapus oleh loop
+            bc_log('INFO', 'bot_cron sudah berhenti. Aman untuk mematikan server.');
+            return 0;
+        }
+    }
+    bc_log('WARN', "bot_cron belum berhenti setelah $tunggu detik (mungkin sedang memproses file besar). File STOP tetap ada; loop akan berhenti setelah putaran ini.");
+    return 1;
+}
+
+/** Mode terus-menerus: putaran -> tidur -> putaran ... sampai ada file STOP, koneksi DB putus, atau memori membengkak. */
+function bc_loop(PDO $conn, string $root, ?int $id_bot, int $jeda): int
+{
+    $stop = "$root/log/STOP";
+    if (is_file($stop)) @unlink($stop);   // sisa penghentian sebelumnya
+    bc_log('INFO', "Mode terus-menerus dimulai (jeda $jeda detik). Untuk berhenti: buat file $stop");
+
+    $putaran = 0;
+    $denyut  = time();
+    while (true) {
+        if (is_file($stop)) { @unlink($stop); bc_log('INFO', 'File STOP ditemukan, berhenti.'); return 0; }
+
+        try { $conn->query('SELECT 1'); }
+        catch (Throwable $e) { bc_log('ERROR', 'Koneksi database putus: ' . $e->getMessage() . ' - keluar, penjadwal akan menjalankan ulang.'); return 2; }
+
+        try { bc_jalan($conn, $root, false, $id_bot, BC_STABIL_DETIK); }
+        catch (Throwable $e) { bc_log('ERROR', 'Putaran gagal: ' . $e->getMessage()); }
+        $putaran++;
+
+        gc_collect_cycles();
+        if (memory_get_usage(true) > BC_MAKS_MEMORI) {
+            bc_log('WARN', 'Memori ' . round(memory_get_usage(true) / 1048576) . ' MB melewati batas, keluar agar dijalankan ulang.');
+            return 3;
+        }
+        if (time() - $denyut >= 600) {   // catatan "masih hidup" tiap 10 menit
+            bc_log('INFO', "Masih berjalan ($putaran putaran, memori " . round(memory_get_usage(true) / 1048576) . ' MB).');
+            $denyut = time();
+        }
+
+        for ($i = 0; $i < $jeda; $i++) {   // tidur per detik supaya STOP cepat terbaca
+            if (is_file($stop)) break;
+            sleep(1);
+        }
+    }
+}
+
 // ============================================================ main
 $perintah = 'jalan';
 $id_bot   = null;
+$jeda     = BC_JEDA_BAWAAN;
+$tunggu   = BC_TUNGGU_BERHENTI;
 foreach (array_slice($argv, 1) as $a) {
-    if (preg_match('/^--bot=(\d+)$/', $a, $m))                      $id_bot = (int) $m[1];
-    elseif (in_array($a, ['jalan', 'kering', 'siapkan'], true))     $perintah = $a;
-    else { bc_log('ERROR', "Argumen tidak dikenal: $a (pakai: jalan | kering | siapkan, opsional --bot=ID)"); exit(1); }
+    if (preg_match('/^--bot=(\d+)$/', $a, $m))                              $id_bot = (int) $m[1];
+    elseif (preg_match('/^--tiap=(\d+)$/', $a, $m))                         $jeda = max(5, (int) $m[1]);
+    elseif (preg_match('/^--tunggu=(\d+)$/', $a, $m))                       $tunggu = (int) $m[1];
+    elseif (in_array($a, ['jalan', 'sekali', 'kering', 'siapkan', 'berhenti'], true)) $perintah = $a;
+    else { bc_log('ERROR', "Argumen tidak dikenal: $a (pakai: jalan | sekali | kering | siapkan | berhenti, opsional --bot=ID --tiap=DETIK --tunggu=DETIK)"); exit(1); }
 }
 $kering = $perintah === 'kering';
 
@@ -307,10 +395,13 @@ $dir_log = $root . '/log';
 if (!$kering && !is_dir($dir_log)) @mkdir($dir_log, 0775, true);
 $GLOBALS['BC_LOG'] = is_dir($dir_log) ? $dir_log . '/bot_cron.log' : '';
 
+// "berhenti" tidak ikut berebut kunci: ia hanya meminta loop yang berjalan untuk berhenti
+if ($perintah === 'berhenti') exit(bc_berhenti($root, $tunggu));
+
 // Cegah dua putaran berjalan bersamaan (file ganda / tabrakan transit_dil)
 $kunci = null;
 if (!$kering) {
-    $kunci = @fopen(sys_get_temp_dir() . '/digita_bot_cron.lock', 'c');
+    $kunci = @fopen(sys_get_temp_dir() . '/' . BC_BERKAS_KUNCI, 'c');
     if ($kunci && !flock($kunci, LOCK_EX | LOCK_NB)) {
         bc_log('INFO', 'Putaran sebelumnya masih berjalan, putaran ini dilewati.');
         exit(0);
@@ -318,9 +409,9 @@ if (!$kering) {
 }
 
 try {
-    $kode = $perintah === 'siapkan'
-        ? bc_siapkan_semua($conn, $root, $id_bot)
-        : bc_jalan($conn, $root, $kering, $id_bot, BC_STABIL_DETIK);
+    if ($perintah === 'siapkan')    $kode = bc_siapkan_semua($conn, $root, $id_bot);
+    elseif ($perintah === 'jalan')  $kode = bc_loop($conn, $root, $id_bot, $jeda);
+    else                            $kode = bc_jalan($conn, $root, $kering, $id_bot, BC_STABIL_DETIK);   // sekali / kering
 } catch (Throwable $e) {
     bc_log('ERROR', 'Cron berhenti: ' . $e->getMessage());
     $kode = 1;

@@ -244,9 +244,8 @@ if ($ada) {
 <script>
 (function () {
     var modal = document.getElementById('modalTiket'), info = document.getElementById('infoTombol'), penanda = document.getElementById('penandaLangkah');
-    // Cara PPOB menyalin: 'terpisah' = 3 salinan berurutan (HP, No Meter, IDPEL; isi clipboard saat ini = IDPEL, sisanya di riwayat clipboard),
-    //                    'gabung'   = 1 salinan berisi 3 baris (IDPEL, No Meter, No HP).
-    var MODE_SALIN = 'terpisah';
+    // PPOB menyalin IDPEL (1 salinan). MDMS menyalin No Meter (1 salinan).
+    var JEDA_SALIN = 500;   // ms antar salinan bila suatu tombol menyalin lebih dari satu nilai
     var data = {idpel: <?= json_encode($idpel) ?>, meter: <?= json_encode($meter) ?>, hp: <?= json_encode($hp) ?>};
     function kabar(t) { info.textContent = t; clearTimeout(kabar.w); kabar.w = setTimeout(function () { info.textContent = ''; }, 3500); }
 
@@ -276,30 +275,47 @@ if ($ada) {
             try { document.execCommand('copy') ? ok() : gagal(); } catch (e) { gagal(e); } finally { t.remove(); }
         });
     }
-    function salinData() {
-        var item = [['No HP', data.hp], ['No Meter', data.meter], ['IDPEL', data.idpel]].filter(function (x) { return String(x[1]).trim() !== ''; });
-        if (!item.length) { kabar('IDPEL, No Meter dan No HP kosong, tidak ada yang disalin.'); return; }
-        var kosong = [['IDPEL', data.idpel], ['No Meter', data.meter], ['No HP', data.hp]].filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
+    // daftar = [[label, nilai], ...] sesuai urutan salin (yang terakhir menjadi isi clipboard saat ini); nilai kosong dilewati.
+    function salinItem(daftar, gabung) {
+        var item   = daftar.filter(function (x) { return String(x[1]).trim() !== ''; });
+        var kosong = daftar.filter(function (x) { return String(x[1]).trim() === ''; }).map(function (x) { return x[0]; });
         var catatan = kosong.length ? ' (' + kosong.join(', ') + ' kosong, dilewati)' : '';
-        var nama = item.slice().reverse().map(function (x) { return x[0]; }).join(', ');
-        var proses = MODE_SALIN === 'gabung'
-            ? salin(item.slice().reverse().map(function (x) { return x[1]; }).join('\n'))
-            : item.reduce(function (p, x) { return p.then(function () { return salin(String(x[1]).trim()); }); }, Promise.resolve());
-        proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
-                    function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
+        if (!item.length) { kabar(kosong.join(' dan ') + ' kosong, tidak ada yang disalin.'); return Promise.resolve(); }
+        var nama = item.map(function (x) { return x[0]; }).join(', ');
+        var proses = (gabung && item.length > 1)
+            ? salin(item.map(function (x) { return String(x[1]).trim(); }).join('\n'))
+            : item.reduce(function (p, x, i) {
+                  // jeda (JEDA_SALIN) hanya ANTAR salinan, agar riwayat clipboard mencatat tiap salinan sebagai entri terpisah
+                  return p.then(function () { return i ? new Promise(function (r) { setTimeout(r, JEDA_SALIN); }) : null; })
+                          .then(function () { return salin(String(x[1]).trim()); });
+              }, Promise.resolve());
+        return proses.then(function () { kabar('Tersalin ke clipboard: ' + nama + catatan); },
+                           function () { kabar('Gagal menyalin otomatis. Izinkan akses clipboard atau salin manual dari keterangan.'); });
     }
+    function salinPpob() { return salinItem([['IDPEL', data.idpel]], false); }                                   // PPOB: IDPEL saja
+    function salinMdms() { return salinItem([['No Meter', data.meter]], false); }                                       // MDMS: No Meter
 
-    // ---- PPOB: salin data, buka tautan, lanjut langkah 2 ----
-    // ---- MDMS: buka tautan, lanjut langkah 3 ----
-    function pasang(id, tautan, sesudah, nama) {
+    // ---- PPOB: salin IDPEL, buka tautan, lanjut langkah 2 ----
+    // ---- MDMS: salin No Meter, buka tautan, lanjut langkah 3 ----
+    // Penting: tab tujuan dibuka SESUDAH semua salinan selesai. Bila tab baru dibuka lebih dulu, fokus berpindah dan browser
+    // menolak salinan ke-2 (hanya salinan pertama yang masuk clipboard).
+    function pasang(id, salinFn, lanjut, nama) {
         var a = document.getElementById(id);
         a.addEventListener('click', function (e) {
-            if (a.getAttribute('href') === '#') { e.preventDefault(); kabar('Tautan ' + nama + ' belum diatur (isi $link di modules/penggunaan/pemutusan_ami.php).'); }
-            sesudah();
+            e.preventDefault();
+            var href = a.getAttribute('href');
+            lanjut();
+            var selesai = Promise.resolve(salinFn());
+            if (href === '#') { selesai.then(function () { kabar('Tautan ' + nama + ' belum diatur (isi $link di modules/penggunaan/pemutusan_ami.php).'); }); return; }
+            selesai.then(function () {
+                var w = window.open(href, '_blank');          // tanpa fitur 'noopener' (itu membuat window.open selalu mengembalikan null)
+                if (w) { try { w.opener = null; } catch (er) {} }
+                else kabar('Pop-up diblokir browser. Izinkan pop-up untuk situs ini, lalu klik ' + nama + ' lagi.');
+            });
         });
     }
-    pasang('btnPpob', 'ppob', function () { salinData(); tampil(2); }, 'PPOB');
-    pasang('btnMdms', 'mdms', function () { tampil(3); }, 'MDMS');
+    pasang('btnPpob', salinPpob, function () { tampil(2); }, 'PPOB');
+    pasang('btnMdms', salinMdms, function () { tampil(3); }, 'MDMS');
 
 })();
 </script>

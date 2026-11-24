@@ -1,6 +1,6 @@
 <?php
 // modules/penggunaan/monitor_dil.php  -  Monitoring DIL (tabel `dil`)
-// Menampilkan semua kolom tabel dil. Fitur: cari (IdPel, nama, alamat, telepon, kWh, tarif, unit, akun), filter status / nama kosong, paginasi, edit nama & status (hanya akun yang berhak Input DIL).
+// Menampilkan semua kolom tabel dil (termasuk Kogol, Jenis Shuntrip, Kuadran, Skala Prioritas, Peringkat bila kolomnya ada). Fitur: cari (IdPel, nama, alamat, telepon, kWh, tarif, unit, akun), filter status / nama kosong, paginasi, edit nama & status (hanya akun yang berhak Input DIL).
 // IdPel adalah kunci, jadi tidak dapat diubah.
 
 $pesan_sukses = '';
@@ -88,7 +88,7 @@ try {
 
     $where = []; $p = [];
     if ($keyword !== '') {
-        $cari = ['IdPel', 'Nama', 'Alamat', 'NomorTlp', 'NomorHp', 'NomorMeter', 'GolTar', 'UnitUp', 'NamaAkun'];
+        $cari = ['IdPel', 'Nama', 'Alamat', 'NomorTlp', 'NomorHp', 'NomorMeter', 'GolTar', 'UnitUpi', 'UnitAp', 'UnitUp', 'NamaAkun'];
         $w_k = [];
         foreach ($cari as $i => $c) { $w_k[] = "$c LIKE :k$i"; $p[":k$i"] = '%' . $keyword . '%'; }
         $where[] = '(' . implode(' OR ', $w_k) . ')';
@@ -106,7 +106,16 @@ try {
     $total_data = (int) $st->fetchColumn();
     $hal = min($hal, max(1, (int) ceil($total_data / $limit)));
 
-    $st = $conn->prepare("SELECT IdPel, Nama AS NamaPelanggan, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorMeter, Aktifasi, ProdukPrabayar, NamaAkun, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
+    // Kolom tambahan dibaca hanya bila ada di tabel dil; bila belum ada, diganti NULL supaya tampilan tetap jalan ("-").
+    $kolom_dil = array_column($conn->query("SHOW COLUMNS FROM dil")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    $opsional  = [];
+    foreach (['Kogol', 'JenisShuntrip', 'Kuadran', 'SkalaPrioritas', 'Peringkat'] as $k) {
+        $opsional[$k] = in_array($k, $kolom_dil, true) ? "`$k`" : "NULL AS `$k`";
+    }
+
+    $st = $conn->prepare("SELECT IdPel, Nama AS NamaPelanggan, Alamat, JenisMk, NomorTlp, NomorHp, GolTar, Daya, TegUkur, KdPembMeter, NomorMeter, Aktifasi, ProdukPrabayar, "
+        . $opsional['Kogol'] . ", " . $opsional['JenisShuntrip'] . ", " . $opsional['Kuadran'] . ", " . $opsional['SkalaPrioritas'] . ", " . $opsional['Peringkat']
+        . ", NamaAkun, UnitUpi, UnitAp, UnitUp, StatusData, WaktuData FROM dil $w ORDER BY WaktuData DESC, IdPel LIMIT :lim OFFSET :off");
     foreach ($p as $k => $v) $st->bindValue($k, $v);
     $st->bindValue(':lim', $limit, PDO::PARAM_INT);
     $st->bindValue(':off', ($hal - 1) * $limit, PDO::PARAM_INT);

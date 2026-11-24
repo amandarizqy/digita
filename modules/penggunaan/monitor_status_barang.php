@@ -4,12 +4,12 @@
 // diubah trigger saat tiket terbit), status relay ON/OFF, apakah punya TIKET AKTIF (trx_order_putus_s41 / trx_order_nyala_s41), dan apakah sedang
 // MENGIRIM PESAN (antrean sms_outbox) beserta balasan terakhir (sms_inbox).
 // Wilayah : kode unit session (pg_scope()); akun tanpa AP / UP memilih Unit AP dahulu (pg_filter_unit()). Barang tanpa kode unit tidak tampil.
-// Penautan: barang -> tiket lewat IdPel + NomorBarang (dari view vw_terpasang); barang -> SMS lewat 9 digit terakhir NomorBarang.
+// Penautan: barang -> tiket lewat IdPel + NomorBarang (dari view vw_terpasang_S41); barang -> SMS lewat 9 digit terakhir NomorBarang.
 //           Barang yang belum ada di view (data SIM/IMEI/relay/unit belum lengkap) tidak punya NomorBarang, jadi tiket & SMS-nya tidak terlacak.
 // SMS     : hanya $batas_sms SMS terakhir dari sms_outbox / sms_inbox yang diperiksa (bentuk tabel smsd standar; kolom opsional dideteksi).
 
 $pesan_error = '';
-$sumber_barang = 'vw_terpasang';
+$sumber_barang = 'vw_terpasang_S41';
 $tabel_outbox  = 'sms_outbox';
 $tabel_inbox   = 'sms_inbox';
 $batas_sms     = 2000;
@@ -112,7 +112,7 @@ if (!$unit_siap) {
         if ($nomor) {
             $ph = implode(',', array_fill(0, count($nomor), '?'));
             $tk = ['putus' => [], 'nyala' => []];
-            foreach (['putus' => ['trx_order_putus_s41', 'TiketPutus'], 'nyala' => ['trx_order_nyala_s41', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
+            foreach (['putus' => ['trx_order_putus_s41', 'TiketPutusS41'], 'nyala' => ['trx_order_nyala_s41', 'TiketNyala']] as $jenis => [$tb, $pkt]) {
                 $st = $conn->prepare("SELECT NomorBarang, $pkt AS Tiket, JenisTiket, WaktuData FROM $tb WHERE StatusData = 'AKTIF' AND NomorBarang IN ($ph) ORDER BY WaktuData DESC");
                 $st->execute($nomor);
                 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) if (!isset($tk[$jenis][$r['NomorBarang']])) $tk[$jenis][$r['NomorBarang']] = $r;   // terbaru per nomor

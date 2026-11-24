@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../functions/order_notif_helper.php';
 
 $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $kode_hak = $_SESSION['KodeHak'] ?? '';
@@ -25,10 +26,23 @@ try {
             throw new Exception("Pelanggan dan Perangkat Alat wajib dipilih!");
         }
 
+        // Jika login sebagai SA.KP (UnitUp session kosong), ambil UnitUp/Ap/Upi dari tabel dil pelanggan
+        $target_up  = $unit_up;
+        $target_ap  = $unit_ap;
+        $target_upi = $unit_upi;
+        if (empty($target_up)) {
+            $st_dil = $conn->prepare("SELECT UnitUp, UnitAp, UnitUpi FROM dil WHERE IdPel = ? LIMIT 1");
+            $st_dil->execute([$id_pel]);
+            $dil_info   = $st_dil->fetch(PDO::FETCH_ASSOC);
+            $target_up  = $dil_info['UnitUp'] ?? '';
+            $target_ap  = $dil_info['UnitAp'] ?? '';
+            $target_upi = $dil_info['UnitUpi'] ?? '';
+        }
+
         $conn->beginTransaction();
 
         $tgl_fmt = date('Ymd', strtotime($tgl_fpk));
-        $prefix  = $unit_up;
+        $prefix  = $target_up;
         $stmt_seq = $conn->prepare("SELECT NoFpk FROM frm_pk WHERE NoFpk LIKE :pola ORDER BY NoFpk DESC LIMIT 1");
         $stmt_seq->execute([':pola' => $prefix . '___' . $tgl_fmt . '-F.F']);
         $last_pk = $stmt_seq->fetchColumn();
@@ -53,7 +67,7 @@ try {
             INSERT INTO frm_pk (NoFpk, TglFpk, JenisPk, IdPel, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData) 
             VALUES (?, ?, 'PASANG', ?, ?, ?, ?, ?, 'AKTIF')
         ");
-        $stmt_ins->execute([$no_fpk, $tgl_fpk, $id_pel, $nama_akun, $unit_up, $unit_ap, $unit_upi]);
+        $stmt_ins->execute([$no_fpk, $tgl_fpk, $id_pel, $nama_akun, $target_up, $target_ap, $target_upi]);
 
         $stmt_ins_detil = $conn->prepare("
             INSERT INTO frm_pk_detil (NoFpk, StatusBarang, NoRef, SimId, ImeiModem, NomorBarang, NomorModem) 
@@ -122,7 +136,7 @@ try {
         exit;
     }
 
-    // 3. SIMPAN ORDER (SPK) BARU (StatusData = 'TIDAK' saat masih draft / belum final mutasi)
+    // 3. SIMPAN ORDER (SPK) BARU + KIRIM EMAIL NOTIFIKASI & PDF KE SF.UP
     if ($action === 'simpan_order' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $tgl_order = trim($_POST['tgl_order']);
         $fpk_terpilih = $_POST['fpk_terpilih'] ?? [];
@@ -131,10 +145,24 @@ try {
             throw new Exception("Pilih minimal satu FPK untuk dibuatkan Order/SPK!");
         }
 
+        // Ambil UnitUp/Ap/Upi dari FPK pertama yang dipilih (penting jika pembuatnya SA.KP)
+        $target_up  = $unit_up;
+        $target_ap  = $unit_ap;
+        $target_upi = $unit_upi;
+
+        if (empty($target_up)) {
+            $st_fpk_unit = $conn->prepare("SELECT UnitUp, UnitAp, UnitUpi FROM frm_pk WHERE NoFpk = ? LIMIT 1");
+            $st_fpk_unit->execute([$fpk_terpilih[0]]);
+            $fpk_unit   = $st_fpk_unit->fetch(PDO::FETCH_ASSOC);
+            $target_up  = $fpk_unit['UnitUp'] ?? '';
+            $target_ap  = $fpk_unit['UnitAp'] ?? '';
+            $target_upi = $fpk_unit['UnitUpi'] ?? '';
+        }
+
         $conn->beginTransaction();
 
         $tgl_fmt = date('Ymd', strtotime($tgl_order));
-        $prefix = $unit_up;
+        $prefix = $target_up;
         $stmt_seq = $conn->prepare("SELECT NoFormOrder FROM frm_order WHERE NoFormOrder LIKE :pola ORDER BY NoFormOrder DESC LIMIT 1");
         $stmt_seq->execute([':pola' => $prefix . '___' . $tgl_fmt . '-F.E']);
         $last_ord = $stmt_seq->fetchColumn();
@@ -147,14 +175,21 @@ try {
             INSERT INTO frm_order (NoFormOrder, TglOrder, KdPetugas, UnitUp, UnitAp, UnitUpi, StatusData, NamaAkun) 
             VALUES (?, ?, ?, ?, ?, ?, 'TIDAK', ?)
         ");
-        $stmt_ord->execute([$no_order, $tgl_order, $kd_petugas, $unit_up, $unit_ap, $unit_upi, $nama_akun]);
+        $stmt_ord->execute([$no_order, $tgl_order, $kd_petugas, $target_up, $target_ap, $target_upi, $nama_akun]);
 
         $stmt_detil = $conn->prepare("INSERT INTO frm_order_detil (NoFormOrder, NoFpk) VALUES (?, ?)");
         foreach ($fpk_terpilih as $no_fpk) {
             $stmt_detil->execute([$no_order, $no_fpk]);
         }
 
+        // Commit database terlebih dahulu agar Order aman tersimpan walaupun email gagal terkirim
         $conn->commit();
+
+        // Kirim Email Notifikasi + Lampiran PDF ke SF.UP UnitUp terkait
+        $notif_res = kirimNotifOrderPasang($conn, $no_order);
+        $swal_icon  = $notif_res['status'] ? 'success' : 'warning';
+        $swal_title = $notif_res['status'] ? 'Berhasil & Terkirim!' : 'Order Tersimpan (Email Gagal)';
+        $swal_text  = addslashes("Order {$no_order} berhasil dibuat. " . $notif_res['message']);
 
         echo "<!DOCTYPE html>
         <html>
@@ -162,12 +197,10 @@ try {
         <body>
             <script>
                 Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: 'Surat Perintah Kerja (Order) berhasil dibuat.',
-                    confirmButtonColor: '#0d6efd',
-                    timer: 1500,
-                    showConfirmButton: false
+                    icon: '{$swal_icon}',
+                    title: '{$swal_title}',
+                    text: '{$swal_text}',
+                    confirmButtonColor: '#0d6efd'
                 }).then(() => {
                     window.location.href = '../../index.php?page=pemasangan&menu=eksekusi&sub=order_pasang';
                 });
@@ -177,7 +210,7 @@ try {
         exit;
     }
     
-    // 4. HAPUS KESELURUHAN ORDER / SPK (Hanya jika belum difinalisasi / StatusData = 'TIDAK')
+    // 4. HAPUS KESELURUHAN ORDER / SPK
     if ($action === 'hapus_order') {
         $no_form = $_GET['no_form'];
         $conn->beginTransaction();
