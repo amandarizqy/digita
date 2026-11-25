@@ -164,7 +164,7 @@ if (!function_exists('bot_jenis_daftar')) {
      * Catat satu file yang selesai diproses ke bot_akses_riwayat. Mengembalikan nomor tiket.
      * $ap / $up = wilayah file tersebut (kosong -> dipakai wilayah bot).
      */
-    function bot_catat_riwayat(PDO $conn, array $bot, string $ap, string $up, int $berhasil, int $gagal, string $nama_file = ''): string
+    function bot_catat_riwayat(PDO $conn, array $bot, string $ap, string $up, int $berhasil, int $gagal, string $nama_file = '', string $status = 'AKTIF'): string
     {
         $upi_db = trim((string) ($bot['UnitUpi'] ?? ''));
         $ap_db  = $ap !== '' ? $ap : trim((string) ($bot['UnitAp'] ?? ''));
@@ -172,16 +172,16 @@ if (!function_exists('bot_jenis_daftar')) {
         $ap_db  = $ap_db !== '' ? $ap_db : null;
         $up_db  = $up_db !== '' ? $up_db : null;
         $file_db = trim(basename(str_replace('\\', '/', $nama_file)));   // hanya nama file, tanpa folder
-        $file_db = $file_db !== '' ? mb_substr($file_db, 0, 255) : null;
+        $file_db = $file_db !== '' ? mb_substr($file_db, 0, 150) : null;      // kolom NamaFile = VARCHAR(150)
 
         $sql = "INSERT INTO bot_akses_riwayat (TiketBot, IdBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, NamaFile, StatusData, WaktuData)
-                VALUES (?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())";
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW())";
         $coba = 0;
         while (true) {
             $tiket = bot_buat_tiket();
             try {
                 $conn->prepare($sql)->execute([$tiket, (int) $bot['IdBot'], $berhasil + $gagal, $berhasil, $gagal,
-                                               bot_akun_riwayat($conn), $up_db, $ap_db, $upi_db, $file_db]);
+                                               bot_akun_riwayat($conn), $up_db, $ap_db, $upi_db, $file_db, $status]);
                 return $tiket;
             } catch (PDOException $e) {
                 // 1062 = tiket kembar (sangat jarang): buat tiket baru lalu coba lagi
@@ -189,6 +189,70 @@ if (!function_exists('bot_jenis_daftar')) {
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Buka baris riwayat SEBELUM file diproses (0 data, StatusData = 'DIPROSES') supaya jumlah data yang masuk
+     * bisa diperbarui selama proses berjalan (lihat bot_riwayat_perbarui). Mengembalikan nomor tiket.
+     * Bila kolom StatusData tidak menerima 'DIPROSES' (mis. ENUM belum ditambah), dipakai 'AKTIF': jumlah tetap diperbarui,
+     * hanya penanda "sedang diproses" di halaman yang tidak muncul.
+     * TiketBot yang DIKEMBALIKAN adalah tiket yang benar-benar tersimpan (bila database/trigger mengganti tiket, tiket aslinya dicari ulang).
+     */
+    function bot_riwayat_mulai(PDO $conn, array $bot, string $ap, string $up, string $nama_file = ''): string
+    {
+        try {
+            $tiket = bot_catat_riwayat($conn, $bot, $ap, $up, 0, 0, $nama_file, 'DIPROSES');
+        } catch (PDOException $e) {
+            $tiket = bot_catat_riwayat($conn, $bot, $ap, $up, 0, 0, $nama_file, 'AKTIF');
+        }
+
+        // Pastikan tiket ada di tabel. Bila trigger/aturan database mengganti TiketBot saat INSERT, cari baris yang baru dibuat.
+        $st = $conn->prepare('SELECT 1 FROM bot_akses_riwayat WHERE TiketBot = ? LIMIT 1');
+        $st->execute([$tiket]);
+        if ($st->fetchColumn() !== false) return $tiket;
+
+        $file_db = trim(basename(str_replace('\\', '/', $nama_file)));
+        $st = $conn->prepare('SELECT TiketBot FROM bot_akses_riwayat WHERE IdBot = ? AND NamaFile <=> ? AND JmlData = 0 AND JmlBerhasil = 0 AND JmlGagal = 0
+                              ORDER BY WaktuData DESC, TiketBot DESC LIMIT 1');
+        $st->execute([(int) $bot['IdBot'], $file_db !== '' ? mb_substr($file_db, 0, 150) : null]);
+        $asli = $st->fetchColumn();
+        if ($asli === false) throw new RuntimeException('Baris riwayat yang baru dibuat tidak ditemukan (tiket diganti database?).');
+        return (string) $asli;
+    }
+
+    /**
+     * Perbarui jumlah pada baris riwayat. $selesai = true -> proses tuntas (StatusData kembali 'AKTIF').
+     * WaktuData ikut diperbarui: dipakai halaman untuk mengenali proses yang macet (tidak ada pembaruan > 15 menit).
+     * Satu UPDATE berdasarkan kunci utama, autocommit, tidak menahan lock lama.
+     */
+    function bot_riwayat_perbarui(PDO $conn, string $tiket, int $berhasil, int $gagal, bool $selesai = false): void
+    {
+        static $status_proses_ok = true;     // false bila database menolak nilai 'DIPROSES' (ENUM belum ditambah): jangan dicoba lagi
+        $param = [$berhasil + $gagal, $berhasil, $gagal];
+        $dasar = 'UPDATE bot_akses_riwayat SET JmlData = ?, JmlBerhasil = ?, JmlGagal = ?, WaktuData = NOW()';
+
+        if ($selesai) {                                      // tuntas: status kembali AKTIF
+            $conn->prepare($dasar . ", StatusData = 'AKTIF' WHERE TiketBot = ?")->execute([...$param, $tiket]);
+            return;
+        }
+        // Selama file berjalan, status SELALU dipaksa 'DIPROSES' (juga memperbaiki bila INSERT awal / trigger menaruh nilai lain)
+        if ($status_proses_ok) {
+            try {
+                $conn->prepare($dasar . ", StatusData = 'DIPROSES' WHERE TiketBot = ?")->execute([...$param, $tiket]);
+                return;
+            } catch (PDOException $e) {
+                // 1265/1366/1292 = nilai ditolak kolom ENUM. Kesalahan lain (deadlock, koneksi putus) dilempar ke pemanggil.
+                if (!in_array((int) ($e->errorInfo[1] ?? 0), [1265, 1366, 1292], true)) throw $e;
+                $status_proses_ok = false;                   // nilai ditolak: lanjut tanpa mengubah status
+            }
+        }
+        $conn->prepare($dasar . ' WHERE TiketBot = ?')->execute([...$param, $tiket]);
+    }
+
+    /** Hapus baris riwayat yang dibuka tetapi prosesnya ditunda (file akan diulang & dicatat ulang pada putaran berikutnya). */
+    function bot_riwayat_hapus(PDO $conn, string $tiket): void
+    {
+        $conn->prepare('DELETE FROM bot_akses_riwayat WHERE TiketBot = ?')->execute([$tiket]);
     }
 
     // ------------------------------------------------------------------ root & folder

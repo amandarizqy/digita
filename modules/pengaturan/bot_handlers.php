@@ -12,7 +12,9 @@
 require_once __DIR__ . '/../../functions/xlsx_reader.php';
 require_once __DIR__ . '/bot_helper.php';   // aturan folder & cakupan unit (satu sumber dengan bot.php & bot_cron.php)
 
-const BH_CHUNK = 500;
+const BH_CHUNK = 500;          // untuk SELECT ... IN (...) saja (baca, tidak mengunci baris)
+const BH_PAKET = 100;          // untuk TULIS: tiap paket = 1 transaksi pendek, langsung commit
+const BH_COBA  = 3;            // percobaan ulang paket yang kena deadlock / lock wait
 
 /** Nilai ENUM dil.JenisShuntrip (sama dengan JENIS_SHUNTRIP di penggunaan/input_dil.php). */
 const BH_JENIS_SHUNTRIP = ['MCCB', 'RELAY', 'ALARM', 'S41', 'AMI', 'SDU', '-'];
@@ -158,6 +160,115 @@ function bh_pdo_sementara(PDOException $e): bool
         || strpos($m, 'deadlock') !== false || strpos($m, 'lost connection') !== false;
 }
 
+// ============================================================
+// Penulisan "per paket kecil, langsung commit"
+// ------------------------------------------------------------
+// Dulu: satu file = satu transaksi besar -> lock baris (dan lock FK ke tabel induk) ditahan sampai file selesai,
+//       sehingga input lain ke tabel yang sama / tabel yang terhubung FK menunggu lama.
+// Sekarang: tiap BH_PAKET baris ditulis & di-commit sendiri, lalu lock langsung dilepas.
+//   - paket gagal karena deadlock/lock wait -> diulang (BH_COBA kali, jeda acak)
+//   - paket gagal karena DATA (FK, duplikat, terlalu panjang, dsb.) -> diulang BARIS PER BARIS,
+//     sehingga hanya baris yang bermasalah yang dihitung gagal; baris lain tetap masuk.
+//   - gangguan sementara yang tidak kunjung reda -> exception dilempar (file = tidak_pasti, dicoba lagi nanti;
+//     aman karena semua tulisan bersifat upsert / INSERT IGNORE sehingga idempoten).
+// ============================================================
+// ============================================================
+// Laporan kemajuan (jumlah data yang sudah masuk) -> dipakai cron untuk memperbarui bot_akses_riwayat
+// ============================================================
+function &bh_progres_state(): array
+{
+    static $s = ['cb' => null, 'ok' => 0, 'gagal' => 0, 't' => 0.0];
+    return $s;
+}
+
+/** Mulai penghitungan baru untuk satu file. $cb(int $berhasil, int $gagal) dipanggil paling sering 1x/detik. */
+function bh_progres_atur(?callable $cb): void
+{
+    $s = &bh_progres_state();
+    $s = ['cb' => $cb, 'ok' => 0, 'gagal' => 0, 't' => 0.0];
+}
+
+function bh_progres_lapor(bool $paksa = false): void
+{
+    $s = &bh_progres_state();
+    if (!$s['cb']) return;
+    $now = microtime(true);
+    if (!$paksa && $now - $s['t'] < 1.0) return;
+    $s['t'] = $now;
+    try { ($s['cb'])($s['ok'], $s['gagal']); } catch (Throwable $e) { /* gagal melapor tidak boleh menghentikan proses data */ }
+}
+
+/** Tambah hitungan. Dipanggil di luar transaksi (setelah commit paket). */
+function bh_progres_tambah(int $ok, int $gagal): void
+{
+    $s = &bh_progres_state();
+    $s['ok'] += $ok; $s['gagal'] += $gagal;
+    bh_progres_lapor();
+}
+
+/** Jalankan satu paket dalam satu transaksi pendek. @return int|null rowCount bila sukses, null bila gagal ($err terisi). */
+function bh_eksekusi_paket(PDO $conn, callable $sql_untuk, array $paket, ?PDOException &$err = null, ?callable $setelah = null): ?int
+{
+    $err = null;
+    for ($coba = 1; $coba <= BH_COBA; $coba++) {
+        try {
+            $conn->beginTransaction();
+            $st = $conn->prepare($sql_untuk(count($paket)));
+            $st->execute(array_merge(...$paket));
+            $rc = $st->rowCount();
+            if ($setelah) $setelah($conn, $paket);          // langkah tambahan dalam transaksi yang sama (mis. hapus transit_dil)
+            $conn->commit();
+            return $rc;
+        } catch (PDOException $e) {
+            try { if ($conn->inTransaction()) $conn->rollBack(); } catch (Throwable $x) { /* koneksi putus: abaikan */ }
+            $err = $e;
+            if (!bh_pdo_sementara($e)) return null;          // salah data: mengulang paket yang sama tidak ada gunanya
+            usleep(150000 * $coba + random_int(0, 150000));  // jeda acak agar dua proses tidak bentrok lagi bersamaan
+        }
+    }
+    return null;
+}
+
+/**
+ * Tulis $rows (list parameter per baris) dalam paket kecil.
+ * @param callable $sql_untuk fn(int $n): string  -> SQL lengkap untuk n baris (placeholder per baris sudah di dalamnya)
+ * @param callable|null $setelah fn(PDO, array $paket): void -> dijalankan dalam transaksi paket yang sama
+ * @param bool $lapor true -> tiap paket selesai, jumlah berhasil/gagal dilaporkan ke bh_progres_tambah (hanya untuk tulisan utama)
+ * @return array ['ok' => int, 'gagal' => int, 'rc' => int (jumlah rowCount sukses), 'gagal_idx' => int[], 'pesan' => [idx => string]]
+ * @throws PDOException bila gangguan sementara tidak kunjung reda
+ */
+function bh_sisip_aman(PDO $conn, array $rows, callable $sql_untuk, ?callable $setelah = null, int $ukuran = BH_PAKET, bool $lapor = false): array
+{
+    $h = ['ok' => 0, 'gagal' => 0, 'rc' => 0, 'gagal_idx' => [], 'pesan' => []];
+    foreach (array_chunk($rows, $ukuran, true) as $paket) {
+        $ok0 = $h['ok']; $gl0 = $h['gagal'];
+        $rc = bh_eksekusi_paket($conn, $sql_untuk, array_values($paket), $err, $setelah);
+        if ($rc !== null) {
+            $h['ok'] += count($paket); $h['rc'] += $rc;
+            if ($lapor) bh_progres_tambah(count($paket), 0);
+            continue;
+        }
+        if ($err !== null && bh_pdo_sementara($err)) throw $err;       // bukan salah data -> serahkan ke status tidak_pasti
+
+        foreach ($paket as $i => $prm) {                                // paket ditolak: cari baris yang bermasalah
+            $rc = bh_eksekusi_paket($conn, $sql_untuk, [$prm], $err, $setelah);
+            if ($rc !== null) { $h['ok']++; $h['rc'] += $rc; continue; }
+            if ($err !== null && bh_pdo_sementara($err)) throw $err;
+            $h['gagal']++;
+            $h['gagal_idx'][] = $i;
+            $h['pesan'][$i]   = mb_substr($err ? $err->getMessage() : 'gagal', 0, 120);
+        }
+        if ($lapor) bh_progres_tambah($h['ok'] - $ok0, $h['gagal'] - $gl0);
+    }
+    return $h;
+}
+
+/** Placeholder multi-baris: bh_ph(5)(3) => "(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?)" */
+function bh_ph(string $per_baris): callable
+{
+    return fn(int $n): string => implode(',', array_fill(0, $n, $per_baris));
+}
+
 function bh_hasil(string $status, string $pesan, int $tersimpan = 0, int $ditolak = 0, array $detail = []): array
 {
     return ['status' => $status, 'pesan' => $pesan, 'tersimpan' => $tersimpan, 'ditolak' => $ditolak, 'detail' => $detail];
@@ -165,12 +276,16 @@ function bh_hasil(string $status, string $pesan, int $tersimpan = 0, int $ditola
 
 /**
  * Proses satu file untuk satu bot.
+ * @param callable|null $progres fn(int $berhasil, int $gagal) untuk memperbarui riwayat selama file diproses
  * @param string $ap,$up  wilayah tujuan dari lokasi folder ('' = tidak ditentukan; hanya boleh untuk DIL yang diletakkan langsung di Direktori Utama)
  */
-function bh_jalankan(PDO $conn, array $bot, string $jenis, string $file, string $ap, string $up): array
+function bh_jalankan(PDO $conn, array $bot, string $jenis, string $file, string $ap, string $up, ?callable $progres = null): array
 {
+    bh_progres_atur($progres);        // $progres(int $berhasil, int $gagal): jumlah data yang sudah masuk, dilaporkan selama proses
     @set_time_limit(0);
     @ini_set('memory_limit', '512M');
+    // Jangan menunggu lock terlalu lama (bawaan MySQL 50 dtk): gagal cepat -> bh_eksekusi_paket mengulang.
+    try { $conn->exec('SET SESSION innodb_lock_wait_timeout = 10'); } catch (PDOException $e) { /* abaikan */ }
 
     if (strtolower(pathinfo($file, PATHINFO_EXTENSION)) !== 'xlsx' || file_get_contents($file, false, null, 0, 2) !== 'PK') {
         return bh_hasil('gagal', 'Format file harus .xlsx (Excel).');
@@ -295,33 +410,42 @@ function bh_pelunasan(PDO $conn, array $bot, string $file, string $ap, string $u
     $ditolakTotal = $tolak + $tidakDil;
     if (!$baris) return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($ditolakTotal ? " ($ditolakTotal baris ditolak" . ($tidakDil ? ", $tidakDil di antaranya IdPel tidak ada di DIL" : '') . ').' : '.'), 0, $ditolakTotal, $detail);
 
-    $katBaru = 0;
+    // Tulis per paket kecil (langsung commit). Urutan kunci tetap -> mengurangi deadlock antar proses.
+    ksort($baris);
+    $daftar = array_values($baris);
     $head = "INSERT INTO pelunasan_ap2t (IdPel, ThBlRek, TglBayar, RpBK, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ";
     $tail = " ON DUPLICATE KEY UPDATE TglBayar = VALUES(TglBayar), RpBK = VALUES(RpBK), RpTag = VALUES(RpTag),
               NamaAkun = VALUES(NamaAkun), UnitUp = VALUES(UnitUp), UnitAp = VALUES(UnitAp), UnitUpi = VALUES(UnitUpi),
               WaktuData = VALUES(WaktuData)";
-    $conn->beginTransaction();
-    foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
-        $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,?,?,NOW())')) . $tail);
-        $param = [];
-        foreach ($paket as $b) array_push($param, $b[0], $b[1], $b[2], $b[3], $b[4], $akun, $up, $ap, $upi);   // $b[5] (no. baris) tidak ikut disimpan
-        $stmt->execute($param);
+    $rows = array_map(fn($b) => [$b[0], $b[1], $b[2], $b[3], $b[4], $akun, $up, $ap, $upi], $daftar);
+    bh_progres_tambah(0, $ditolakTotal);                       // baris yang sudah ditolak validasi ikut dihitung gagal
+    $r = bh_sisip_aman($conn, $rows, fn($n) => $head . bh_ph('(?,?,?,?,?,?,?,?,?,NOW())')($n) . $tail, null, BH_PAKET, true);
+    foreach ($r['gagal_idx'] as $i) {
+        if (count($detail) < 50) $detail[] = 'Baris ' . $daftar[$i][5] . ': IdPel ' . $daftar[$i][0] . ' - gagal disimpan (' . $r['pesan'][$i] . ')';
     }
-    // kategorisasi_risiko: tambah (IdPel, Periode) yang belum ada; yang sudah ada TIDAK diubah.
-    foreach (array_chunk(array_values($kat), BH_CHUNK) as $paket) {
-        $stmt  = $conn->prepare("INSERT IGNORE INTO kategorisasi_risiko (IdPel, Periode, UnitUp, UnitAp, UnitUpi) VALUES "
-               . implode(',', array_fill(0, count($paket), '(?,?,?,?,?)')));
-        $param = [];
-        foreach ($paket as $k) array_push($param, $k[0], $k[1], $up, $ap, $upi);
-        $stmt->execute($param);
-        $katBaru += $stmt->rowCount();
-    }
-    $conn->commit();
 
-    $pesan = count($baris) . ' baris pelunasan' . ($katBaru ? ", $katBaru kategori risiko baru" : '')
+    // kategorisasi_risiko: tambah (IdPel, Periode) yang belum ada; yang sudah ada TIDAK diubah. Hanya dari baris yang berhasil.
+    $gagalSet = array_flip($r['gagal_idx']);
+    $kat = [];
+    foreach ($daftar as $i => $b) {
+        if (isset($gagalSet[$i])) continue;
+        $thn = (int) substr($b[1], 0, 4);
+        $kat[$b[0] . '|' . $thn] = [$b[0], $thn, $up, $ap, $upi];
+    }
+    ksort($kat);
+    $rk = bh_sisip_aman($conn, array_values($kat), fn($n) => 'INSERT IGNORE INTO kategorisasi_risiko (IdPel, Periode, UnitUp, UnitAp, UnitUpi) VALUES ' . bh_ph('(?,?,?,?,?)')($n));
+    $katBaru = $rk['rc'];
+
+    $simpan = $r['ok'];
+    $gagalDb = $r['gagal'];
+    $ditolakTotal += $gagalDb;
+    if ($simpan === 0) return bh_hasil('gagal', "Tidak ada baris yang berhasil disimpan ($ditolakTotal baris ditolak/gagal).", 0, $ditolakTotal, $detail);
+
+    $pesan = "$simpan baris pelunasan" . ($katBaru ? ", $katBaru kategori risiko baru" : '')
            . ($dup ? ", $dup dobel dalam file" : '') . ($tolak ? ", $tolak tidak valid" : '')
-           . ($tidakDil ? ", $tidakDil dilewati (IdPel tidak ada di DIL)" : '');
-    return bh_hasil('sukses', $pesan, count($baris), $ditolakTotal, $detail);
+           . ($tidakDil ? ", $tidakDil dilewati (IdPel tidak ada di DIL)" : '')
+           . ($gagalDb ? ", $gagalDb gagal saat disimpan ke database" : '') . ($rk['gagal'] ? ", {$rk['gagal']} kategori risiko gagal" : '');
+    return bh_hasil('sukses', $pesan, $simpan, $ditolakTotal, $detail);
 }
 
 // ============================================================
@@ -355,32 +479,35 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
 
     $cols = [];
     $masuk = 0;                                                   // baris yang berhasil masuk ke transit_dil (trigger yang upsert ke dil)
-    $kirim = function (array $rows) use ($conn, &$cols, &$masuk) {
-        if (!$rows) return;
-        $per_baris = '(' . implode(', ', array_fill(0, count($cols), '?')) . ', NOW())';   // WaktuData = NOW()
-        $st = $conn->prepare('INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, count($rows), $per_baris)));
-        $st->execute(array_merge(...$rows));
-        $masuk += $st->rowCount();                                // jumlah baris yang benar-benar tersimpan, tanpa membedakan baru/sudah ada
-    };
-
+    $gagal_db = 0;                                                // baris yang ditolak database (FK, trigger, dsb.)
     $detail = []; $seen = []; $batch = []; $peta = [];
     $total = $salah = $dobel = 0;
-    $units = [];                                                  // pasangan UnitAp|UnitUp yang dipakai run ini
 
-    // Kondisi WHERE: akun + UnitUpi + (daftar pasangan AP/UP). Dipakai untuk hitung dan hapus.
-    $filter_unit = function (array $pasangan) use ($akun, $upi): array {
-        $sql    = 'NamaAkun = ? AND UnitUpi = ?';
-        $params = [$akun, $upi];
-        if ($pasangan) {
-            $sql .= ' AND (' . implode(' OR ', array_fill(0, count($pasangan), '(UnitAp = ? AND UnitUp = ?)')) . ')';
-            foreach ($pasangan as [$a, $u]) { $params[] = $a; $params[] = $u; }
+    // Tiap paket: INSERT transit_dil (trigger upsert ke dil) + hapus baris transit paket itu, dalam SATU transaksi pendek.
+    // Lock ke dil hanya ditahan selama satu paket, bukan selama seluruh file.
+    $sdh_lapor = 0;                                               // baris ditolak validasi yang sudah dilaporkan ke progres
+    $kirim = function (array $rows) use ($conn, &$cols, &$masuk, &$gagal_db, &$detail, &$salah, &$dobel, &$sdh_lapor, $akun, $upi) {
+        if (!$rows) return;
+        bh_progres_tambah(0, ($salah + $dobel) - $sdh_lapor); $sdh_lapor = $salah + $dobel;
+        usort($rows, fn($a, $b) => strcmp((string) $a[0], (string) $b[0]));   // IdPel selalu kolom pertama ($cols[0] = 'IdPel'): urutan tetap -> kurangi deadlock
+        $per_baris = '(' . implode(', ', array_fill(0, count($cols), '?')) . ', NOW())';   // WaktuData = NOW()
+        $sql = fn($n) => 'INSERT INTO transit_dil (' . implode(', ', $cols) . ', WaktuData) VALUES ' . implode(', ', array_fill(0, $n, $per_baris));
+        $hapus = function (PDO $c, array $paket) use ($akun, $upi) {
+            $ids = array_column($paket, 0);
+            $c->prepare('DELETE FROM transit_dil WHERE NamaAkun = ? AND UnitUpi = ? AND IdPel IN (' . implode(',', array_fill(0, count($ids), '?')) . ')')
+              ->execute(array_merge([$akun, $upi], $ids));
+        };
+        $r = bh_sisip_aman($conn, $rows, $sql, $hapus, BH_PAKET, true);
+        $masuk    += $r['ok'];
+        $gagal_db += $r['gagal'];
+        foreach ($r['gagal_idx'] as $i) {
+            if (count($detail) < 50) $detail[] = 'IdPel ' . $rows[$i][0] . ' - ditolak database (' . $r['pesan'][$i] . ')';
         }
-        return [$sql, $params];
     };
 
-    $conn->beginTransaction();
-    try {
-        // Sisa import gagal: hanya milik akun ini, UnitUpi ini, dan (bila folder menentukan) AP/UP tujuan saja
+
+    {
+        // Sisa import gagal (mis. proses sebelumnya mati): hanya milik akun ini, UnitUpi ini, dan (bila folder menentukan) AP/UP tujuan saja
         $sql = 'DELETE FROM transit_dil WHERE NamaAkun = ? AND UnitUpi = ?';
         $prm = [$akun, $upi];
         if ($ap !== '') { $sql .= ' AND UnitAp = ?'; $prm[] = $ap; }
@@ -444,7 +571,6 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
                 continue;
             }
             $seen[$idpel] = true;
-            $units[$r_ap . '|' . $r_up] = [$r_ap, $r_up];         // catat unit yang dipakai untuk filter hapus
 
             $teg = strtoupper($g('TegUkur', 2));
             $sh  = strtoupper($g('JenisShuntrip', 10));
@@ -466,22 +592,15 @@ function bh_dil(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         }
         if (!$peta) throw new RuntimeException('Baris judul kolom (IDPEL, NAMA, ...) tidak ditemukan. Pastikan file adalah "Monitoring DIL Detail".');
         $kirim($batch);
-
-        // Trigger sudah upsert ke dil di tiap insert. Hapus HANYA data milik akun + UnitUpi + unit AP/UP yang diproses.
-        [$where, $prm] = $filter_unit(array_values($units));
-        $conn->prepare("DELETE FROM transit_dil WHERE $where")->execute($prm);
-        $conn->commit();
-    } catch (Throwable $e) {
-        if ($conn->inTransaction()) $conn->rollBack();
-        throw $e;
     }
 
     // Berhasil = baris yang masuk. Gagal = baris yang TIDAK masuk (IdPel/Nama tidak valid, unit di luar wilayah, dobel dalam file).
     // Tidak ada pembedaan baru / sudah ada: IdPel yang sudah ada di DIL juga dihitung berhasil (di-upsert oleh trigger).
-    $ditolak = $salah + $dobel;
+    $ditolak = $salah + $dobel + $gagal_db;
     if ($total === 0) return bh_hasil('gagal', 'File tidak berisi data pelanggan di bawah baris judul.');
     $pesan = "$masuk baris berhasil masuk ke DIL"
-           . ($dobel ? ", $dobel dobel dalam file" : '') . ($salah ? ", $salah tidak valid" : '');
+           . ($dobel ? ", $dobel dobel dalam file" : '') . ($salah ? ", $salah tidak valid" : '')
+           . ($gagal_db ? ", $gagal_db ditolak database" : '');
     return bh_hasil($masuk > 0 ? 'sukses' : 'gagal', $pesan, $masuk, $ditolak, $detail);
 }
 
@@ -619,8 +738,9 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     }
     if ($peta === null) throw new RuntimeException('Baris judul kolom (Id Pelanggan, Nomer Tul VI-01, ...) tidak ditemukan.');
 
+    $gagalDb = 0;
     if ($baris) {
-        $conn->beginTransaction();
+        // (tanpa transaksi pembungkus: SELECT tidak perlu lock, UPDATE dil = 1 statement/paket, tul_601 per paket kecil)
 
         // c0. NoTul adalah kunci tunggal: tolak NoTul milik wilayah LAIN supaya tidak menimpa data unit lain.
         foreach (array_chunk(array_keys($baris), BH_CHUNK) as $paket) {
@@ -638,7 +758,8 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         // c1. Nama dari file hanya melengkapi DIL yang SUDAH ada dan namanya masih kosong,
         //     dan hanya untuk IdPel yang benar-benar disimpan (sama dengan halaman web).
         $nama_pakai = array_intersect_key($nama_dil, array_flip(array_map('strval', array_column($baris, 3))));
-        foreach (array_chunk($nama_pakai, BH_CHUNK, true) as $paket) {
+        ksort($nama_pakai);                                // urutan tetap -> kurangi deadlock dengan proses DIL
+        foreach (array_chunk($nama_pakai, 100, true) as $paket) {
             $case = $param = [];
             foreach ($paket as $idn => $nm) { $case[] = 'WHEN ? THEN ?'; array_push($param, (string) $idn, $nm); }
             $in = implode(',', array_fill(0, count($paket), '?'));
@@ -652,13 +773,17 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
         //     Kolom lain (WaktuCetak, IdPel, StandBaca, TglBaca, NamaAkun, unit, StatusData, WaktuData) tidak disentuh.
         $head = "INSERT INTO tul_601 (NoTul, WaktuCetak, IdPel, ThBlRekAwal, ThBlRekAkhir, Lembar, RpTag, StandBaca, TglBaca, NamaAkun, UnitUp, UnitAp, UnitUpi, StatusData, WaktuData) VALUES ";
         $tail = " ON DUPLICATE KEY UPDATE ThBlRekAwal = VALUES(ThBlRekAwal), ThBlRekAkhir = VALUES(ThBlRekAkhir), Lembar = VALUES(Lembar), RpTag = VALUES(RpTag)";
-        foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
-            $stmt  = $conn->prepare($head . implode(',', array_fill(0, count($paket), "(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")) . $tail);
-            $param = [];
-            foreach ($paket as $b) array_push($param, $b[1], $b[2], $b[3], $b[4], $b[5], $b[6], $b[7], $b[8], $b[9], $akun, $up, $ap, $upi);
-            $stmt->execute($param);
+        ksort($baris);
+        $daftar = array_values($baris);
+        $rows = array_map(fn($b) => [$b[1], $b[2], $b[3], $b[4], $b[5], $b[6], $b[7], $b[8], $b[9], $akun, $up, $ap, $upi], $daftar);
+        bh_progres_tambah(0, $tolak);                      // baris yang sudah ditolak validasi ikut dihitung gagal
+        $r = bh_sisip_aman($conn, $rows, fn($n) => $head . bh_ph("(?,?,?,?,?,?,?,?,?,?,?,?,?,'AKTIF',NOW())")($n) . $tail, null, BH_PAKET, true);
+        $gagalDb = $r['gagal'];
+        foreach ($r['gagal_idx'] as $i) {
+            if (count($detail) < 50) $detail[] = 'Baris ' . $daftar[$i][0] . ': Tul ' . $daftar[$i][1] . ' - gagal disimpan (' . $r['pesan'][$i] . ')';
+            unset($baris[$daftar[$i][1]]);
         }
-        $conn->commit();
+        $tolak += $gagalDb;
     }
 
     if (!$baris) {
@@ -666,7 +791,8 @@ function bh_tul(PDO $conn, array $bot, string $file, string $ap, string $up): ar
     }
     $pesan = count($baris) . ' baris TUL VI-01' . ($dup ? ", $dup dobel dalam file" : '')
            . ($bentrok ? ", $bentrok ditolak (wilayah lain)" : '')
-           . (($tolak - $bentrok) > 0 ? ', ' . ($tolak - $bentrok) . ' tidak valid' : '');
+           . ($gagalDb ? ", $gagalDb gagal saat disimpan ke database" : '')
+           . (($tolak - $bentrok - $gagalDb) > 0 ? ', ' . ($tolak - $bentrok - $gagalDb) . ' tidak valid' : '');
     return bh_hasil('sukses', $pesan, count($baris), $tolak, $detail);
 }
 
@@ -750,21 +876,21 @@ function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): 
     }
 
     // INSERT IGNORE sebagai pengaman bila ada input bersamaan; yang dihitung = baris yang benar-benar masuk
-    $baru = 0;
+    $baru = 0; $gagalDb = 0;
     if ($baris) {
-        $conn->beginTransaction();
-        foreach (array_chunk(array_values($baris), BH_CHUNK) as $paket) {
-            $prm = [];
-            foreach ($paket as $b) array_push($prm, $b[0], $b[1], $b[2], $akun, $up, $ap, $upi);
-            $stmt = $conn->prepare("INSERT IGNORE INTO dpp (IdPel, ThBlRek, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES "
-                  . implode(',', array_fill(0, count($paket), '(?,?,?,?,?,?,?,NOW())')));
-            $stmt->execute($prm);
-            $baru += $stmt->rowCount();
+        ksort($baris);
+        $daftar = array_values($baris);
+        $rows = array_map(fn($b) => [$b[0], $b[1], $b[2], $akun, $up, $ap, $upi], $daftar);
+        bh_progres_tambah(0, $salah + $tidak_dil);          // baris yang sudah ditolak validasi ikut dihitung gagal
+        $r = bh_sisip_aman($conn, $rows, fn($n) => 'INSERT IGNORE INTO dpp (IdPel, ThBlRek, RpTag, NamaAkun, UnitUp, UnitAp, UnitUpi, WaktuData) VALUES ' . bh_ph('(?,?,?,?,?,?,?,NOW())')($n), null, BH_PAKET, true);
+        $baru    = $r['rc'];                       // INSERT IGNORE: rowCount = baris yang benar-benar baru masuk
+        $gagalDb = $r['gagal'];
+        foreach ($r['gagal_idx'] as $i) {
+            if (count($detail) < 50) $detail[] = 'Baris ' . $daftar[$i][3] . ': IdPel ' . $daftar[$i][0] . ' periode ' . $daftar[$i][1] . ' - gagal disimpan (' . $r['pesan'][$i] . ')';
         }
-        $conn->commit();
     }
 
-    $ditolak = $salah + $tidak_dil;
+    $ditolak = $salah + $tidak_dil + $gagalDb;
     if ($baru + $sudah_ada === 0) {
         return bh_hasil('gagal', 'Tidak ada baris valid yang bisa disimpan' . ($ditolak ? " ($ditolak baris ditolak)." : '.'), 0, $ditolak, $detail);
     }
@@ -772,7 +898,8 @@ function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): 
            . ($sudah_ada ? ", $sudah_ada sudah ada di DPP (tidak diperbarui)" : '')
            . ($dobel ? ", $dobel dobel dalam file" : '')
            . ($salah ? ", $salah tidak valid" : '')
-           . ($tidak_dil ? ", $tidak_dil dilewati (IdPel tidak ada di DIL)" : '');
+           . ($tidak_dil ? ", $tidak_dil dilewati (IdPel tidak ada di DIL)" : '')
+           . ($gagalDb ? ", $gagalDb gagal saat disimpan ke database" : '');
     return bh_hasil('sukses', $pesan, $baru, $ditolak, $detail);
 }
 
@@ -783,46 +910,48 @@ function bh_saldo(PDO $conn, array $bot, string $file, string $ap, string $up): 
  * Simpan pasangan [idpel, nilai] ke kolom $kolom (dari konfigurasi di bh_jalankan, bukan input pengguna).
  * $unit = [UnitUp, UnitAp, UnitUpi]; $tingkat = 'UP' (bot terikat UP) | 'AP'.
  * Baris lama di wilayah yang sama: hanya $kolom diperbarui. Baris lama milik unit LAIN: DILEWATI.
- * @return array [baru, diperbarui, dilewati]
+ * @return array [baru, diperbarui, dilewati, gagal]
  */
 function bh_simpan_kategorisasi(PDO $conn, string $kolom, int $periode, array $pasangan, array $unit, string $tingkat): array
 {
-    $baru = $upd = $lewat = 0;
+    $baru = $upd = $lewat = $gagal = 0;
     $beda = fn($lama, $target) => $lama !== null && $lama !== '' && (string) $lama !== (string) $target;
+    usort($pasangan, fn($a, $b) => strcmp((string) $a[0], (string) $b[0]));   // urutan tetap -> kurangi deadlock
 
-    $conn->beginTransaction();
     foreach (array_chunk($pasangan, BH_CHUNK) as $paket) {
+        // SELECT di luar transaksi: hanya membaca, tidak menahan lock
         $st = $conn->prepare("SELECT IdPel, UnitUp, UnitAp, UnitUpi FROM kategorisasi_risiko WHERE Periode = ? AND IdPel IN (" . implode(',', array_fill(0, count($paket), '?')) . ")");
         $st->execute(array_merge([$periode], array_column($paket, 0)));
         $ada = [];
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $ada[(string) $r['IdPel']] = $r;
 
-        $boleh = [];
+        $boleh = []; $jenis = [];
         foreach ($paket as [$id, $nilai]) {
             if (isset($ada[$id])) {
                 $r = $ada[$id];
                 $bentrok = $beda($r['UnitUpi'], $unit[2]) || $beda($r['UnitAp'], $unit[1]) || ($tingkat === 'UP' && $beda($r['UnitUp'], $unit[0]));
-                if ($bentrok) { $lewat++; continue; }
-                $upd++;
+                if ($bentrok) { $lewat++; bh_progres_tambah(0, 1); continue; }
+                $jenis[] = 'upd';
             } else {
-                $baru++;
+                $jenis[] = 'baru';
             }
-            $boleh[] = [$id, $nilai];
+            $boleh[] = [$id, $periode, $nilai, $unit[0], $unit[1], $unit[2]];
         }
         if (!$boleh) continue;
 
-        $stmt = $conn->prepare("INSERT INTO kategorisasi_risiko (IdPel, Periode, $kolom, UnitUp, UnitAp, UnitUpi) VALUES "
-              . implode(',', array_fill(0, count($boleh), '(?,?,?,?,?,?)'))
-              . " ON DUPLICATE KEY UPDATE $kolom = VALUES($kolom),
+        $tail = " ON DUPLICATE KEY UPDATE $kolom = VALUES($kolom),
                     UnitUp  = COALESCE(NULLIF(UnitUp, ''),  VALUES(UnitUp)),
                     UnitAp  = COALESCE(NULLIF(UnitAp, ''),  VALUES(UnitAp)),
-                    UnitUpi = COALESCE(NULLIF(UnitUpi, ''), VALUES(UnitUpi))");
-        $param = [];
-        foreach ($boleh as [$id, $nilai]) array_push($param, $id, $periode, $nilai, $unit[0], $unit[1], $unit[2]);
-        $stmt->execute($param);
+                    UnitUpi = COALESCE(NULLIF(UnitUpi, ''), VALUES(UnitUpi))";
+        $r = bh_sisip_aman($conn, $boleh, fn($n) => "INSERT INTO kategorisasi_risiko (IdPel, Periode, $kolom, UnitUp, UnitAp, UnitUpi) VALUES " . bh_ph('(?,?,?,?,?,?)')($n) . $tail, null, BH_PAKET, true);
+        $gagal += $r['gagal'];
+        $gagalSet = array_flip($r['gagal_idx']);
+        foreach ($jenis as $i => $j) {
+            if (isset($gagalSet[$i])) continue;
+            if ($j === 'baru') $baru++; else $upd++;
+        }
     }
-    $conn->commit();
-    return [$baru, $upd, $lewat];
+    return [$baru, $upd, $lewat, $gagal];
 }
 
 function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string $up, array $cfg): array
@@ -870,11 +999,13 @@ function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string
     }
     if ($kolId === null) throw new RuntimeException('Baris judul kolom (Idpel, ' . $cfg['nama_excel'] . ') tidak ditemukan.');
 
-    $baru = $upd = $lewat = 0;
+    $baru = $upd = $lewat = $gagalDb = 0;
+    bh_progres_tambah(0, $tolak);                    // baris yang sudah ditolak validasi ikut dihitung gagal
     foreach ($per as $p => $pasangan) {
-        [$b, $u, $l] = bh_simpan_kategorisasi($conn, $cfg['kolom'], (int) $p, array_values($pasangan), [$up, $ap, $upi], $tingkat);
-        $baru += $b; $upd += $u; $lewat += $l;
+        [$b, $u, $l, $g] = bh_simpan_kategorisasi($conn, $cfg['kolom'], (int) $p, array_values($pasangan), [$up, $ap, $upi], $tingkat);
+        $baru += $b; $upd += $u; $lewat += $l; $gagalDb += $g;
     }
+    if ($gagalDb) $detail[] = "$gagalDb pelanggan gagal disimpan oleh database.";
     $tersimpan = $baru + $upd;
     if ($lewat) $detail[] = "$lewat pelanggan dilewati karena tercatat di unit lain (di luar wilayah bot).";
     if ($tersimpan === 0) {
@@ -882,6 +1013,6 @@ function bh_kategorisasi(PDO $conn, array $bot, string $file, string $ap, string
                                         : 'Tidak ada baris valid yang bisa disimpan' . ($tolak ? " ($tolak baris ditolak)." : '.'), 0, $tolak + $lewat, $detail);
     }
     $pesan = "$tersimpan data {$cfg['label']} (periode " . implode('/', array_keys($per)) . ": $baru baru, $upd diperbarui)"
-           . ($dup ? ", $dup dobel dalam file" : '') . ($lewat ? ", $lewat dilewati (unit lain)" : '') . ($tolak ? ", $tolak ditolak" : '');
-    return bh_hasil('sukses', $pesan, $tersimpan, $tolak + $lewat, $detail);
+           . ($dup ? ", $dup dobel dalam file" : '') . ($lewat ? ", $lewat dilewati (unit lain)" : '') . ($tolak ? ", $tolak ditolak" : '') . ($gagalDb ? ", $gagalDb gagal di database" : '');
+    return bh_hasil('sukses', $pesan, $tersimpan, $tolak + $lewat + $gagalDb, $detail);
 }
