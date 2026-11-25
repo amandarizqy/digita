@@ -8,7 +8,7 @@ if (!isset($_SESSION['NamaAkun']) || !pgh_akses_monitoring()) {
     exit('Akses ditolak.');
 }
 
-$type = (($_GET['type'] ?? 'order') === 'mutasi') ? 'mutasi' : 'order';
+$type = 'mutasi';
 $unit_up = $_SESSION['UnitUp'] ?? '-';
 
 try {
@@ -136,7 +136,7 @@ if (!isset($_SESSION['NamaAkun']) || !pgh_akses_monitoring()) {
     exit('Akses ditolak.');
 }
 
-$type = (($_GET['type'] ?? 'order') === 'mutasi') ? 'mutasi' : 'order';
+$type = 'mutasi';
 $unit_up = $_SESSION['UnitUp'] ?? '-';
 
 try {

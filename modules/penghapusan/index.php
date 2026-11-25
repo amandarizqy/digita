@@ -12,8 +12,7 @@ require_once __DIR__ . '/../../functions/penghapusan_ui.php';
 $boleh = [
     'order_penghapusan'  => pgh_akses_order(),
     'mutasi_penghapusan' => pgh_akses_mutasi(),
-    'monitoring_order'    => pgh_akses_monitoring(),
-    'monitoring_mutasi'   => pgh_akses_monitoring(),
+    'monitoring_mutasi'  => pgh_akses_monitoring(),
 ];
 
 $struktur = [
@@ -27,7 +26,6 @@ $struktur = [
     'monitoring' => [
         'label' => 'Monitoring', 'icon' => 'bi-display',
         'sub'   => [
-            'monitoring_order'  => ['Order Pembongkaran',  'bi-display',       'monitoring_order.php'],
             'monitoring_mutasi' => ['Mutasi Pembongkaran', 'bi-journal-check', 'monitoring_mutasi.php'],
         ],
     ],
@@ -67,21 +65,21 @@ if ($menu !== '' && (!isset($struktur[$menu]['sub'][$sub]) || !empty($struktur[$
 <?php
 // Judul, subjudul, dan tombol aksi (kanan atas) per sub-menu
 $halaman = [
-    'order_penghapusan'  => ['FPK & Order Penghapusan', 'Langkah 1: Buat FPK Penghapusan → Langkah 2: Gabungkan FPK ke dalam Surat Perintah Kerja (Order).'],
-    'mutasi_penghapusan' => ['Eksekusi Mutasi Penghapusan', 'Langkah 3: Bongkar alat di lapangan, rekam kondisi lampu indikator, foto, lalu lepas alat dari pelanggan.'],
-    'monitoring_order'    => ['Monitoring Order Pembongkaran', 'Rekapitulasi FPK, Order, dan Berita Acara penghapusan.'],
-    'monitoring_mutasi'   => ['Monitoring Mutasi Pembongkaran', 'Riwayat pembongkaran dan penghapusan perangkat S41.'],
+    'order_penghapusan'  => ['Order Pembongkaran', 'Langkah 1: Buat FPK Penghapusan → Langkah 2: Gabungkan FPK ke dalam Surat Perintah Kerja (Order).'],
+    'mutasi_penghapusan' => ['Mutasi Pembongkaran', 'Langkah 3: Bongkar alat di lapangan lalu simpan Berita Acara. Alat yang selesai dilepas dari pelanggan (SIM, modem & relay dikosongkan) dan baru bisa dipakai lagi setelah lolos Pengujian (menu Pemasangan).'],
+    'monitoring_mutasi'  => ['Monitoring Mutasi Pembongkaran', 'Riwayat pembongkaran dan penghapusan perangkat S41.'],
 ];
 $tombol = [];
 if ($sub === 'order_penghapusan') {
     $tombol = [
-        ['type' => 'modal', 'label' => ' Buat FPK',   'icon' => 'bi-tools',              'target' => 'modalBuatPK',    'class' => 'btn-primary'],
-        ['type' => 'modal', 'label' => ' Buat Order', 'icon' => 'bi-file-earmark-plus',  'target' => 'modalBuatOrder', 'class' => 'btn-primary'],
+        ['type' => 'modal', 'label' => 'Cetak Order',  'icon' => 'bi-printer',           'target' => 'modalCetakOrder', 'class' => 'btn-info text-white'],
+        ['type' => 'modal', 'label' => '1. Buat FPK',   'icon' => 'bi-tools',             'target' => 'modalBuatPK',    'class' => 'btn-warning'],
+        ['type' => 'modal', 'label' => '2. Buat Order', 'icon' => 'bi-file-earmark-plus', 'target' => 'modalBuatOrder', 'class' => 'btn-primary'],
     ];
-} elseif ($sub === 'monitoring_order' || $sub === 'monitoring_mutasi') {
+} elseif ($sub === 'monitoring_mutasi') {
     $tombol = [[
         'type' => 'link', 'label' => 'Cetak Laporan PDF', 'icon' => 'bi-printer', 'class' => 'btn-outline-primary',
-        'href' => BASE_URL . '/modules/penghapusan/cetak_laporan.php?type=' . ($sub === 'monitoring_order' ? 'order' : 'mutasi'),
+        'href' => BASE_URL . '/modules/penghapusan/cetak_laporan.php?type=mutasi',
     ]];
 }
 ?>

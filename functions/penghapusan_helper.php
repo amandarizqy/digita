@@ -1,6 +1,6 @@
 <?php
 // functions/penghapusan_helper.php
-// Fungsi bersama modul Penghapusan (skema: frm_order, frm_pk, frm_pk_detil, frm_ba, frm_ba_detil, master_barang).
+// Fungsi bersama modul Penghapusan (skema: frm_pk, frm_pk_detil, frm_ba, frm_ba_detil, master_barang).
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -14,7 +14,7 @@ const PGH_POSISI  = ['PANGKAL', 'TENGAH', 'UJUNG'];
 const PGH_STATUS  = ['AKTIF', 'TIDAK'];
 const PGH_FOTO_MAKS_BYTE = 5 * 1024 * 1024;           // 5 MB
 const PGH_PER_HALAMAN = 25;
-// Nilai master_barang.StatusData untuk alat yang sudah dihapus. SESUAIKAN dengan nilai yang dipakai di database Anda.
+// Nilai master_barang.StatusData untuk alat bekas bongkar / tidak layak (kolom ENUM: 'AKTIF','TIDAK').
 const PGH_STATUS_BARANG_NONAKTIF = 'TIDAK';
 
 function pgh_e($v): string
@@ -306,6 +306,21 @@ function pgh_buat_pk(PDO $conn, array $p, array $b): string
     }
     $conn->prepare("INSERT INTO frm_pk ($kol) VALUES ($val)")->execute($par);
 
+    // Pastikan baris induk benar-benar ada dengan NoFpk yang SAMA sebelum menulis detil (FK frm_pk_detil -> frm_pk).
+    // Bila nilai yang tersimpan berbeda (kolom terpotong / trigger mengubah nomor), pakai nilai yang tersimpan.
+    $cek = $conn->prepare('SELECT NoFpk FROM frm_pk WHERE NoFpk = ? LIMIT 1');
+    $cek->execute([$no_fpk]);
+    if ($cek->fetchColumn() === false) {
+        $cari = $conn->prepare("SELECT NoFpk FROM frm_pk WHERE IdPel = ? AND TglFpk = ? AND JenisPk = 'BERHENTI' AND StatusData = 'TIDAK' ORDER BY WaktuData DESC LIMIT 1");
+        $cari->execute([$p['id_pel'], $p['tgl']]);
+        $asli = $cari->fetchColumn();
+        if ($asli === false) {
+            throw new RuntimeException("Baris FPK $no_fpk tidak tersimpan di frm_pk (cek panjang kolom NoFpk, trigger, atau nilai ENUM JenisPk).");
+        }
+        error_log("penghapusan: NoFpk dibuat $no_fpk tetapi tersimpan sebagai $asli");
+        $no_fpk = (string) $asli;
+    }
+
     $nomor = pgh_nomor_sim($conn, $b['SimId'] ?? '');
     $conn->prepare('INSERT INTO frm_pk_detil (NoFpk, StatusBarang, NoRef, SimId, ImeiModem, NomorBarang, NomorModem) VALUES (?, ?, ?, ?, ?, ?, ?)')
          ->execute([$no_fpk, 'DIL', $b['NoRef'], $b['SimId'], $b['ImeiModem'], $nomor, $nomor]);
@@ -324,17 +339,29 @@ function pgh_lepas_barang(PDO $conn, string $no_ref, string $id_pel): void
 }
 
 /**
- * Efek BA PENGHAPUSAN SELESAI: alat yang sudah rusak / tidak dipakai lagi DIHAPUS PERMANEN dari master_barang.
- * Jejak historis tetap ada di frm_pk_detil dan frm_ba_detil (NoRef, SimId, ImeiModem tersimpan di sana).
- * Tidak bisa dibatalkan, sehingga BA yang sudah SELESAI dikunci dan tidak boleh diubah lagi.
+ * Efek BA PENGHAPUSAN SELESAI: alat dilepas dari pelanggan dan DIKOSONGKAN (bukan dihapus fisik).
+ * Baris master_barang tidak boleh di-DELETE karena dirujuk foreign key (formulir_penerimaan_detil,
+ * riwayat pengiriman, pengujian, dst. -> error 1451).
+ * Yang dikosongkan: IdPel, SimId, ImeiModem, StatusRelay. StatusData menjadi nonaktif.
+ * Alat baru bisa dipakai lagi setelah lolos Pengujian (Pemasangan > Pra Eksekusi > Pengujian).
+ * StatusRelay terisi lagi saat alat dipasang ulang (proses_mutasi).
+ * Jejak SIM/IMEI lama tetap ada di frm_pk_detil dan frm_ba_detil.
  */
 function pgh_hapus_barang(PDO $conn, string $no_ref, string $id_pel): void
 {
-    $st = $conn->prepare("DELETE FROM master_barang WHERE NoRef = ? AND (IdPel = ? OR IdPel IS NULL OR IdPel = '')");
-    $st->execute([$no_ref, $id_pel]);
-    if ($st->rowCount() === 0) {
-        throw new RuntimeException("Perangkat $no_ref gagal dihapus dari master barang (tidak ditemukan atau terpasang di pelanggan lain).");
+    $kondisi = "NoRef = ? AND (IdPel = ? OR IdPel IS NULL OR IdPel = '')";
+
+    // COUNT (bukan rowCount) supaya eksekusi ulang pada alat yang sudah kosong tidak memunculkan error palsu.
+    $cek = $conn->prepare("SELECT COUNT(*) FROM master_barang WHERE $kondisi");
+    $cek->execute([$no_ref, $id_pel]);
+    if ((int) $cek->fetchColumn() === 0) {
+        throw new RuntimeException("Perangkat $no_ref tidak ditemukan di master barang atau terpasang di pelanggan lain.");
     }
+
+    $conn->prepare("UPDATE master_barang
+                    SET IdPel = NULL, SimId = NULL, ImeiModem = NULL, StatusRelay = NULL, StatusData = ?
+                    WHERE $kondisi")
+         ->execute([PGH_STATUS_BARANG_NONAKTIF, $no_ref, $id_pel]);
 }
 
 /** Kebalikan pgh_lepas_barang (dipakai saat BA diubah kembali menjadi PENDING). Tidak lagi dipakai oleh eksekusi penghapusan. */
@@ -437,6 +464,11 @@ function pgh_badge_status($status): string
         : '<span class="badge bg-warning-subtle text-warning-emphasis">PENDING</span>';
 }
 
-function pgh_akses_order(): bool { return in_array(pgh_role(), ['SA.KP', 'TL.AP', 'TL.UP'], true); }
-function pgh_akses_mutasi(): bool { return in_array(pgh_role(), ['SA.KP', 'SF.AP', 'SF.UP'], true); }
+// Matriks akses (sesuai Excel hak akses):
+//   Eksekusi > Order Pembongkaran   : TL.UP, SF.UP (+ SA.KP super admin)
+//   Eksekusi > Mutasi Pembongkaran  : SF.UP saja   (+ SA.KP super admin)
+//   Monitoring > Mutasi Pembongkaran: semua role
+//   Monitoring Order Pembongkaran   : dihapus (tidak ada lagi)
+function pgh_akses_order(): bool { return in_array(pgh_role(), ['SA.KP', 'TL.UP', 'SF.UP'], true); }
+function pgh_akses_mutasi(): bool { return in_array(pgh_role(), ['SA.KP', 'SF.UP'], true); }
 function pgh_akses_monitoring(): bool { return true; }
