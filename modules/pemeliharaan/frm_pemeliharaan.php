@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($tgl === null) throw new RuntimeException('Tanggal FPK tidak valid.');
             if ($id_pel === '') throw new RuntimeException('Pilih ID Pelanggan terlebih dahulu.');
             if ($err_k !== null) throw new RuntimeException($err_k);
-            if ($lat === null || $long === null) throw new RuntimeException('Titik koordinat DIL wajib diisi melalui peta atau tombol GPS.');
+            if ($lat === null || $long === null) throw new RuntimeException('Titik koordinat DIL wajib diisi (ketik manual, klik peta, atau tombol GPS).');
             
             // Ambil data master barang milik pelanggan
             $b = ph_barang_pelanggan($conn, $id_pel);
@@ -367,8 +367,8 @@ try {
                             <td class="bg-light fw-bold">Tikor DIL</td>
                             <td colspan="3">
                                 <div class="d-flex align-items-center gap-3">
-                                    <span>Long: <input type="text" name="longitude" id="lngInput" class="d-inline-block form-control form-control-sm font-monospace border-0 bg-transparent w-auto" readonly required></span>
-                                    <span>Lat: <input type="text" name="latitude" id="latInput" class="d-inline-block form-control form-control-sm font-monospace border-0 bg-transparent w-auto" readonly required></span>
+                                    <span>Long: <input type="text" name="longitude" id="lngInput" class="d-inline-block form-control form-control-sm font-monospace w-auto" style="max-width:140px;" inputmode="decimal" autocomplete="off" placeholder="106.62319" required></span>
+                                    <span>Lat: <input type="text" name="latitude" id="latInput" class="d-inline-block form-control form-control-sm font-monospace w-auto" style="max-width:140px;" inputmode="decimal" autocomplete="off" placeholder="-6.17698" required></span>
                                     <button type="button" class="btn btn-sm btn-success py-0 px-2 ms-auto" id="btnGetGPS"><i class="bi bi-geo-alt-fill me-1"></i> Ambil GPS Saya</button>
                                 </div>
                             </td>
@@ -579,9 +579,32 @@ document.addEventListener("DOMContentLoaded", function () {
 
     var defaultLat = -6.1783, defaultLng = 106.6321, map = null, marker = null;
     var modalPK = document.getElementById("modalBuatPK");
+    var inLat = document.getElementById("latInput"), inLng = document.getElementById("lngInput");
+    // Tikor boleh diklik di peta, diambil dari GPS, atau diketik manual (koma desimal juga diterima)
+    function angkaTikor(v) {
+        v = String(v).trim().replace(",", ".");
+        return (v !== "" && !isNaN(Number(v))) ? Number(v) : NaN;
+    }
+    function cekTikor(pindahPeta) {
+        var la = angkaTikor(inLat.value), ln = angkaTikor(inLng.value);
+        var salahLat = inLat.value.trim() !== "" && !(Math.abs(la) <= 90);
+        var salahLng = inLng.value.trim() !== "" && !(Math.abs(ln) <= 180);
+        inLat.setCustomValidity(salahLat ? "Latitude harus angka antara -90 dan 90." : "");
+        inLng.setCustomValidity(salahLng ? "Longitude harus angka antara -180 dan 180." : "");
+        inLat.classList.toggle("is-invalid", salahLat);
+        inLng.classList.toggle("is-invalid", salahLng);
+        // diketik manual, isian valid dan lengkap: marker & peta ikut pindah ke titik tersebut
+        if (pindahPeta && !salahLat && !salahLng && !isNaN(la) && !isNaN(ln) && map && marker) {
+            marker.setLatLng([la, ln]);
+            map.setView([la, ln], Math.max(map.getZoom(), 16));
+        }
+    }
+    inLat.addEventListener("input", function () { cekTikor(true); });
+    inLng.addEventListener("input", function () { cekTikor(true); });
     var isiKoordinat = function (lat, lng) {
-        document.getElementById("latInput").value = lat.toFixed(6);
-        document.getElementById("lngInput").value = lng.toFixed(6);
+        inLat.value = lat.toFixed(6);
+        inLng.value = lng.toFixed(6);
+        cekTikor(false);   // dari klik peta / GPS: hanya validasi, peta tidak digeser lagi
     };
     if (modalPK) {
         modalPK.addEventListener("shown.bs.modal", function () {
