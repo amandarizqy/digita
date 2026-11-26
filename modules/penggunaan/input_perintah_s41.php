@@ -2,6 +2,7 @@
 // modules/penggunaan/input_perintah.php  -  Input Perintah (kirim ke perangkat lewat SMS Gateway)
 // Sumber (tab) : 'putus' = VIEW vw_tiket_putus_s41_open  (tiket putus yang masih open  -> perintah PLNOFF),
 //                'nyala' = VIEW vw_tiket_nyala_s41_open  (tiket nyala yang masih open  -> perintah PLNON),
+//                'padam' = VIEW vw_tiket_putus_s41_padam  (tiket padam -> perintah PLNON / PLNSTATUS),
 //                'barang' = VIEW vw_terpasang_s41 (perangkat manual, tanpa tiket). Semua dibatasi wilayah akun (kode unit session, pg_scope()).
 //                Kedua view tiket sudah terurut, jadi dibaca apa adanya (tanpa ORDER BY / GROUP BY tambahan) dan dikirim sesuai urutan itu.
 //                Nomor tujuan = NomorBarang. View HANYA DIBACA.
@@ -22,13 +23,41 @@ $tabel_outbox  = 'sms_outbox';   // tabel antrean SMS; bila di database lain tul
 $tiket_cfg = [   // sumber tiket: view open, kolom kunci, label, perintah yang disarankan
     'putus' => ['tabel' => 'vw_tiket_putus_s41_open', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Putus', 'saran' => 'PLNOFF'],
     'nyala' => ['tabel' => 'vw_tiket_nyala_s41_open', 'pk' => 'TiketNyala',    'label' => 'Tiket Nyala', 'saran' => 'PLNON'],
+    'padam' => ['tabel' => 'vw_tiket_putus_s41_padam', 'pk' => 'TiketPutusS41', 'label' => 'Tiket Padam', 'saran' => 'PLNON'],
 ];
 $sumber = (string) ($_POST['sumber'] ?? $_GET['sumber'] ?? 'putus');
 if (!isset($tiket_cfg[$sumber]) && $sumber !== 'barang') $sumber = 'putus';
 $saran_cmd = $tiket_cfg[$sumber]['saran'] ?? '';
-foreach ([$sumber_barang, $tiket_cfg['putus']['tabel'], $tiket_cfg['nyala']['tabel']] as $id) if (!preg_match('/^\w+$/', $id)) throw new RuntimeException('Nama view tidak valid.');
+foreach (array_merge([$sumber_barang], array_column($tiket_cfg, 'tabel')) as $id) if (!preg_match('/^\w+$/', $id)) throw new RuntimeException('Nama view tidak valid.');
 if (!preg_match('/^\w+(\.\w+)?$/', $tabel_outbox)) throw new RuntimeException('Nama tabel outbox tidak valid.');
 $tb_out = '`' . str_replace('.', '`.`', $tabel_outbox) . '`';
+
+/** Kolom tampil per tab tiket (urut kiri-kanan). Ubah nama kolom view di sini bila berbeda. 'sql' = ekspresi SELECT (v = view tiket);
+ *  NomorModem & ImeiModem diambil dari view terpasang lewat IdPel + NomorBarang (subquery, agar urutan view tidak berubah). */
+$kolom_tampil = []; $kolom_def = [];
+if ($sumber !== 'barang') {
+    $pk_t = $tiket_cfg[$sumber]['pk'];
+    $sub_brg = fn(string $f) => "(SELECT MIN(tb.$f) FROM `$sumber_barang` tb WHERE tb.IdPel = v.IdPel AND tb.NomorBarang = v.NomorBarang)";
+    $kolom_def = [
+        'Kode'          => ['label' => $tiket_cfg[$sumber]['label'], 'sql' => "v.$pk_t",              'cls' => 'font-monospace fw-semibold small'],
+        'TiketPutus'    => ['label' => 'Tiket Putus',  'sql' => 'v.TiketPutusS41',                    'cls' => 'font-monospace small'],
+        'JenisTiket'    => ['label' => 'Jenis Tiket',  'sql' => 'v.JenisTiket',                       'cls' => ''],
+        'NoTUL'         => ['label' => 'No TUL',       'sql' => 'v.NoTUL',                            'cls' => 'font-monospace small'],
+        'IdPel'         => ['label' => 'IdPel',        'sql' => 'v.IdPel',                            'cls' => 'font-monospace'],
+        'NamaPelanggan' => ['label' => 'Nama',         'sql' => "NULLIF(v.Nama,'')",                  'cls' => ''],
+        'ThBlRek'       => ['label' => 'ThBlRek (Periode)', 'sql' => 'v.ThblRek',                     'cls' => 'font-monospace'],
+        'GolTar'        => ['label' => 'GolTar',       'sql' => 'v.GolTar',                           'cls' => 'font-monospace'],
+        'Daya'          => ['label' => 'Daya',         'sql' => 'v.Daya',                             'cls' => 'font-monospace text-end'],
+        'NomorBarang'   => ['label' => 'Nomor Barang', 'sql' => 'v.NomorBarang',                      'cls' => 'font-monospace'],
+        'NomorModem'    => ['label' => 'Nomor Modem',  'sql' => $sub_brg('NomorModem'),               'cls' => 'font-monospace'],
+        'ImeiModem'     => ['label' => 'IMEI Modem',   'sql' => $sub_brg('ImeiModem'),                'cls' => 'font-monospace small'],
+    ];
+    $kolom_tampil = ['Kode', 'JenisTiket', 'NoTUL', 'IdPel', 'NamaPelanggan', 'ThBlRek', 'GolTar', 'Daya', 'NomorBarang', 'NomorModem', 'ImeiModem'];   // putus & padam
+    if ($sumber === 'nyala') {   // view nyala tidak punya NoTUL & ImeiModem -> tidak ditampilkan; ditambah Tiket Putus setelah Tiket Nyala
+        $kolom_tampil = array_values(array_diff($kolom_tampil, ['NoTUL', 'ImeiModem']));
+        array_splice($kolom_tampil, 1, 0, ['TiketPutus']);
+    }                                                                       // nyala: + Tiket Putus setelah Tiket Nyala
+}
 
 /** Kondisi SQL status relay: nilai bisa 'ON'/'OFF' atau teks hasil balasan perangkat (mis. 'LISTRIK MENYALA - BERHASIL (RELAY NC)'). */
 $sql_relay_on  = "(b.StatusRelay = 'ON'  OR b.StatusRelay LIKE '%MENYALA%' OR b.StatusRelay LIKE '%RELAY NC%')";
@@ -47,10 +76,10 @@ $daftar_perintah = [
     'PLNSTATUS' => ['label' => 'Cek status',       'bahaya' => false],
 ];
 
-// Pembatasan per tab: Tiket Putus tidak boleh PLNON, Tiket Nyala tidak boleh PLNOFF (tab Perangkat manual: semua perintah).
+// Pembatasan per tab: Tiket Putus tidak boleh PLNON, Tiket Nyala & Tiket Padam tidak boleh PLNOFF (tab Perangkat manual: semua perintah).
 // Dibuang dari daftar yang sama sehingga berlaku di dropdown sekaligus validasi saat POST.
 if ($sumber === 'putus') unset($daftar_perintah['PLNON']);
-elseif ($sumber === 'nyala') unset($daftar_perintah['PLNOFF']);
+elseif ($sumber === 'nyala' || $sumber === 'padam') unset($daftar_perintah['PLNOFF']);
 
 if (empty($_SESSION['pg_csrf'])) $_SESSION['pg_csrf'] = bin2hex(random_bytes(16));
 $csrf = $_SESSION['pg_csrf'];
@@ -81,19 +110,19 @@ if (!function_exists('pr_nomor')) {
         return null;
     }
 
-    /** Antrekan satu SMS ke tabel sms_outbox dengan Status 'Reserved' (diambil service Python). $tb = nama tabel ber-backtick. */
-    function pr_antrekan_sms(PDO $conn, string $tb, string $tujuan, string $teks, string $pembuat): void
+    /** Antrekan satu SMS ke tabel sms_outbox dengan Status 'Reserved' (diambil service Python). $tb = nama tabel ber-backtick. SenderID = IMEI modem perangkat. */
+    function pr_antrekan_sms(PDO $conn, string $tb, string $tujuan, string $teks, ?string $imei, string $pembuat): void
     {
-        $st = $conn->prepare("INSERT INTO $tb (DestinationNumber, TextDecoded, CreatorID, Status) VALUES (?, ?, ?, 'Reserved')");
-        $st->execute([$tujuan, $teks, $pembuat]);
+        $st = $conn->prepare("INSERT INTO $tb (DestinationNumber, TextDecoded, SenderID, CreatorID, Status) VALUES (?, ?, ?, ?, 'Reserved')");
+        $st->execute([$tujuan, $teks, $imei, $pembuat]);
     }
 }
 
 // ---- filter daftar ----
 $keyword = trim($_GET['keyword'] ?? '');
 $relay   = in_array($_GET['relay'] ?? '', ['ON', 'OFF'], true) ? $_GET['relay'] : '';
-// status antrean SMS tiket open: BELUM = belum diantrekan ke sms_outbox (default), SUDAH = sudah diantrekan, SEMUA = keduanya
-$antrean = in_array($_GET['antrean'] ?? 'BELUM', ['BELUM', 'SUDAH', 'SEMUA'], true) ? ($_GET['antrean'] ?? 'BELUM') : 'BELUM';
+// status antrean SMS tiket open: SEMUA = semua tiket open (default; yang sudah dikirim tetap tampil selama masih ada di view), BELUM = belum diantrekan, SUDAH = sudah diantrekan
+$antrean = in_array($_GET['antrean'] ?? 'SEMUA', ['BELUM', 'SUDAH', 'SEMUA'], true) ? ($_GET['antrean'] ?? 'SEMUA') : 'SEMUA';
 $limit   = (int) ($_GET['limit'] ?? 25);
 if (!in_array($limit, [10, 25, 50, 100], true)) $limit = 25;
 $hal     = max(1, (int) ($_GET['hal'] ?? 1));
@@ -145,24 +174,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // target dibaca ulang dari database (bukan dari form) dan harus berada di wilayah akun
             $p = []; $ph = [];
             foreach ($targets as $i => $no) { $ph[] = ":n$i"; $p[":n$i"] = $no; }
-            $daftar = [];   // kode => [label, nomor, creatorID, sudah]
+            $daftar = [];   // kode => [label, nomor, creatorID, sudah, imei]
             if ($sumber === 'barang') {
                 $scope = pg_scope($u, 'b', 'Unit', $p);
-                $st = $conn->prepare("SELECT b.NoRef AS kode, MIN(b.NomorBarang) AS nomor FROM `$sumber_barang` b
+                $st = $conn->prepare("SELECT b.NoRef AS kode, MIN(b.NomorBarang) AS nomor, MIN(b.ImeiModem) AS imei FROM `$sumber_barang` b
                                       WHERE b.NoRef IN (" . implode(',', $ph) . ") AND $scope GROUP BY b.NoRef");
                 $st->execute($p);
-                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], "digita:$akun:" . $r['kode'], 0];
+                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], "digita:$akun:" . $r['kode'], 0, $r['imei']];
             } else {
                 $c = $tiket_cfg[$sumber]; $pk = $c['pk'];
                 $scope = pg_scope($u, 't', 'Unit', $p);
                 // NoRef perangkat dicari dari view terpasang lewat IdPel + NomorBarang tiket (untuk penelusuran di monitoring);
                 // sudah = perintah yang sama untuk tiket ini sudah ada di sms_outbox
-                $st = $conn->prepare("SELECT t.$pk AS kode, t.NomorBarang AS nomor, MIN(b.NoRef) AS NoRef, " . $sql_antre("t.$pk", $cmd) . " AS sudah
+                $st = $conn->prepare("SELECT t.$pk AS kode, t.NomorBarang AS nomor, MIN(b.NoRef) AS NoRef, MIN(b.ImeiModem) AS imei, " . $sql_antre("t.$pk", $cmd) . " AS sudah
                                       FROM `{$c['tabel']}` t LEFT JOIN `$sumber_barang` b ON b.IdPel = t.IdPel AND b.NomorBarang = t.NomorBarang
                                       WHERE t.$pk IN (" . implode(',', $ph) . ") AND $scope GROUP BY t.$pk, t.NomorBarang");
                 $st->execute($p);
                 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-                    $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], $r['NoRef'] === null ? null : "digita:$akun:" . $r['NoRef'] . ':' . $r['kode'], (int) $r['sudah']];
+                    $daftar[(string) $r['kode']] = [(string) $r['kode'], $r['nomor'], $r['NoRef'] === null ? null : "digita:$akun:" . $r['NoRef'] . ':' . $r['kode'], (int) $r['sudah'], $r['imei']];
                 }
             }
 
@@ -173,11 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $conn->beginTransaction();
             foreach ($targets as $kode) {            // urutan sesuai tampilan / view
                 if (!isset($daftar[$kode])) continue;
-                [$label, $nomor, $creator, $sudah] = $daftar[$kode];
+                [$label, $nomor, $creator, $sudah, $imei] = $daftar[$kode];
                 $hp = pr_nomor($nomor ?? '');
                 if ($hp === null)      { $lewat[] = "$label tanpa nomor barang valid"; continue; }
                 if ($creator === null) { $lewat[] = "$label perangkatnya tidak ditemukan di data terpasang"; continue; }
-                pr_antrekan_sms($conn, $tb_out, $hp, $cmd, mb_substr($creator, 0, 100));
+                pr_antrekan_sms($conn, $tb_out, $hp, $cmd, ($imei === null || $imei === '') ? null : (string) $imei, mb_substr($creator, 0, 100));
                 $ok++;
                 if ($sudah) $ulang++;
             }
@@ -196,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error];
         header('Location: ' . pg_url('input_perintah_s41', [
             'sumber' => $sumber === 'putus' ? '' : $sumber,
-            'antrean' => ($_POST['f_antrean'] ?? 'BELUM') === 'BELUM' ? '' : ($_POST['f_antrean'] ?? ''),
+            'antrean' => ($_POST['f_antrean'] ?? 'SEMUA') === 'SEMUA' ? '' : ($_POST['f_antrean'] ?? ''),
             'keyword' => $_POST['f_keyword'] ?? '', 'relay' => $_POST['f_relay'] ?? '',
             'limit' => ($_POST['f_limit'] ?? '') == 25 ? '' : ($_POST['f_limit'] ?? ''), 'hal' => ($_POST['f_hal'] ?? 1) > 1 ? $_POST['f_hal'] : '',
         ]));
@@ -260,7 +289,8 @@ if ($unit_siap) {
             // tanpa GROUP BY / ORDER BY: urutan mengikuti view. StatusSms/WaktuSms = SMS terakhir untuk tiket + perintah sarannya
             $cmdq = $conn->quote($c['saran']);
             $sub  = "FROM $tb_out o WHERE o.TextDecoded = $cmdq AND RIGHT(o.CreatorID, CHAR_LENGTH(CONCAT(':', v.$pk))) = CONCAT(':', v.$pk) ORDER BY o.ID DESC LIMIT 1";
-            $st = $conn->prepare("SELECT v.$pk AS Kode, v.JenisTiket, v.IdPel, NULLIF(v.Nama,'') AS NamaPelanggan, v.ThblRek AS ThBlRek, v.NomorBarang,
+            $sel  = implode(', ', array_map(fn($k) => $kolom_def[$k]['sql'] . " AS $k", $kolom_tampil));
+            $st = $conn->prepare("SELECT $sel,
                                          (SELECT o.Status $sub) AS StatusSms, (SELECT o.InsertIntoDB $sub) AS WaktuSms
                                   $from LIMIT :lim OFFSET :off");
         }

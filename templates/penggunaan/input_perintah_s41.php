@@ -3,12 +3,12 @@
 // Variabel dari modules/penggunaan/input_perintah.php:
 //   $sumber, $tiket_cfg, $saran_cmd, $daftar_perintah, $data, $total_data, $ringkas, $keyword, $relay, $antrean, $limit, $hal,
 //   $csrf, $u, $unit_siap, $maks_kirim, $boleh_monitor, $pesan_sukses, $pesan_error
-// Tab Tiket Putus / Tiket Nyala bersumber dari view vw_tiket_putus_s41_open / vw_tiket_nyala_s41_open (hanya tiket open, sudah terurut).
+// Tab Tiket Putus / Tiket Nyala / Tiket Padam bersumber dari view vw_tiket_putus_s41_open / vw_tiket_nyala_s41_open / vw_tiket_putus_s41_padam (sudah terurut).
 
 $tiket_mode = $sumber !== 'barang';
 $url_pr = fn(array $ubah = []) => pg_url('input_perintah_s41', array_merge(
     ['sumber' => $sumber === 'putus' ? '' : $sumber, 'keyword' => $keyword, 'relay' => $relay,
-     'antrean' => $antrean === 'BELUM' ? '' : $antrean, 'limit' => $limit == 25 ? '' : $limit], $ubah));
+     'antrean' => $antrean === 'SEMUA' ? '' : $antrean, 'limit' => $limit == 25 ? '' : $limit], $ubah));
 
 echo pg_header([
     'title'    => 'Input Perintah',
@@ -26,7 +26,7 @@ if (!$unit_siap) {
     return;
 }
 
-$tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-lightning-charge'], 'barang' => ['Perangkat (manual)', 'bi-cpu']];
+$tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-lightning-charge'], 'padam' => ['Tiket Padam', 'bi-lightbulb-off'], 'barang' => ['Perangkat (manual)', 'bi-cpu']];
 ?>
 
 <!-- SUMBER -->
@@ -64,9 +64,9 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
             <div class="col-md-2">
                 <?php if ($tiket_mode): ?>
                 <select name="antrean" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Status antrean SMS">
+                    <option value="SEMUA" <?= $antrean === 'SEMUA' ? 'selected' : '' ?>>Semua tiket open</option>
                     <option value="BELUM" <?= $antrean === 'BELUM' ? 'selected' : '' ?>>Belum diantrekan</option>
                     <option value="SUDAH" <?= $antrean === 'SUDAH' ? 'selected' : '' ?>>Sudah diantrekan</option>
-                    <option value="SEMUA" <?= $antrean === 'SEMUA' ? 'selected' : '' ?>>Semua tiket open</option>
                 </select>
                 <?php else: ?>
                 <select name="relay" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Relay">
@@ -85,7 +85,7 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
             </div>
             <div class="col-md d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary px-3"><i class="bi bi-search me-1"></i>Cari</button>
-                <?php if ($keyword !== '' || $relay !== '' || ($tiket_mode && $antrean !== 'BELUM')): ?><a href="<?= pg_e(pg_url('input_perintah_s41', ['sumber' => $sumber === 'putus' ? '' : $sumber])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
+                <?php if ($keyword !== '' || $relay !== '' || ($tiket_mode && $antrean !== 'SEMUA')): ?><a href="<?= pg_e(pg_url('input_perintah_s41', ['sumber' => $sumber === 'putus' ? '' : $sumber])) ?>" class="btn btn-sm btn-outline-secondary px-3">Reset</a><?php endif; ?>
             </div>
         </form>
     </div>
@@ -133,7 +133,7 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
                     <tr class="text-secondary text-uppercase" style="font-size:.75rem;letter-spacing:.3px;white-space:nowrap;">
                         <th class="ps-4" style="width:40px"><input type="checkbox" class="form-check-input" id="cekSemua" aria-label="Pilih semua di halaman"></th>
                         <?php if ($tiket_mode): ?>
-                        <th><?= pg_e($tiket_cfg[$sumber]['label']) ?></th><th>Jenis</th><th>IdPel</th><th>Nama Pelanggan</th><th>ThBlRek</th><th>Nomor Barang</th>
+                        <?php foreach ($kolom_tampil as $kk): ?><th><?= pg_e($kolom_def[$kk]['label']) ?></th><?php endforeach; ?>
                         <th class="pe-4">Antrean SMS (<?= pg_e($saran_cmd) ?>)</th>
                         <?php else: ?>
                         <th>NoRef</th><th>Nomor Barang</th><th>IMEI Modem</th><th>IdPel</th><th>Nama Pelanggan</th><th>Unit UP</th><th class="pe-4 text-center">Relay</th>
@@ -141,20 +141,23 @@ $tab = ['putus' => ['Tiket Putus', 'bi-plug'], 'nyala' => ['Tiket Nyala', 'bi-li
                     </tr>
                 </thead>
                 <tbody>
-                <?php $kolom = 8; ?>
+                <?php $kolom = $tiket_mode ? count($kolom_tampil) + 2 : 8; ?>
                 <?php if (!$data): ?>
                     <tr><td colspan="<?= $kolom ?>" class="text-center text-muted py-5"><i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
-                        <?= ($keyword !== '' || $relay !== '' || ($tiket_mode && $antrean !== 'BELUM')) ? 'Tidak ada data yang cocok dengan filter.' : ($tiket_mode ? 'Tidak ada tiket open di wilayah Anda.' : 'Belum ada perangkat terpasang di wilayah Anda.') ?></td></tr>
+                        <?= ($keyword !== '' || $relay !== '' || ($tiket_mode && $antrean !== 'SEMUA')) ? 'Tidak ada data yang cocok dengan filter.' : ($tiket_mode ? 'Tidak ada tiket open di wilayah Anda.' : 'Belum ada perangkat terpasang di wilayah Anda.') ?></td></tr>
                 <?php elseif ($tiket_mode): foreach ($data as $r):
                     $bisa = pr_nomor($r['NomorBarang'] ?? '') !== null; ?>
                     <tr class="<?= $bisa ? '' : 'text-muted' ?>">
                         <td class="ps-4"><input type="checkbox" class="form-check-input cek-baris" name="pilih[]" value="<?= pg_e($r['Kode']) ?>" data-sudah="<?= $r['StatusSms'] === null ? '0' : '1' ?>" <?= $bisa ? '' : 'disabled' ?> aria-label="Pilih <?= pg_e($r['Kode']) ?>"></td>
-                        <td class="font-monospace fw-semibold small"><?= pg_e($r['Kode']) ?></td>
-                        <td><span class="badge bg-<?= $r['JenisTiket'] === 'KOREKTIF' ? 'danger' : 'info' ?> bg-opacity-10 text-<?= $r['JenisTiket'] === 'KOREKTIF' ? 'danger' : 'info' ?> border border-<?= $r['JenisTiket'] === 'KOREKTIF' ? 'danger' : 'info' ?> border-opacity-50"><?= pg_e($r['JenisTiket']) ?></span></td>
-                        <td class="font-monospace"><?= pg_e($r['IdPel']) ?></td>
-                        <td><?= $r['NamaPelanggan'] === null ? '-' : pg_e($r['NamaPelanggan']) ?></td>
-                        <td class="font-monospace"><?= pg_e($r['ThBlRek']) ?></td>
-                        <td class="font-monospace"><?= $bisa ? pg_e($r['NomorBarang']) : '<span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-50">Tidak valid</span>' ?></td>
+                        <?php foreach ($kolom_tampil as $kk): $d = $kolom_def[$kk]; $v = $r[$kk] ?? null; ?>
+                        <td class="<?= $d['cls'] ?>">
+                            <?php if ($kk === 'JenisTiket' && $v !== null && $v !== ''): $wj = $v === 'KOREKTIF' ? 'danger' : 'info'; ?>
+                            <span class="badge bg-<?= $wj ?> bg-opacity-10 text-<?= $wj ?> border border-<?= $wj ?> border-opacity-50"><?= pg_e((string) $v) ?></span>
+                            <?php elseif ($kk === 'NomorBarang' && !$bisa): ?>
+                            <span class="badge bg-warning bg-opacity-10 text-warning-emphasis border border-warning border-opacity-50">Tidak valid</span>
+                            <?php else: ?><?= ($v === null || $v === '') ? '-' : pg_e((string) $v) ?><?php endif; ?>
+                        </td>
+                        <?php endforeach; ?>
                         <td class="pe-4 small text-nowrap">
                             <?php if ($r['StatusSms'] === null): ?>
                             <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-50">Belum diantrekan</span>
