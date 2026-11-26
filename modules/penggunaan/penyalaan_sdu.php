@@ -134,6 +134,43 @@ $hitung_sisa = function () use ($conn, $u, $tabel, $view, $pk): int {
     return (int) $st->fetchColumn();
 };
 
+// ---- BATAS WAKTU TIKET: tiap tiket yang tampil diberi $batas_diam detik (5 menit), seperti mengerjakan tugas ber-timer ----
+// Hitung mundur mulai saat tiket pertama kali muncul di sesi ini dan MULAI ULANG tiap berganti tiket. Waktu habis (tiket belum ditindak):
+// tiket dilepas kembali ke antrean, SessionID dibuang dari session login (sesi dihapus otomatis). Sesi tanpa tiket tidak berbatas waktu.
+$batas_diam       = 300;                                 // detik (5 menit)
+$kunci_aktif      = 'pg_mulai_' . $halaman;              // ['tiket' => id, 'mulai' => epoch] tiket yang sedang dihitung mundur
+$sesi_kedaluwarsa = false;
+$sisa_detik       = null;                                // sisa waktu tiket berjalan (detik) | null bila tidak ada tiket
+/** Sisa detik untuk tiket $id; tiket baru (berbeda dari yang tercatat) memulai hitung mundur penuh. */
+$timer_tiket = function (string $id) use ($kunci_aktif, $batas_diam): int {
+    $m = $_SESSION[$kunci_aktif] ?? null;
+    if (!is_array($m) || (string) ($m['tiket'] ?? '') !== $id || (int) ($m['mulai'] ?? 0) <= 0) {
+        $m = ['tiket' => $id, 'mulai' => time()];
+        $_SESSION[$kunci_aktif] = $m;
+    }
+    return max(0, $batas_diam - (time() - (int) $m['mulai']));
+};
+if ($unit_siap && $sesi !== '') {
+    try {
+        $ta = $tiket_aktif($sesi);
+        if (!$ta) {
+            unset($_SESSION[$kunci_aktif]);              // tidak ada tiket berjalan: tidak ada hitung mundur
+        } else {
+            $sisa_detik = $timer_tiket((string) $ta[$pk]);
+            if ($sisa_detik <= 0) {
+                $st = $conn->prepare("UPDATE `$tabel` t SET t.Sesi = NULL WHERE t.Sesi = :sesi AND t.StatusData = 'AKTIF'
+                                      AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
+                $st->execute([':sesi' => $sesi]);
+                $dilepas = $st->rowCount();
+                unset($_SESSION[$kunci_sesi], $_SESSION[$kunci_aktif]);
+                $_SESSION['pg_flash']['info'] = trim(($_SESSION['pg_flash']['info'] ?? '') . ' Waktu ' . round($batas_diam / 60) . ' menit untuk tiket <strong>' . pg_e((string) $ta[$pk]) . '</strong> habis, sesi <strong>' . pg_e($sesi) . '</strong> dihapus otomatis.'
+                                              . ($dilepas > 0 ? ' ' . pg_n($dilepas) . ' tiket yang belum selesai dilepas kembali ke antrean.' : ''));
+                $sesi = ''; $sesi_kedaluwarsa = true; $sisa_detik = null;
+            }
+        }
+    } catch (Throwable $e) { $sisa_detik = $sisa_detik === 0 ? 15 : $sisa_detik; /* gagal melepas: sesi dipertahankan, dicoba lagi sebentar lagi */ }
+}
+
 // ---- pengecekan berkala (JSON): jumlah tiket tersedia + tiket milik sesi ini; dipanggil JavaScript halaman tiap beberapa detik ----
 // Letaknya SEBELUM pembacaan flash, supaya pengecekan berkala tidak menghabiskan pesan hasil proses.
 if (isset($_GET['hitung'])) {
@@ -144,7 +181,7 @@ if (isset($_GET['hitung'])) {
         $t_saya = $unit_siap ? $tiket_sekarang($sesi) : null;
         // Sesi sudah ada tetapi belum memegang tiket (tadinya antrean kosong): ambil otomatis begitu tiket tersedia.
         if ($unit_siap && !$t_saya && $sesi !== '' && $ambil_trx($sesi) !== '') $t_saya = $tiket_sekarang($sesi);
-        echo json_encode(['sesi' => $sesi, 'sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
+        echo json_encode(['kedaluwarsa' => $sesi_kedaluwarsa, 'detik' => $sisa_detik, 'sesi' => $sesi, 'sisa' => $unit_siap ? $hitung_sisa() : null, 'tiket' => $t_saya ? (string) $t_saya[$pk] : '', 'waktu' => date('H:i:s')]);
     } catch (Throwable $e) {
         http_response_code(500); echo json_encode(['error' => 'gagal']);
     }
@@ -194,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                       AND NOT EXISTS (SELECT 1 FROM `$tindakan_tabel` x WHERE x.`$pk` = t.`$pk`)");
                 $st->execute([':sesi' => $sesi]);
                 $dilepas = $st->rowCount();
-                unset($_SESSION[$kunci_sesi]);
+                unset($_SESSION[$kunci_sesi], $_SESSION[$kunci_aktif]);
                 $pesan_sukses = 'Sesi <strong>' . pg_e($sesi) . '</strong> dihapus.'
                               . ($dilepas > 0 ? ' ' . pg_n($dilepas) . ' tiket yang belum selesai dilepas kembali ke antrean.' : '');
             }
@@ -235,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Post-Redirect-Get: refresh tidak mengulang proses.
     if (!headers_sent()) {
-        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'info' => $info_baru];
+        $_SESSION['pg_flash'] = ['sukses' => $pesan_sukses, 'error' => $pesan_error, 'info' => trim($pesan_info . ' ' . $info_baru)];
         header('Location: ' . pg_url($halaman));
         exit;
     }
@@ -262,9 +299,10 @@ $row = null; $sisa = null;
 if ($unit_siap) {
     try {
         $row = $tiket_sekarang($sesi);
+        $sisa_detik = $row ? $timer_tiket((string) $row[$pk]) : null;   // hitung mundur tiket berjalan (mulai ulang bila tiket baru)
         if ($row) {
             $d = $ambil_dil((string) $row['IdPel']);
-            $row['nama']       = $d['nama'];
+            $row['nama']       = trim((string) ($row['Nama'] ?? ''));   // nama dari kolom Nama pada VIEW (bukan DIL)
             $row['meter_tpl']  = trim((string) $row['NomorMeter']) !== '' ? trim((string) $row['NomorMeter']) : $d['meter'];
             $row['hp_tpl']     = trim((string) $row['NomorHp']) !== '' ? trim((string) $row['NomorHp']) : $d['hp'];
         }

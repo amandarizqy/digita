@@ -18,7 +18,7 @@ $kol_unit  = $hak_sa ? 'col-md-4' : 'col-md-6';
 $daftar_upi = array_values(array_unique(array_map(fn($a) => (string) $a['UnitUpi'], $daftar_ap)));
 sort($daftar_upi);
 
-$kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'warning'];
+$kelas_status = ['BERHASIL' => 'success', 'GAGAL' => 'danger', 'SEBAGIAN' => 'warning', 'DIPROSES' => 'info'];
 
 // Data untuk jendela riwayat: id bot -> {judul, baris}
 $riwayat_js = [];
@@ -461,7 +461,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var rwCari = document.getElementById('riwayatCari');
     var rwRingkas = document.getElementById('riwayatRingkas');
     var rwAktif = null;
-    var kelasStatus = { BERHASIL: 'success', GAGAL: 'danger', SEBAGIAN: 'warning' };
+    var kelasStatus = { BERHASIL: 'success', GAGAL: 'danger', SEBAGIAN: 'warning', DIPROSES: 'info' };
 
     function gambarRiwayat() {
         var d = rwAktif;

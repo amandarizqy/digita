@@ -29,12 +29,15 @@ if (!function_exists('pga_matriks')) {
             // AMI
             'pemutusan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Pemutusan AMI
             'penyalaan_ami'     => ['TL.UP', 'SF.UP', 'SF.VD'],      // Penyalaan AMI
+            'padam_ami'         => ['TL.UP', 'SF.UP', 'SF.VD'],      // Padam AMI
             // AMR
             'pemutusan_amr'     => ['TL.UP', 'SF.UP'],      // Pemutusan AMR
             'penyalaan_amr'     => ['TL.UP', 'SF.UP'],      // Penyalaan AMR
+            'padam_amr'         => ['TL.UP', 'SF.UP'],      // Padam AMR
             // SDU
             'pemutusan_sdu'     => ['TL.UP', 'SF.UP'],      // Pemutusan SD
             'penyalaan_sdu'     => ['TL.UP', 'SF.UP'],      // Penyalaan SDU
+            'padam_sdu'         => ['TL.UP', 'SF.UP'],      // Padam SDU
             // MONITORING
             'monitor_dil'       => $tanpa_vd,   // DIL
             'monitor_tul'       => $semua,   // TUL

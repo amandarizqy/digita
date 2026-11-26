@@ -41,12 +41,15 @@ switch ($action) {
     // AMI
     case 'pemutusan_ami':      include __DIR__ . '/pemutusan_ami.php'; break;
     case 'penyalaan_ami':      include __DIR__ . '/penyalaan_ami.php'; break;
+    case 'padam_ami':          include __DIR__ . '/padam_ami.php'; break;
     // AMR  
     case 'pemutusan_amr':      include __DIR__ . '/pemutusan_amr.php'; break;   
     case 'penyalaan_amr':      include __DIR__ . '/penyalaan_amr.php'; break;
+    case 'padam_amr':          include __DIR__ . '/padam_amr.php'; break;
     // SDU
     case 'pemutusan_sdu':      include __DIR__ . '/pemutusan_sdu.php'; break;
     case 'penyalaan_sdu':      include __DIR__ . '/penyalaan_sdu.php'; break;
+    case 'padam_sdu':          include __DIR__ . '/padam_sdu.php'; break;
     // MONITORING
     case 'monitor_dil':        include __DIR__ . '/monitor_dil.php'; break;
     case 'monitor_tul':        include __DIR__ . '/monitor_tul.php'; break;

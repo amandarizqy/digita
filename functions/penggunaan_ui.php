@@ -55,18 +55,21 @@ function pg_menu(): array
             'label' => 'AMI', 'icon' => 'bi-robot', 'items' => [
                 'pemutusan_ami'       => ['Pemutusan', 'bi-plug'],
                 'penyalaan_ami'       => ['Penyalaan', 'bi-lightning-charge'],
+                'padam_ami'           => ['Padam', 'bi-lightning-charge-fill'],
             ],
         ],
         'AMR' => [
             'label' => 'AMR', 'icon' => 'bi-person-gear', 'items' => [
                 'pemutusan_amr'       => ['Pemutusan', 'bi-plug'],
                 'penyalaan_amr'       => ['Penyalaan', 'bi-lightning-charge'],
+                'padam_amr'           => ['Padam', 'bi-lightning-charge-fill'],
             ],
         ],
         'SDU' => [
             'label' => 'SDU', 'icon' => 'bi-person-gear', 'items' => [
                 'pemutusan_sdu'       => ['Pemutusan', 'bi-plug'],
                 'penyalaan_sdu'       => ['Penyalaan', 'bi-lightning-charge'],
+                'padam_sdu'           => ['Padam', 'bi-lightning-charge-fill'],
             ],
         ],
         'monitoring' => [

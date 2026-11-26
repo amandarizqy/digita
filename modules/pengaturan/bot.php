@@ -276,7 +276,8 @@ try {
 $riwayat = [];
 if ($bots) {
     try {
-        $st = $conn->prepare("SELECT TiketBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, NamaFile, WaktuData
+        $st = $conn->prepare("SELECT TiketBot, JmlData, JmlBerhasil, JmlGagal, NamaAkun, UnitUp, UnitAp, UnitUpi, NamaFile, StatusData, WaktuData,
+                                     TIMESTAMPDIFF(SECOND, WaktuData, NOW()) AS UmurDetik
                               FROM bot_akses_riwayat WHERE IdBot = ?
                               ORDER BY WaktuData DESC, TiketBot DESC LIMIT " . (int) BOT_RIWAYAT_MAKS);
         foreach ($bots as $b) {
@@ -285,6 +286,8 @@ if ($bots) {
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $ok = (int) $r['JmlBerhasil'];
                 $gl = (int) $r['JmlGagal'];
+                // Sedang diproses: StatusData 'DIPROSES' dan masih ada pembaruan dalam 15 menit terakhir (selebihnya dianggap macet)
+                $proses = (string) ($r['StatusData'] ?? '') === 'DIPROSES' && (int) $r['UmurDetik'] <= 900;
                 $baris[] = [
                     'tiket'    => (string) $r['TiketBot'],
                     'file'     => (string) ($r['NamaFile'] ?? ''),
@@ -295,7 +298,7 @@ if ($bots) {
                     'data'     => (int) $r['JmlData'],
                     'berhasil' => $ok,
                     'gagal'    => $gl,
-                    'status'   => bot_status_riwayat($ok, $gl),
+                    'status'   => $proses ? 'DIPROSES' : bot_status_riwayat($ok, $gl),
                     'akun'     => (string) ($r['NamaAkun'] ?? ''),
                 ];
             }

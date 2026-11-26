@@ -207,7 +207,16 @@ function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $s
     foreach ($tugas as $t) {
         $nama = basename($t['file']);
         bc_log('INFO', "$tag Mengunggah: " . bc_rel($t['file'], $root) . ' (' . $k['jenis'] . ')');
-        $h = bh_jalankan($conn, $bot, $k['jenis'], $t['file'], $t['ap'], $t['up']);
+
+        // Riwayat dibuka SEBELUM file diproses; jumlah berhasil/gagal diperbarui selama proses berjalan (maks 1x/detik).
+        $tiket = '';
+        try {
+            $tiket = bot_riwayat_mulai($conn, $bot, $t['ap'], $t['up'], $nama);
+        } catch (Throwable $e) {
+            bc_log('ERROR', "  Gagal membuka riwayat (jumlah tidak diperbarui selama proses): {$e->getMessage()}");
+        }
+        $lapor = $tiket === '' ? null : function (int $ok, int $gl) use ($conn, $tiket) { bot_riwayat_perbarui($conn, $tiket, $ok, $gl); };
+        $h = bh_jalankan($conn, $bot, $k['jenis'], $t['file'], $t['ap'], $t['up'], $lapor);
         $terakhir = "$nama: " . $h['pesan'];
 
         if ($h['status'] === 'sukses' || $h['status'] === 'gagal') {
@@ -215,10 +224,10 @@ function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $s
             $h['status'] === 'sukses' ? $ok++ : $tidak++;
 
             // Riwayat: satu baris + satu TiketBot per file yang selesai diproses (berhasil maupun gagal).
-            // Dicatat SEBELUM file dipindah; kegagalan mencatat tidak menghentikan proses.
-            $tiket = '';
+            // Jumlah akhir ditulis SEBELUM file dipindah; kegagalan mencatat tidak menghentikan proses.
             try {
-                $tiket = bot_catat_riwayat($conn, $bot, $t['ap'], $t['up'], (int) $h['tersimpan'], (int) $h['ditolak'], $nama);
+                if ($tiket !== '') bot_riwayat_perbarui($conn, $tiket, (int) $h['tersimpan'], (int) $h['ditolak'], true);
+                else               $tiket = bot_catat_riwayat($conn, $bot, $t['ap'], $t['up'], (int) $h['tersimpan'], (int) $h['ditolak'], $nama);
                 bc_log('INFO', "  Riwayat dicatat: tiket $tiket");
             } catch (Throwable $e) {
                 bc_log('ERROR', "  Gagal mencatat riwayat: {$e->getMessage()}");
@@ -234,6 +243,9 @@ function bc_proses_bot(PDO $conn, array $bot, string $root, bool $kering, int $s
             }
         } else {
             $tunda++;
+            if ($tiket !== '') {                       // file akan diulang & dicatat ulang: buang baris "PROSES" agar tidak dobel
+                try { bot_riwayat_hapus($conn, $tiket); } catch (Throwable $e) { bc_log('ERROR', "  Gagal menghapus riwayat sementara: {$e->getMessage()}"); }
+            }
             bc_log('WARN', "  DITUNDA ({$h['status']}), file dibiarkan di tempatnya | {$h['pesan']}");
             if (++$beruntun >= BC_MAKS_TUNDA) {
                 bc_log('ERROR', "$tag " . BC_MAKS_TUNDA . ' gangguan sementara beruntun, bot dihentikan untuk putaran ini.');
