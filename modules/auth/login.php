@@ -11,6 +11,7 @@ session_start();
 // Panggil konfigurasi database & pembatas percobaan login (berbasis file, tanpa tabel tambahan)
 require_once '../../config/database.php';
 require_once __DIR__ . '/../../functions/login_throttle.php';
+require_once __DIR__ . '/../../includes/pg_lepas_sesi.php';   // lepas tiket sesi halaman Pemutusan & Penyalaan (sama seperti logout.php)
 
 // Jika pengguna sudah login, arahkan langsung ke dashboard
 if (isset($_SESSION['NamaAkun'])) {
@@ -120,6 +121,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $up->execute([':h' => password_hash($password, PASSWORD_DEFAULT), ':u' => $user['NamaAkun']]);
                     }
 
+                    // Bersihkan sisa sesi lama, sama seperti logout.php
+                    // 1) Lepas tiket DULU, selagi SessionID halaman masih ada di $_SESSION
+                    try {
+                        pg_lepas_sesi_tiket($conn);
+                    } catch (Throwable $e) {
+                        error_log('login: gagal melepas tiket sesi lama: ' . $e->getMessage());
+                        // jangan gagalkan login hanya karena pembersihan tiket bermasalah
+                    }
+
+                    // 2) Kosongkan variabel sesi lama, lalu buat ID sesi baru
+                    $_SESSION = [];
                     session_regenerate_id(true);   // cegah session fixation
 
                     // Inisialisasi Session RBAC S41

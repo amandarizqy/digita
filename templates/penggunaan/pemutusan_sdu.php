@@ -23,7 +23,7 @@ if (!$unit_siap) echo pg_alert('warning', 'Unit akun Anda belum diatur, sehingga
 
 if ($ada) {
     $tiket  = (string) $row[$pk];
-    $nama   = $row['nama'] !== '' ? $row['nama'] : '(nama belum ada di DIL)';
+    $nama   = $row['nama'] !== '' ? $row['nama'] : '(nama kosong)';
     $idpel  = (string) $row['IdPel'];
     $jenis  = (string) $row['JenisTiket'];
     $meter  = (string) $row['meter_tpl'];
@@ -33,7 +33,10 @@ if ($ada) {
     $rincian = [];
     if (!$putus) $rincian[] = ['Tiket Putus', (string) $row[$fk]];
     $rincian[] = ['No. TUL', (string) ($row['NoTulTampil'] ?? '')];
-    $rincian[] = ['Periode', trim((string) $row['ThBlRek'])];
+    // nama kolom periode di VIEW dicari tanpa membedakan huruf besar/kecil (ThblRek / ThBlRek)
+    $periode = '';
+    foreach ($row as $kolom => $nilai) { if (strcasecmp((string) $kolom, 'ThblRek') === 0) { $periode = trim((string) $nilai); break; } }
+    $rincian[] = ['Periode', $periode];
     $rincian[] = ['No. Meter', $meter];
     $rincian[] = ['No. HP', $hp];
     $rincian[] = ['Skala Prioritas', trim((string) ($row['SkalaPrioritas'] ?? ''))];
@@ -67,8 +70,14 @@ if ($ada) {
                 <div class="fw-bold font-monospace text-break"><?= pg_e($tiket) ?></div>
                 <div class="text-truncate"><?= pg_e($nama) ?> &middot; <span class="font-monospace"><?= pg_e($idpel) ?></span></div>
             </div>
+            <div class="text-center flex-shrink-0">
+                <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.4px;">Sisa waktu</div>
+                <div class="fw-bold font-monospace fs-4 js-timer"><?= isset($sisa_detik) ? sprintf('%02d:%02d', intdiv((int) $sisa_detik, 60), (int) $sisa_detik % 60) : '--:--' ?></div>
+            </div>
             <button type="button" class="btn btn-primary btn-sm px-3 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalTiket"><i class="bi bi-box-arrow-up-right me-1"></i> Buka tiket</button>
         </div>
+        <div class="progress mt-2" style="height:5px;"><div class="progress-bar js-timer-bar" style="width:100%;"></div></div>
+        <div class="form-text">Waktu tiap tiket <?= (int) (($batas_diam ?? 300) / 60) ?> menit. Bila habis sebelum ditindak, sesi dihapus otomatis dan tiket dikembalikan ke antrean. Tiket berikutnya mulai dari awal lagi.</div>
         <?php endif; ?>
     </div>
 </div>
@@ -152,6 +161,19 @@ if ($ada) {
     var jml = document.getElementById('jmlSisa'), waktu = document.getElementById('waktuCek'), denyut = document.getElementById('denyut'),
         peringatan = document.getElementById('peringatanData'), btn = document.querySelector('button[name="aksi"][value="create"]'),
         jeda = INTERVAL, timer = null, jalan = false;
+    // ---- hitung mundur tiket (5 menit): waktu habis -> server menghapus sesi, halaman dimuat ulang ----
+    var DETIK = <?= json_encode(isset($sisa_detik) ? (int) $sisa_detik : null) ?>, TOTAL = <?= (int) ($batas_diam ?? 300) ?> * 1000,
+        akhir = (ada && DETIK !== null) ? Date.now() + DETIK * 1000 : null, habis = false;
+    function fmt(s) { var m = Math.floor(s / 60), d = s % 60; return (m < 10 ? '0' : '') + m + ':' + (d < 10 ? '0' : '') + d; }
+    function gambar() {
+        if (akhir === null) return;
+        var ms = Math.max(0, akhir - Date.now()), s = Math.ceil(ms / 1000),
+            warna = s > 120 ? '#0d6efd' : (s > 60 ? '#b45309' : '#dc3545'), kelas = s > 120 ? 'bg-primary' : (s > 60 ? 'bg-warning' : 'bg-danger');
+        document.querySelectorAll('.js-timer').forEach(function (e) { e.textContent = fmt(s); e.style.color = warna; });
+        document.querySelectorAll('.js-timer-bar').forEach(function (b) { b.style.width = (ms / TOTAL * 100) + '%'; b.className = 'progress-bar js-timer-bar ' + kelas; });
+        if (ms <= 0 && !habis) { habis = true; setTimeout(function () { location.reload(); }, 800); }   // server sudah/akan menghapus sesi
+    }
+    setInterval(gambar, 250); gambar();
     function atur(ms) { clearTimeout(timer); timer = setTimeout(cek, ms); }
     function cek() {
         if (document.hidden) { atur(jeda); return; }
@@ -160,19 +182,21 @@ if ($ada) {
         fetch(URL_CEK, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}})
             .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(function (j) {
+                if (ada && j.tiket === tiketSaya && j.detik !== null && j.detik !== undefined) akhir = Date.now() + j.detik * 1000;   // sinkron ulang dengan jam server
                 if (j.sisa !== null && j.sisa !== undefined) {
                     jml.textContent = Number(j.sisa).toLocaleString('id-ID');
                 }
                 waktu.textContent = '\u00b7 dicek ' + j.waktu;
                 denyut.className = 'd-inline-block rounded-circle bg-success'; denyut.style.opacity = '.35'; setTimeout(function () { denyut.style.opacity = '1'; }, 300);
-                if (!ada && j.tiket) { location.reload(); }   // sesi baru mendapat tiket (diambil otomatis server) -> muat ulang, pop-up terbuka
+                if (j.kedaluwarsa) { location.reload(); }   // waktu tiket habis, sesi dihapus otomatis -> muat ulang, pesan tampil
+                else if (!ada && j.tiket) { location.reload(); }   // sesi baru mendapat tiket (diambil otomatis server) -> muat ulang, pop-up terbuka
                 else if (j.tiket !== tiketSaya) peringatan.classList.remove('d-none');       // tiket sesi ini berubah dari tempat lain
                 jeda = INTERVAL;
             })
             .catch(function () { denyut.className = 'd-inline-block rounded-circle bg-danger'; jeda = Math.min(jeda * 2, MAKS); })   // gagal: perlambat
             .then(function () { jalan = false; atur(jeda); });
     }
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) atur(300); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { atur(300); gambar(); } });
     atur(INTERVAL);
 })();
 </script>
@@ -190,7 +214,11 @@ if ($ada) {
                     <div class="small text-muted text-uppercase fw-bold" style="letter-spacing:.5px;"><?= pg_e($judul) ?> &middot; Sesi <span class="font-monospace"><?= pg_e($sesi) ?></span></div>
                     <h5 class="modal-title font-monospace fw-bold text-break mt-1" id="judulTiket"><?= pg_e($tiket) ?></h5>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                    <span class="small text-muted">Sisa waktu</span>
+                    <span class="badge bg-light border font-monospace fs-6 js-timer" title="Sisa waktu untuk tiket ini"><?= isset($sisa_detik) ? sprintf('%02d:%02d', intdiv((int) $sisa_detik, 60), (int) $sisa_detik % 60) : '--:--' ?></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
             </div>
 
             <div class="modal-body px-4">
