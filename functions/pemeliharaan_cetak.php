@@ -152,6 +152,32 @@ function pc_halaman_pk(PDO $conn, array $d, bool $halaman_baru = false): string
         <table class="catatan">
             <tr><td><strong><u>Catatan Pemasangan:</u></strong></td></tr>
         </table>
+        <?php
+        // Lampiran foto Berita Acara (hanya yang benar-benar ada), tampil di bawah catatan dan ikut tercetak
+        $foto_ada = [];
+        if ($ada_ba) {
+            foreach ([
+                ['Bongkar - Foto Terpasang', 'pasang', 'bongkar', $K['f_pasang']],
+                ['Bongkar - Foto Barang',    'barang', 'bongkar', $K['f_barang']],
+                ['Pasang - Foto Terpasang',  'pasang', 'pasang',  $P['f_pasang']],
+                ['Pasang - Foto Barang',     'barang', 'pasang',  $P['f_barang']],
+            ] as [$judul, $jenis, $sisi, $ada]) {
+                if ($ada) $foto_ada[] = [$judul, 'foto.php?jenis=' . $jenis . '&sisi=' . $sisi . '&no=' . urlencode($d['NoFba'])];
+            }
+        }
+        if ($foto_ada): ?>
+        <table class="lampiran">
+            <tr><td colspan="2"><strong>Lampiran Foto Berita Acara <?= ph_e($d['NoFba']) ?></strong></td></tr>
+            <?php foreach (array_chunk($foto_ada, 2) as $baris): ?>
+            <tr>
+                <?php foreach ($baris as [$judul, $src]): ?>
+                    <td class="foto"><div class="cap"><?= ph_e($judul) ?></div><img src="<?= ph_e($src) ?>" alt="<?= ph_e($judul) ?>"></td>
+                <?php endforeach; ?>
+                <?php if (count($baris) === 1): ?><td class="foto"></td><?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+        </table>
+        <?php endif; ?>
     </div>
     <?php
     return ob_get_clean();
@@ -180,6 +206,10 @@ tr { page-break-inside: avoid; }
 .pk .ttd td { height: 95px; text-align: center; vertical-align: top; width: 33.33%; }
 .pk .ttd .nama { display: block; margin-top: 62px; }
 .pk .catatan td { height: 70px; vertical-align: top; }
+.pk .lampiran td { padding: 5px 6px; text-align: center; vertical-align: top; width: 50%; }
+.pk .lampiran .cap { font-weight: 700; margin-bottom: 4px; }
+.pk .lampiran img { max-width: 100%; max-height: 210px; object-fit: contain; }
+.pk .lampiran tr { page-break-inside: avoid; }
 /* Halaman Rekap Order */
 .rekap td, .rekap th { padding: 3px 6px; }
 .rekap .lbl { width: 18%; white-space: nowrap; }

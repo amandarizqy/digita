@@ -180,11 +180,17 @@ try {
     $st->execute($sp);
     $list_pk_bebas = $st->fetchAll(PDO::FETCH_ASSOC);
 
-    // Daftar order untuk pilihan "Cetak Order" (100 order terbaru di unit pengguna)
+    // Daftar order untuk pilihan "Cetak Order": HANYA order aktif yang masih punya FPK belum termutasi
+    // (frm_pk.StatusData = 'TIDAK'). Order yang seluruh FPK-nya sudah termutasi tidak dimuat.
     [$sc, $sp] = ph_scope('o');
-    $st = $conn->prepare("SELECT o.NoFormOrder, o.TglOrder FROM frm_order o
+    $st = $conn->prepare("SELECT o.NoFormOrder, o.TglOrder
+                          FROM frm_order o
+                          JOIN frm_order_detil od ON od.NoFormOrder = o.NoFormOrder
+                          JOIN frm_pk p ON p.NoFpk = od.NoFpk AND p.JenisPk = 'PEMELIHARAAN'
                           WHERE o.StatusData = 'AKTIF'" . $sc . "
-                          ORDER BY o.WaktuData DESC, o.NoFormOrder DESC LIMIT 100");
+                          GROUP BY o.NoFormOrder, o.TglOrder, o.WaktuData
+                          HAVING SUM(p.StatusData = 'TIDAK') > 0
+                          ORDER BY o.WaktuData DESC, o.NoFormOrder DESC LIMIT 200");
     $st->execute($sp);
     $list_orders = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -274,7 +280,7 @@ try {
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>
 
-<!-- MODAL CETAK ORDER -->
+<!-- MODAL CETAK ORDER (hanya order yang belum termutasi) -->
 <div class="modal fade" id="modalCetakOrder" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form action="<?= ph_e($url_cetak_order) ?>" method="GET" target="_blank" class="modal-content border-0 rounded-4 shadow">
@@ -294,7 +300,9 @@ try {
                         <?php endforeach; ?>
                     </select>
                     <?php if (empty($list_orders)): ?>
-                        <div class="form-text text-danger">Belum ada order. Buat order terlebih dahulu.</div>
+                        <div class="form-text text-danger">Tidak ada order yang belum termutasi.</div>
+                    <?php else: ?>
+                        <div class="form-text">Hanya order yang belum termutasi.</div>
                     <?php endif; ?>
                 </div>
                 <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i> Sistem akan mencetak 1 halaman Formulir Order ditambah dengan semua halaman FPK yang tergabung di dalamnya.</p>

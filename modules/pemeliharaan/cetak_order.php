@@ -16,7 +16,8 @@ if ($no_order === '') {
     exit('Nomor Order tidak ditemukan.');
 }
 
-const CO_BARIS_MIN = 25; 
+const CO_BARIS_MIN = 25;
+$preview = isset($_GET['preview']); // mode pratinjau (dipakai di modal): tanpa dialog cetak otomatis
 
 [$sc, $sp] = ph_scope('o');
 try {
@@ -62,11 +63,13 @@ $total_baris = max(CO_BARIS_MIN, $jml);
     <title>Cetak Order SPK &amp; FPK - <?= ph_e($order['NoFormOrder']) ?></title>
     <style><?= pc_css() ?></style>
 </head>
-<body onload="window.print()">
+<body<?= $preview ? '' : ' onload="window.print()"' ?>>
 <div class="kertas">
+    <?php if (!$preview): ?>
     <div class="no-print">
         <button onclick="window.print()" style="padding:8px 15px;background:#0d6efd;color:#fff;border:none;cursor:pointer;font-weight:bold;">Cetak / Simpan PDF</button>
     </div>
+    <?php endif; ?>
 
     <div class="rekap">
     <table>

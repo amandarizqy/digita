@@ -23,7 +23,8 @@ try {
         "o.NoFormOrder, p.NoFpk, b.NoFba, p.TglFpk, COALESCE(b.KdPetugas, o.KdPetugas) AS KdPetugas, p.IdPel, pd.NoRef,
          COALESCE(bd.SimId, mb.SimId) AS SimId, COALESCE(bd.ImeiModem, mb.ImeiModem) AS ImeiModem, $nama_sql AS NamaModem,
          COALESCE(bd.NomorBarang, pd.NomorBarang) AS KontakS41, bd.LampuIndikator AS KondisiRelay, COALESCE(b.StatusData, p.StatusData) AS StatusData,
-         (bd.FotoTerpasang IS NOT NULL) AS AdaFotoPasang, (bd.FotoBarang IS NOT NULL) AS AdaFotoBarang",
+         (bd.FotoTerpasang IS NOT NULL) AS AdaFotoPasang, (bd.FotoBarang IS NOT NULL) AS AdaFotoBarang,
+         (bk.FotoTerpasang IS NOT NULL) AS AdaBongkarTerpasang, (bk.FotoBarang IS NOT NULL) AS AdaBongkarBarang",
         "frm_pk p
          LEFT JOIN frm_order_detil od ON od.NoFpk = p.NoFpk
          LEFT JOIN frm_order o ON o.NoFormOrder = od.NoFormOrder
@@ -31,6 +32,7 @@ try {
          LEFT JOIN master_barang mb ON mb.NoRef = pd.NoRef
          LEFT JOIN frm_ba b ON b.NoFpk = p.NoFpk AND b.JenisPekerjaan = 'PEMELIHARAAN'
          LEFT JOIN frm_ba_detil bd ON bd.NoFba = b.NoFba AND bd.StatusPekerjaan = 'PASANG'
+         LEFT JOIN frm_ba_detil bk ON bk.NoFba = b.NoFba AND bk.StatusPekerjaan = 'BONGKAR'
          LEFT JOIN master_modem mm ON mm.ImeiModem = COALESCE(bd.ImeiModem, mb.ImeiModem)",
         "AND p.JenisPk = 'PEMELIHARAAN'",
         [],
@@ -86,16 +88,19 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
                             <td><?= ph_badge_relay($row['KondisiRelay']) ?></td>
                             <td><?= ph_badge_status($row['StatusData']) ?></td>
                             <td class="text-end pe-4">
-                                <?php if (!empty($row['NoFba'])): ?>
-                                    <a href="<?= ph_e($url_cetak . '?no_fba=' . urlencode($row['NoFba'])) ?>" target="_blank" class="btn btn-sm btn-outline-primary rounded-3 px-2 py-1" title="Cetak BA"><i class="bi bi-printer-fill"></i></a>
-                                    <?php if (!empty($row['AdaFotoPasang']) || !empty($row['AdaFotoBarang'])): ?>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-3 px-2 py-1 btn-lihat-foto" title="Lihat foto"
-                                                data-nofba="<?= ph_e($row['NoFba']) ?>" data-pasang="<?= !empty($row['AdaFotoPasang']) ? '1' : '0' ?>" data-barang="<?= !empty($row['AdaFotoBarang']) ? '1' : '0' ?>">
-                                            <i class="bi bi-images"></i>
-                                        </button>
-                                    <?php endif; ?>
+                                <?php if (!empty($row['NoFormOrder']) || !empty($row['NoFba'])): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-3 px-3 py-1 btn-detail-order" title="Lihat detail FPK dan foto"
+                                            data-order="<?= ph_e($row['NoFormOrder'] ?? '') ?>"
+                                            data-fpk="<?= ph_e($row['NoFpk']) ?>"
+                                            data-nofba="<?= ph_e($row['NoFba'] ?? '') ?>"
+                                            data-bongkar-terpasang="<?= !empty($row['AdaBongkarTerpasang']) ? '1' : '0' ?>"
+                                            data-bongkar-barang="<?= !empty($row['AdaBongkarBarang']) ? '1' : '0' ?>"
+                                            data-pasang-terpasang="<?= !empty($row['AdaFotoPasang']) ? '1' : '0' ?>"
+                                            data-pasang-barang="<?= !empty($row['AdaFotoBarang']) ? '1' : '0' ?>">
+                                        <i class="bi bi-eye me-1"></i>Detail
+                                    </button>
                                 <?php else: ?>
-                                    <span class="text-muted small">Belum BA</span>
+                                    <span class="text-muted small">-</span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -108,58 +113,78 @@ $url_cetak_laporan = BASE_URL . '/modules/pemeliharaan/cetak_laporan.php?type=or
     <?= ph_pager($sub_ini, $total_hasil, $hal, $total_hal, $q) ?>
 </div>
 
-<!-- MODAL FOTO: kedua foto (terpasang & barang) tampil berdampingan -->
-<div class="modal fade" id="modalFoto" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
+<!-- MODAL DETAIL: Formulir Order + FPK, serta foto pembongkaran dan pemasangan -->
+<div class="modal fade" id="modalDetail" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
         <div class="modal-content border-0 rounded-4 shadow">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="bi bi-images me-2 text-primary"></i>Foto Berita Acara <span id="fotoNoBa" class="font-monospace small text-muted"></span></h5>
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="bi bi-eye me-2"></i>Detail <span class="font-monospace small text-dark ms-2" id="dtFpk"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-3">
-                    <div class="col-md-6 text-center">
-                        <div class="fw-bold small text-uppercase text-muted mb-2">Foto Terpasang (Lapangan)</div>
-                        <div id="fotoPasangBox" class="border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height:260px;"></div>
-                    </div>
-                    <div class="col-md-6 text-center">
-                        <div class="fw-bold small text-uppercase text-muted mb-2">Foto Barang (Perangkat)</div>
-                        <div id="fotoBarangBox" class="border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height:260px;"></div>
-                    </div>
+                <div class="fw-bold small text-uppercase text-muted mb-2">Formulir Order &amp; FPK <span class="font-monospace" id="dtOrder"></span></div>
+                <div class="border rounded-3 overflow-hidden mb-4 bg-secondary-subtle">
+                    <iframe id="dtFrame" title="Formulir Order" style="width:100%;height:70vh;min-height:70vh;border:0;background:#fff;display:block;"></iframe>
+                    <div id="dtNoOrder" class="text-center text-muted small fst-italic py-4 d-none">FPK ini belum masuk ke dalam order.</div>
                 </div>
+
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Tutup</button>
+                <a href="#" target="_blank" rel="noopener" id="dtCetak" class="btn btn-info text-white fw-bold px-4 d-none"><i class="bi bi-printer me-1"></i> Cetak Order Ini</a>
             </div>
         </div>
     </div>
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    var urlFoto = <?= json_encode($url_foto) ?>;
-    var modalEl = document.getElementById("modalFoto");
+    var urlOrder = <?= json_encode($url_cetak_order) ?>;
+    var modalEl  = document.getElementById("modalDetail");
     if (!modalEl || !window.bootstrap) { return; }
     var modal = new bootstrap.Modal(modalEl);
-    function isi(boxId, ada, jenis, no) {
-        var box = document.getElementById(boxId);
-        box.innerHTML = "";
-        if (ada) {
-            var a = document.createElement("a");
-            a.href = urlFoto + "?jenis=" + jenis + "&no=" + encodeURIComponent(no);
-            a.target = "_blank"; a.rel = "noopener";
-            var img = document.createElement("img");
-            img.src = a.href; img.alt = jenis; img.className = "img-fluid rounded-3";
-            img.style.maxHeight = "420px";
-            a.appendChild(img); box.appendChild(a);
-        } else {
-            box.innerHTML = '<span class="text-muted small fst-italic">Belum ada foto</span>';
-        }
+    var frameEl = document.getElementById("dtFrame");
+    // Tinggi iframe mengikuti isi dokumen (min 70% tinggi layar) agar seluruh FPK (termasuk lampiran foto) terlihat
+    function ukurFrame() {
+        try {
+            if (!frameEl.src || frameEl.src.indexOf("about:blank") !== -1) { return; }
+            var doc = frameEl.contentDocument;
+            if (!doc || !doc.documentElement) { return; }
+            var tinggi = doc.documentElement.scrollHeight;
+            if (tinggi > 300) { frameEl.style.height = (tinggi + 16) + "px"; }
+        } catch (e) {}
     }
-    document.querySelectorAll(".btn-lihat-foto").forEach(function (btn) {
+    frameEl.addEventListener("load", function () { ukurFrame(); [300, 1000, 2500].forEach(function (t) { setTimeout(ukurFrame, t); }); });
+    modalEl.addEventListener("shown.bs.modal", ukurFrame);
+
+    document.querySelectorAll(".btn-detail-order").forEach(function (btn) {
         btn.addEventListener("click", function () {
             var d = this.dataset;
-            document.getElementById("fotoNoBa").textContent = d.nofba;
-            isi("fotoPasangBox", d.pasang === "1", "pasang", d.nofba);
-            isi("fotoBarangBox", d.barang === "1", "barang", d.nofba);
+            document.getElementById("dtFpk").textContent = d.fpk;
+            document.getElementById("dtOrder").textContent = d.order ? "(" + d.order + ")" : "";
+
+            var cetak = document.getElementById("dtCetak");
+            if (d.order) {
+                cetak.href = urlOrder + "?no_order=" + encodeURIComponent(d.order);
+                cetak.classList.remove("d-none");
+            } else {
+                cetak.classList.add("d-none");
+            }
+
+            var frame = document.getElementById("dtFrame"), kosong = document.getElementById("dtNoOrder");
+            if (d.order) {
+                frame.classList.remove("d-none"); kosong.classList.add("d-none");
+                frame.src = urlOrder + "?no_order=" + encodeURIComponent(d.order) + "&preview=1";
+            } else {
+                frame.classList.add("d-none"); kosong.classList.remove("d-none");
+            }
+
             modal.show();
         });
+    });
+
+    modalEl.addEventListener("hidden.bs.modal", function () {
+        document.getElementById("dtFrame").src = "about:blank";
+        frameEl.style.height = "70vh";
     });
 });
 </script>
