@@ -291,7 +291,7 @@ try {
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold small">Pilih Order Perintah Kerja</label>
-                    <select name="no_order" class="form-select" required>
+                    <select name="no_order" id="selCetakOrder" class="form-select" required>
                         <option value="">-- Pilih Nomor Order --</option>
                         <?php foreach ($list_orders as $ord): ?>
                             <option value="<?= ph_e($ord['NoFormOrder']) ?>">
@@ -314,6 +314,30 @@ try {
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // Kotak pencarian pada pilihan order (Select2, sudah dimuat di layout): bisa cari no order atau tanggal
+    var sel = document.getElementById("selCetakOrder");
+    var modalEl = document.getElementById("modalCetakOrder");
+    if (!sel || !window.jQuery || !jQuery.fn.select2) { return; }
+    jQuery(sel).select2({
+        theme: "bootstrap-5", width: "100%", dropdownParent: jQuery(modalEl),
+        placeholder: "Ketik no order atau tanggal...",
+        minimumResultsForSearch: 0,
+        language: { noResults: function () { return "Order tidak ditemukan"; } }
+    });
+    jQuery(sel).on("select2:open", function () {
+        var f = document.querySelector(".select2-container--open .select2-search__field");
+        if (f) { f.focus(); }
+    });
+    // select2 menyembunyikan validasi bawaan 'required', jadi dicek manual
+    modalEl.querySelector("form").addEventListener("submit", function (e) {
+        if (!sel.value) { e.preventDefault(); jQuery(sel).select2("open"); }
+    });
+    modalEl.addEventListener("hidden.bs.modal", function () { jQuery(sel).val("").trigger("change"); });
+});
+</script>
 
 <!-- MODAL 1: BUAT FPK -->
 <div class="modal fade" id="modalBuatPK" tabindex="-1">
